@@ -7,6 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 get_filename_component(VX_PROJECT_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+set(VX_SOURCE_DIR "${VX_PROJECT_ROOT_DIR}/source")
+set(VX_SHELL_DIR "${VX_SOURCE_DIR}/shell")
+set(VX_MODULES_DIR "${VX_SOURCE_DIR}/modules")
+set(VX_EQE_MODULE_DIR "${VX_MODULES_DIR}/eqe")
+set(VX_EQE_HEADERS_DIR "${VX_EQE_MODULE_DIR}/headers")
+set(VX_EQE_EDITOR_DIR "${VX_EQE_MODULE_DIR}/editor")
+set(VX_EQE_PROCESSOR_DIR "${VX_EQE_MODULE_DIR}/processor")
+
 option(MIXOLVE_VX_USE_LOCAL_JUCE "Use a local JUCE checkout via JUCE_DIR" OFF)
 option(MIXOLVE_VX_ENABLE_APP_GROUP "Enable shared App Group preset storage for the iOS host app and AUv3 extension" ON)
 
@@ -148,26 +156,29 @@ juce_generate_juce_header(Vx)
 
 target_include_directories(Vx
     PRIVATE
-        ${VX_PROJECT_ROOT_DIR}/source/headers
+        ${VX_SHELL_DIR}
+        ${VX_EQE_HEADERS_DIR}
 )
 
-file(GLOB VX_EDITOR_SOURCES CONFIGURE_DEPENDS
-    ${VX_PROJECT_ROOT_DIR}/source/editor/*.cpp)
+file(GLOB VX_EQE_HEADERS CONFIGURE_DEPENDS
+    ${VX_EQE_HEADERS_DIR}/*.h)
 
-file(GLOB VX_PROCESSOR_SOURCES CONFIGURE_DEPENDS
-    ${VX_PROJECT_ROOT_DIR}/source/processor/*.cpp)
+file(GLOB VX_EQE_EDITOR_SOURCES CONFIGURE_DEPENDS
+    ${VX_EQE_EDITOR_DIR}/*.cpp)
+
+file(GLOB VX_EQE_PROCESSOR_SOURCES CONFIGURE_DEPENDS
+    ${VX_EQE_PROCESSOR_DIR}/*.cpp)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS" AND MIXOLVE_VX_ENABLE_APP_GROUP)
-    list(APPEND VX_PROCESSOR_SOURCES
-        ${VX_PROJECT_ROOT_DIR}/source/processor/AppGroupStorage.mm)
+    list(APPEND VX_EQE_PROCESSOR_SOURCES
+        ${VX_EQE_PROCESSOR_DIR}/AppGroupStorage.mm)
 endif()
 
 target_sources(Vx
     PRIVATE
-        ${VX_EDITOR_SOURCES}
-        ${VX_PROCESSOR_SOURCES}
-        ${VX_PROJECT_ROOT_DIR}/source/headers/Editor.h
-        ${VX_PROJECT_ROOT_DIR}/source/headers/Processor.h
+        ${VX_EQE_HEADERS}
+        ${VX_EQE_EDITOR_SOURCES}
+        ${VX_EQE_PROCESSOR_SOURCES}
 )
 
 target_compile_definitions(Vx
@@ -307,16 +318,16 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
 
     target_include_directories(Vx_iOSHost
         PRIVATE
-            ${VX_PROJECT_ROOT_DIR}/source/headers
+            ${VX_SHELL_DIR}
+            ${VX_EQE_HEADERS_DIR}
     )
 
     target_sources(Vx_iOSHost
         PRIVATE
-            ${VX_EDITOR_SOURCES}
-            ${VX_PROCESSOR_SOURCES}
-            ${VX_PROJECT_ROOT_DIR}/source/headers/Editor.h
-            ${VX_PROJECT_ROOT_DIR}/source/headers/Processor.h
-            ${VX_PROJECT_ROOT_DIR}/source/IosHostMain.cpp
+            ${VX_EQE_HEADERS}
+            ${VX_EQE_EDITOR_SOURCES}
+            ${VX_EQE_PROCESSOR_SOURCES}
+            ${VX_SHELL_DIR}/IosHostMain.cpp
     )
 
     target_compile_definitions(Vx_iOSHost
