@@ -1,0 +1,156 @@
+#pragma once
+
+#include "EditorControls.h"
+
+#include <functional>
+#include <memory>
+#include <vector>
+
+class ParameterControl final : public juce::Component
+{
+public:
+    using Attachment = juce::AudioProcessorValueTreeState::SliderAttachment;
+
+    ParameterControl(juce::AudioProcessorValueTreeState& state,
+                     const juce::String& parameterIdIn,
+                     const juce::String& titleText,
+                     int editorDecimalsIn);
+    ~ParameterControl() override;
+
+    int getPreferredHeight() const noexcept;
+    void setValue(double value, bool sendNotification);
+    void setOverrideText(const juce::String& text);
+    void clearOverrideText();
+    void setInteractionEnabled(bool shouldEnable);
+    void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);
+    void resized() override;
+
+    std::function<void()> onValueChanged;
+    std::function<void()> onTitleClick;
+
+private:
+    juce::String formatDisplayValue(double value) const;
+    juce::String formatEditorValue() const;
+
+    juce::String parameterId;
+    juce::RangedAudioParameter* parameter = nullptr;
+    const int editorDecimals = 2;
+    std::unique_ptr<BoxTextButton> titleButton;
+    juce::Slider slider;
+    std::unique_ptr<ValueBoxComponent> valueBox;
+    std::unique_ptr<Attachment> attachment;
+    juce::String overrideText;
+};
+
+class ChoiceControl final : public juce::Component
+{
+public:
+    using Attachment = juce::ParameterAttachment;
+
+    ChoiceControl(juce::AudioProcessorValueTreeState& state,
+                  const juce::String& parameterIdIn,
+                  const juce::String& titleText,
+                  std::vector<int> displayOrderIn = {});
+
+    int getPreferredHeight() const noexcept;
+    int getSelectedChoiceIndex() const noexcept;
+    void setSelectedChoiceIndex(int choiceIndex, bool sendNotification);
+    void setChoices(const juce::StringArray& choicesIn);
+    void setChoiceEnabled(int choiceIndex, bool shouldEnable);
+    void setTitleMouseEnabled(bool shouldEnable);
+    void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);
+    void setInteractionEnabled(bool shouldEnable);
+    void setOverrideText(const juce::String&);
+    void clearOverrideText();
+    void resized() override;
+
+    std::function<void()> onValueChanged;
+    std::function<void()> onTitleClick;
+
+private:
+    juce::AudioParameterChoice* parameter = nullptr;
+    std::unique_ptr<BoxTextButton> titleButton;
+    NoTickComboBox comboBox;
+    std::unique_ptr<Attachment> attachment;
+    juce::StringArray choices;
+    std::vector<int> displayOrder;
+    std::vector<int> choiceToDisplayIndex;
+    bool ignoreCallbacks = false;
+    juce::String overrideText;
+    bool interactionEnabled = true;
+};
+
+class LocalChoiceControl final : public juce::Component
+{
+public:
+    LocalChoiceControl(const juce::String& titleText,
+                       const juce::StringArray& choicesIn,
+                       std::vector<int> displayOrderIn,
+                       int initialChoiceIndex);
+
+    int getPreferredHeight() const noexcept;
+    void setInteractionEnabled(bool shouldEnable);
+    void setOverrideText(const juce::String&);
+    void clearOverrideText();
+    void setChoices(const juce::StringArray& choicesIn);
+    void setChoiceEnabled(int choiceIndex, bool shouldEnable);
+    void setTitleBorderVisible(bool shouldShow);
+    void setTitleMouseEnabled(bool shouldEnable);
+    void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);
+    int getSelectedChoiceIndex() const noexcept;
+    void setSelectedChoiceIndex(int choiceIndex, bool sendNotification);
+    void resized() override;
+
+    std::function<void()> onValueChanged;
+    std::function<void()> onTitleClick;
+
+private:
+    juce::StringArray choices;
+    std::unique_ptr<BoxTextButton> titleButton;
+    NoTickComboBox comboBox;
+    std::vector<int> displayOrder;
+    std::vector<int> choiceToDisplayIndex;
+    bool ignoreCallbacks = false;
+    juce::String overrideText;
+    bool interactionEnabled = true;
+};
+
+class LocalParameterControl final : public juce::Component
+{
+public:
+    LocalParameterControl(const juce::String& titleText,
+                          int editorDecimalsIn,
+                          double minimum,
+                          double maximum,
+                          double interval,
+                          double defaultValueIn,
+                          double skewCentre = 0.0,
+                          bool supportsBrickwText = false,
+                          bool supportsNoteTextIn = false);
+
+    int getPreferredHeight() const noexcept;
+    double getValue() const noexcept;
+    void setValue(double value, bool sendNotification);
+    void setOverrideText(const juce::String& text);
+    void clearOverrideText();
+    void setInteractionEnabled(bool shouldEnable);
+    void setTitleBorderVisible(bool shouldShow);
+    void setTitleMouseEnabled(bool shouldEnable);
+    void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);
+    void resized() override;
+
+    std::function<void()> onValueChanged;
+
+private:
+    juce::String formatDisplayValue(double value) const;
+    juce::String formatEditorValue() const;
+
+    const double defaultValue = 0.0;
+    const int editorDecimals = 2;
+    const bool brickwSupported = false;
+    const bool supportsNoteText = false;
+    std::unique_ptr<BoxTextButton> titleButton;
+    juce::Slider slider;
+    std::unique_ptr<ValueBoxComponent> valueBox;
+    juce::String overrideText;
+};
