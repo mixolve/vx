@@ -45,22 +45,38 @@ vx_command_exit() {
 }
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-
-cd "$repo_root"
+temp_dir="$script_dir"
 
 trap 'vx_command_exit' EXIT
 
-source_bundle="$repo_root/temp/build/macos-vst3/Vx_artefacts/Debug/VST3/vx.vst3"
-destination_dir="/Library/Audio/Plug-Ins/ALL"
-destination_bundle="$destination_dir/vx.vst3"
+source_bundle="$temp_dir/build/macos-vst3/Vx_artefacts/Debug/VST3/vx.vst3"
 
 if [ ! -d "$source_bundle" ]; then
 	echo "Missing macOS VST3 bundle: $source_bundle" >&2
 	exit 1
 fi
 
-echo "Installing macOS VST3 to $destination_bundle"
-vx_run_clean sudo mkdir -p "$destination_dir"
-vx_run_clean sudo rm -rf "$destination_bundle"
-vx_run_clean sudo ditto "$source_bundle" "$destination_bundle"
+vx_install_bundle() {
+	destination_dir="$1"
+	destination_bundle="$destination_dir/vx.vst3"
+
+	echo "Installing macOS VST3 to $destination_bundle"
+
+	if ! vx_run_clean mkdir -p "$destination_dir"; then
+		echo "Skipping macOS VST3 install, cannot create $destination_dir" >&2
+		return 0
+	fi
+
+	if ! vx_run_clean rm -rf "$destination_bundle"; then
+		echo "Skipping macOS VST3 install, cannot replace $destination_bundle" >&2
+		return 0
+	fi
+
+	if ! vx_run_clean ditto "$source_bundle" "$destination_bundle"; then
+		echo "Skipping macOS VST3 install, cannot copy to $destination_bundle" >&2
+		return 0
+	fi
+}
+
+vx_install_bundle "/Library/Audio/Plug-Ins/ALL"
+vx_install_bundle "$HOME/Library/Audio/Plug-Ins/VST3"

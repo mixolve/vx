@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
-
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist>
+<plist version="1.0">
   <dict>
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <true/>
-    <key>UILaunchStoryboardName</key>
-    <string>LaunchScreen</string>
+    <key>UILaunchScreen</key>
+    <dict/>
     <key>UIApplicationSceneManifest</key>
     <dict>
       <key>UIApplicationSupportsMultipleScenes</key>
@@ -25,17 +24,18 @@
     <key>CFBundleDisplayName</key>
     <string>@VX_IOS_HOST_DISPLAY_NAME@</string>
     <key>CFBundleIconFile</key>
-    <string>Icon-60</string>
+    <string>Icon.png</string>
+    <key>CFBundleIconFiles</key>
+    <array>
+      <string>Icon.png</string>
+    </array>
     <key>CFBundleIcons</key>
     <dict>
       <key>CFBundlePrimaryIcon</key>
       <dict>
         <key>CFBundleIconFiles</key>
         <array>
-          <string>Icon-20</string>
-          <string>Icon-29</string>
-          <string>Icon-40</string>
-          <string>Icon-60</string>
+          <string>Icon.png</string>
         </array>
         <key>UIPrerenderedIcon</key>
         <false/>
@@ -47,16 +47,33 @@
       <dict>
         <key>CFBundleIconFiles</key>
         <array>
-          <string>Icon-20</string>
-          <string>Icon-29</string>
-          <string>Icon-40</string>
-          <string>Icon-76</string>
-          <string>Icon-83.5</string>
+          <string>Icon.png</string>
         </array>
         <key>UIPrerenderedIcon</key>
         <false/>
       </dict>
     </dict>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+      <dict>
+        <key>CFBundleTypeIconFile</key>
+        <string>Icon.png</string>
+        <key>CFBundleTypeIconFiles</key>
+        <array>
+          <string>Icon.png</string>
+        </array>
+        <key>CFBundleTypeName</key>
+        <string>VX Documents</string>
+        <key>CFBundleTypeRole</key>
+        <string>Viewer</string>
+        <key>LSHandlerRank</key>
+        <string>Alternate</string>
+        <key>LSItemContentTypes</key>
+        <array>
+          <string>public.data</string>
+        </array>
+      </dict>
+    </array>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleSignature</key>
@@ -80,6 +97,8 @@
     <key>UIFileSharingEnabled</key>
     <true/>
     <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+    <key>UISupportsDocumentBrowser</key>
     <true/>
   </dict>
 </plist>

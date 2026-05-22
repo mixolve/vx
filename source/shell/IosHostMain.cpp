@@ -1,13 +1,14 @@
 #include <JuceHeader.h>
-#include "Editor.h"
+
+#include "shell.Editor.h"
 
 class HostContent final : public juce::Component
 {
 public:
     HostContent()
     {
-        processor = std::make_unique<EqeAudioProcessor>();
-        editor = std::make_unique<EqeAudioProcessorEditor>(*processor);
+        processor = std::make_unique<VxAudioProcessor>();
+        editor = std::make_unique<VxAudioProcessorEditor>(*processor);
         editor->setResizable(false, false);
         addAndMakeVisible(*editor);
         setOpaque(true);
@@ -25,8 +26,8 @@ public:
     }
 
 private:
-    std::unique_ptr<EqeAudioProcessor> processor;
-    std::unique_ptr<EqeAudioProcessorEditor> editor;
+    std::unique_ptr<VxAudioProcessor> processor;
+    std::unique_ptr<VxAudioProcessorEditor> editor;
 };
 
 class HostWindow final : public juce::DocumentWindow
@@ -38,10 +39,13 @@ public:
         setUsingNativeTitleBar(false);
         setTitleBarButtonsRequired(0, false);
         setTitleBarHeight(0);
-        setResizable(true, false);
+        setResizable(false, false);
         setContentOwned(new HostContent(), true);
-        centreWithSize(juce::jmin(juce::Desktop::getInstance().getDisplays().getMainDisplay().userArea.getWidth(), 420),
-                       juce::jmin(juce::Desktop::getInstance().getDisplays().getMainDisplay().userArea.getHeight(), 260));
+
+        const auto& displays = juce::Desktop::getInstance().getDisplays();
+        const auto* primaryDisplay = displays.getPrimaryDisplay();
+        const auto displayBounds = primaryDisplay != nullptr ? primaryDisplay->userArea : displays.getTotalBounds(true);
+        centreWithSize(displayBounds.getWidth(), displayBounds.getHeight());
         setVisible(true);
     }
 
@@ -54,9 +58,9 @@ public:
 class VxIosHostApplication final : public juce::JUCEApplication
 {
 public:
-    const juce::String getApplicationName() override       { return "Vx Host"; }
-    const juce::String getApplicationVersion() override    { return "0.1.0"; }
-    bool moreThanOneInstanceAllowed() override             { return true; }
+    const juce::String getApplicationName() override { return "vx-app"; }
+    const juce::String getApplicationVersion() override { return "0.1.2"; }
+    bool moreThanOneInstanceAllowed() override { return true; }
 
     void initialise(const juce::String&) override
     {

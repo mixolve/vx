@@ -29,18 +29,27 @@ vx_command_exit() {
 }
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-repo_root=$(CDPATH= cd -- "$script_dir/.." && pwd)
-
-cd "$repo_root"
+temp_dir="$script_dir"
 
 trap 'vx_command_exit' EXIT
 
-build_dir="$repo_root/temp/build/macos-vst3"
+build_dir="$temp_dir/build/macos-vst3"
+cache_source_dir="CMAKE_HOME_DIRECTORY:INTERNAL=$temp_dir"
+juce_subbuild_dir="$temp_dir/_deps/juce-subbuild"
+juce_tools_dir="$temp_dir/_deps/juce-build/tools"
 
 if [ -d "$build_dir" ] && {
-	[ ! -f "$build_dir/CMakeCache.txt" ] || ! grep -q "^CMAKE_HOME_DIRECTORY:INTERNAL=$repo_root/temp$" "$build_dir/CMakeCache.txt"
+	[ ! -f "$build_dir/CMakeCache.txt" ] || ! grep -Fqx "$cache_source_dir" "$build_dir/CMakeCache.txt"
 }; then
 	rm -rf "$build_dir"
 fi
 
-cmake -S temp -B "$build_dir" -G Xcode && cmake --build "$build_dir" --config Debug --target Vx_VST3 --parallel 4
+if [ -f "$juce_subbuild_dir/CMakeCache.txt" ] && ! grep -Fqx "CMAKE_GENERATOR:INTERNAL=Xcode" "$juce_subbuild_dir/CMakeCache.txt"; then
+	rm -rf "$juce_subbuild_dir"
+fi
+
+if [ -f "$juce_tools_dir/CMakeCache.txt" ] && ! grep -Fqx "CMAKE_GENERATOR:INTERNAL=Xcode" "$juce_tools_dir/CMakeCache.txt"; then
+	rm -rf "$juce_tools_dir"
+fi
+
+cmake -S "$temp_dir" -B "$build_dir" -G Xcode && cmake --build "$build_dir" --config Debug --target Vx_VST3 --parallel 4
