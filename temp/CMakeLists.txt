@@ -16,6 +16,7 @@ set(VX_SPE_MODULE_DIR "${VX_MODULES_DIR}/spe")
 set(VX_MXE_MODULE_DIR "${VX_MODULES_DIR}/mxe")
 set(VX_TSE_MODULE_DIR "${VX_MODULES_DIR}/tse")
 option(MIXOLVE_VX_ENABLE_EQE_APP_GROUP "Enable shared App Group EQE preset storage for iOS host app and AUv3 extension" ON)
+option(MIXOLVE_VX_BUILD_MACOS_AU "Build the macOS Audio Unit format instead of VST3" OFF)
 
 option(MIXOLVE_VX_USE_LOCAL_JUCE "Use a local JUCE checkout via JUCE_DIR" OFF)
 
@@ -200,9 +201,12 @@ juce_add_binary_data(vx_assets
     ${VX_PROJECT_ROOT_DIR}/resources/about.md
 )
 
-set(VX_PLUGIN_FORMATS VST3)
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(VX_PLUGIN_FORMATS AUv3)
+elseif(MIXOLVE_VX_BUILD_MACOS_AU)
+    set(VX_PLUGIN_FORMATS AU)
+else()
+    set(VX_PLUGIN_FORMATS VST3)
 endif()
 
 set(VX_PLUGIN_ARGS
