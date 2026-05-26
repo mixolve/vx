@@ -355,10 +355,10 @@ endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(VX_EQE_APP_GROUP_IDENTIFIER "group.com.mixolve.vx")
-    set(VX_IOS_HOST_EXECUTABLE_NAME "vx-app")
+    set(VX_IOS_HOST_EXECUTABLE_NAME "vx")
     set(VX_IOS_HOST_BUNDLE_IDENTIFIER "com.mixolve.vx")
-    set(VX_IOS_HOST_BUNDLE_NAME "vx-app")
-    set(VX_IOS_HOST_DISPLAY_NAME "vx-app")
+    set(VX_IOS_HOST_BUNDLE_NAME "vx")
+    set(VX_IOS_HOST_DISPLAY_NAME "vx")
 
     configure_file(
         ${VX_PROJECT_ROOT_DIR}/temp/Vx_iOSHostInfo.plist.in
@@ -384,7 +384,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     juce_add_gui_app(Vx_iOSHost
         COMPANY_NAME "mixolve"
         BUNDLE_ID "${VX_IOS_HOST_BUNDLE_IDENTIFIER}"
-        PRODUCT_NAME "vx-app")
+        PRODUCT_NAME "vx")
 
     juce_generate_juce_header(Vx_iOSHost)
 

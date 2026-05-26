@@ -78,6 +78,5 @@ vx_install_bundle() {
 	fi
 }
 
-vx_install_bundle "/Library/Audio/Plug-Ins/ALL"
 vx_install_bundle "/Library/Audio/Plug-Ins/Components"
 vx_install_bundle "$HOME/Library/Audio/Plug-Ins/Components"

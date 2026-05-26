@@ -58,7 +58,7 @@ public:
 class VxIosHostApplication final : public juce::JUCEApplication
 {
 public:
-    const juce::String getApplicationName() override { return "vx-app"; }
+    const juce::String getApplicationName() override { return "vx"; }
     const juce::String getApplicationVersion() override { return "0.1.2"; }
     bool moreThanOneInstanceAllowed() override { return true; }
 

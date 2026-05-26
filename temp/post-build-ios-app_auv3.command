@@ -38,9 +38,22 @@ trap finish_command EXIT
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build/ios-app_auv3"
-APP_PATH="${VX_IOS_APP_PATH:-${BUILD_DIR}/Vx_iOSHost_artefacts/Debug/vx-app.app}"
+APP_PATH="${VX_IOS_APP_PATH:-${BUILD_DIR}/Vx_iOSHost_artefacts/Debug/vx.app}"
 APPEX_PATH="${APP_PATH}/PlugIns/vx.appex"
 RULES_FILE="${SCRIPT_DIR}/rules_builds.md"
+
+resolve_app_path() {
+    local build_dir="$1"
+    local found_path=""
+
+    found_path="$(find "${build_dir}" -type d -name "vx.app" -not -path "*/Index.noindex/*" -print -quit)"
+    if [ -n "${found_path}" ]; then
+        printf '%s\n' "${found_path}"
+        return 0
+    fi
+
+    return 1
+}
 
 read_rules_device_udid() {
     [ -f "${RULES_FILE}" ] || return 0
@@ -119,7 +132,13 @@ verify_bundle() {
 }
 
 if [ ! -d "${APP_PATH}" ] && [ -z "${VX_IOS_APP_PATH:-}" ]; then
-    APP_PATH="$(find "${BUILD_DIR}" -type d -name "vx-app.app" -not -path "*/Index.noindex/*" -print -quit)"
+    APP_PATH="$(resolve_app_path "${BUILD_DIR}" || true)"
+    if [ -z "${APP_PATH}" ]; then
+        echo "iOS host app not found in ${BUILD_DIR}. Checked name: vx.app" >&2
+        echo "Run ./temp/build-ios-app_auv3.command first." >&2
+        exit 1
+    fi
+
     APPEX_PATH="${APP_PATH}/PlugIns/vx.appex"
 fi
 
