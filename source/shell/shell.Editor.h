@@ -38,6 +38,7 @@ private:
     void openGlobalSection();
     void openShellGlobalSection();
     void openShellGlobalMiscSection();
+    void openShellGlobalHostSection();
     void openFiltersSection();
     void openSpeMainSection();
     void openPresetsSection();
@@ -63,8 +64,12 @@ private:
 
 public:
     void requestCloseActiveModule() { closeActiveModule(); }
+    bool handleHostSlotAssignRequest(const juce::String& parameterId,
+                                     const juce::String& parameterName,
+                                     float normalizedValue);
     void showTextPrompt(const juce::String& currentText,
                         std::function<bool(const juce::String&)> onCommit,
+                        juce::Rectangle<int> anchorBounds = {},
                         std::function<void()> onClose = {},
                         std::function<void()> onDismiss = {});
     void showInfoPrompt(const juce::String& markdownText);
@@ -101,11 +106,13 @@ private:
     void updateSectionStates();
     void updateEditorWidthForVisualizerVisibility();
     void refreshVisualizerResponse();
+    void syncFocusedParameterControl();
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     void valueTreePropertyChanged(juce::ValueTree& treeWhosePropertyHasChanged,
                                   const juce::Identifier& property) override;
     void registerParameterListeners();
     void unregisterParameterListeners();
+    void syncHostSlotAssignmentValue(int slotIndex, float normalizedValue);
     void registerObservedModuleParameterListeners(juce::AudioProcessorValueTreeState& moduleValueTreeState);
     void refreshModuleStateListeners();
     void clearModuleStateListeners();
@@ -116,6 +123,7 @@ private:
     void setupPresetControls();
     void setupSpeControls(juce::AudioProcessorValueTreeState& speState,
                           SpeModuleProcessor& speProcessor);
+    void refreshSpeAnalyserControls(SpeModuleProcessor& speProcessor);
     void setupEqeControls(juce::AudioProcessorValueTreeState& initialEqeState);
     EqeModuleProcessor* getActiveEqeProcessor() noexcept;
     const EqeModuleProcessor* getActiveEqeProcessor() const noexcept;
@@ -133,8 +141,6 @@ private:
     int getSpeAnalyserContentHeight() const;
     int getSpeSectionContentHeight() const;
     int getActiveBellCount() const noexcept;
-    bool shouldShowDetachedVisualizerPanel() const noexcept;
-    int getCurrentMainPanelWidth() const noexcept;
     void updateVisualizerPanelBounds(juce::Rectangle<int>& bounds);
     void layoutShellGlobalSection(juce::Rectangle<int>& bounds, int editorInsetX);
     void layoutFooter(juce::Rectangle<int>& bounds, int editorInsetX);
@@ -156,6 +162,8 @@ private:
                           juce::Rectangle<int> sectionBounds) const;
     juce::Rectangle<int> buildShellGlobalFrameBounds() const;
     void includeModuleTabRowBounds(juce::Rectangle<int>& sectionBounds) const;
+    void clearHostSlot(int slotIndex);
+    void refreshHostSlotButtons();
 
     struct ObservedModuleParameterListeners
     {
@@ -170,6 +178,7 @@ private:
     std::unique_ptr<VxLookAndFeel> lookAndFeel;
     std::unique_ptr<BoxTextButton> shellGlobalHeader;
     std::unique_ptr<BoxTextButton> shellGlobalMiscHeader;
+    std::unique_ptr<BoxTextButton> shellGlobalHostHeader;
     std::unique_ptr<BoxTextButton> moduleAddButton;
     struct ModuleTabRow
     {
@@ -204,11 +213,6 @@ private:
     std::unique_ptr<ParameterControl> speMakeupControl;
     std::unique_ptr<BoxTextButton> speDeltaButton;
     std::unique_ptr<ButtonAttachment> speDeltaAttachment;
-    std::unique_ptr<ParameterControl> speThresholdControl;
-    std::unique_ptr<ParameterControl> speStereoAdaptiveControl;
-    std::unique_ptr<ParameterControl> speStereoAdaptiveOffsetControl;
-    std::unique_ptr<BoxTextButton> speStereoBypassButton;
-    std::unique_ptr<ButtonAttachment> speStereoBypassAttachment;
     std::unique_ptr<BoxTextButton> speBypassButton;
     std::unique_ptr<ButtonAttachment> speBypassAttachment;
     std::unique_ptr<BoxTextButton> speBypassWithGainButton;
@@ -219,8 +223,8 @@ private:
     std::unique_ptr<ParameterControl> speDualMonoRightThresholdControl;
     std::unique_ptr<ParameterControl> speDualMonoRightAdaptiveControl;
     std::unique_ptr<ParameterControl> speDualMonoRightAdaptiveOffsetControl;
-    std::unique_ptr<BoxTextButton> speDualMonoBypassButton;
-    std::unique_ptr<ButtonAttachment> speDualMonoBypassAttachment;
+    std::unique_ptr<BoxTextButton> speDualMonoLinkButton;
+    std::unique_ptr<ButtonAttachment> speDualMonoLinkAttachment;
     std::unique_ptr<LocalParameterControl> speAnalyserFftSizeControl;
     std::unique_ptr<LocalParameterControl> speAnalyserOverlapControl;
     std::unique_ptr<LocalParameterControl> speAnalyserLeftControl;
@@ -237,7 +241,6 @@ private:
     std::unique_ptr<BoxTextButton> visualizerShowRightButton;
     std::unique_ptr<BoxTextButton> visualizerShowMidButton;
     std::unique_ptr<BoxTextButton> visualizerShowSideButton;
-    std::unique_ptr<BoxTextButton> speAnalyserVisibilityButton;
     std::unique_ptr<BoxTextButton> globalBypassButton;
     std::unique_ptr<ButtonAttachment> globalBypassAttachment;
     std::unique_ptr<BoxTextButton> globalBypassOutGainOnlyButton;
@@ -259,12 +262,15 @@ private:
     std::unique_ptr<BoxTextButton> sortPlaceButton;
     std::unique_ptr<BoxTextButton> sortFreqButton;
     std::unique_ptr<BoxTextButton> sortDuoButton;
-    std::unique_ptr<BoxTextButton> visualizerVisibilityButton;
+    std::array<std::unique_ptr<BoxTextButton>, VxAudioProcessor::hostAutomationSlotCount> hostSlotButtons;
     std::array<std::unique_ptr<BellSection>, VxAudioProcessor::maxBellFilterCount> bellSections;
     juce::Viewport globalViewport;
     juce::Component globalContent;
+    juce::Viewport shellGlobalHostViewport;
+    juce::Component shellGlobalHostContent;
     juce::Viewport filterViewport;
     juce::Component filterContent;
+    std::unique_ptr<juce::Slider> focusedParameterControl;
     std::unique_ptr<BoxTextButton> footerTab;
     std::unique_ptr<juce::Component> eqeModuleFrame;
     std::unique_ptr<juce::Component> shellGlobalSectionFrame;
@@ -285,12 +291,12 @@ private:
     bool eqeModuleExpanded = true;
     bool shellGlobalExpanded = false;
     bool shellGlobalMiscExpanded = true;
+    bool shellGlobalHostExpanded = false;
     bool globalExpanded = false;
     bool speMainExpanded = false;
     bool filtersExpanded = false;
     bool presetsExpanded = false;
     bool visualizerExpanded = false;
-    bool visualizerVisible = false;
     bool visualizerCursorEnabled = true;
     bool visualizerShowStereo = true;
     bool visualizerShowLeft = true;
@@ -299,12 +305,14 @@ private:
     bool visualizerShowSide = true;
     int expandedBellIndex = -1;
     int lastCollapsedEditorWidth = 0;
-    int lastVisualizerWidth = 0;
     float visualizerRangeLowDb = -24.0f;
     float visualizerRangeHighDb = 24.0f;
     std::vector<int> bellDisplayOrder;
     bool suppressBellSectionValueChangeHandlers = false;
     bool suppressVisualizerControlChangeHandlers = false;
+    bool suppressSpeAnalyserControlChangeHandlers = false;
+    bool suppressFocusedParameterControlChangeHandlers = false;
+    bool suppressHostSlotAutomationSync = false;
     bool suppressEditorSizeStateSave = true;
     bool suppressHistorySnapshots = false;
     juce::MemoryBlock committedHistorySnapshot;
@@ -312,6 +320,16 @@ private:
     std::vector<juce::MemoryBlock> redoHistory;
     std::atomic<bool> pendingHistorySnapshot { false };
     std::atomic<uint32_t> lastHistoryChangeTimeMs { 0 };
+    int focusedParameterControlPinnedX = 0;
+    int focusedParameterControlPinnedWidth = 0;
+    juce::Slider* focusedParameterTargetSlider = nullptr;
+
+    struct HostSlotAssignment
+    {
+        juce::String parameterId;
+        juce::String parameterName;
+    };
+    std::array<HostSlotAssignment, VxAudioProcessor::hostAutomationSlotCount> hostSlotAssignments;
 
     int getBellIndexForOrderPosition(int orderIndex) const noexcept;
     int getBellOrderPositionForIndex(int bellIndex) const noexcept;

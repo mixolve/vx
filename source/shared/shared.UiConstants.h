@@ -10,3 +10,6 @@ inline constexpr int internalFrameInsetY = 4;
 inline constexpr int contentFrameInsetX = internalFrameInsetX;
 inline constexpr int contentFrameInsetY = internalFrameInsetY;
 inline constexpr int frameLineThickness = 1;
+inline constexpr int focusedParameterDragSensitivity = 10;
+inline constexpr float focusedParameterScrollSensitivity = 220.0f;
+inline constexpr int speInlineAnalyserHeightRows = 6;

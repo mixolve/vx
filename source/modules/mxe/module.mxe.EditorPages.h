@@ -33,9 +33,6 @@ private:
     std::function<bool()> isSoloEnabled;
     SectionComponent misc;
     SectionComponent main;
-    SectionComponent halfWave;
-    SectionComponent dm;
-    SectionComponent ff;
 };
 
 class FullbandPageComponent final : public juce::Component

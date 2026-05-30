@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "../../shared/shared.TransientSplit.h"
+#include "../../shared/shared.InternalParameterHost.h"
 
 #include <array>
 #include <atomic>
@@ -223,6 +224,7 @@ private:
     void resetTtssSplitState() noexcept;
     static float makeTtssReleaseProgress(float progress, float curveAmount) noexcept;
 
+    InternalParameterHost internalParameterHost;
     juce::AudioProcessorValueTreeState parameters;
     std::atomic<float>* bypassParam = nullptr;
     std::atomic<float>* bypassWithGainParam = nullptr;

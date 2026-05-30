@@ -26,7 +26,7 @@ void VxAudioProcessorEditor::setupVisualizerControls()
         refreshVisualizerResponse();
         storeEditorStateToValueTree();
     };
-    addAndMakeVisible(*visualizerRangeLowControl);
+    filterContent.addAndMakeVisible(*visualizerRangeLowControl);
 
     visualizerRangeHighControl = std::make_unique<LocalParameterControl>("HIGH",
                                                                          1,
@@ -52,7 +52,7 @@ void VxAudioProcessorEditor::setupVisualizerControls()
         refreshVisualizerResponse();
         storeEditorStateToValueTree();
     };
-    addAndMakeVisible(*visualizerRangeHighControl);
+    filterContent.addAndMakeVisible(*visualizerRangeHighControl);
 
     visualizerCursorButton = std::make_unique<BoxTextButton>(uiGrey500);
     visualizerCursorButton->setButtonText(visualizerCursorEnabled ? "CURSOR-OFF" : "CURSOR-ON");
@@ -67,7 +67,7 @@ void VxAudioProcessorEditor::setupVisualizerControls()
         storeEditorStateToValueTree();
         clearKeyboardFocus(*this);
     };
-    addAndMakeVisible(*visualizerCursorButton);
+    filterContent.addAndMakeVisible(*visualizerCursorButton);
 
     auto makeVisualizerLegendButton = [this] (const juce::String& text, const juce::Colour colour, bool& stateValue)
     {
@@ -87,30 +87,18 @@ void VxAudioProcessorEditor::setupVisualizerControls()
     };
 
     visualizerShowStereoButton = makeVisualizerLegendButton("LR", visualizerStereoColour, visualizerShowStereo);
-    addAndMakeVisible(*visualizerShowStereoButton);
+    filterContent.addAndMakeVisible(*visualizerShowStereoButton);
 
     visualizerShowLeftButton = makeVisualizerLegendButton("L", visualizerLeftColour, visualizerShowLeft);
-    addAndMakeVisible(*visualizerShowLeftButton);
+    filterContent.addAndMakeVisible(*visualizerShowLeftButton);
 
     visualizerShowRightButton = makeVisualizerLegendButton("R", visualizerRightColour, visualizerShowRight);
-    addAndMakeVisible(*visualizerShowRightButton);
+    filterContent.addAndMakeVisible(*visualizerShowRightButton);
 
     visualizerShowMidButton = makeVisualizerLegendButton("M", visualizerMidColour, visualizerShowMid);
-    addAndMakeVisible(*visualizerShowMidButton);
+    filterContent.addAndMakeVisible(*visualizerShowMidButton);
 
     visualizerShowSideButton = makeVisualizerLegendButton("S", visualizerSideColour, visualizerShowSide);
-    addAndMakeVisible(*visualizerShowSideButton);
+    filterContent.addAndMakeVisible(*visualizerShowSideButton);
 
-    visualizerVisibilityButton = std::make_unique<BoxTextButton>(uiGrey500);
-    visualizerVisibilityButton->setButtonText("SHOW");
-    visualizerVisibilityButton->setClickingTogglesState(true);
-    visualizerVisibilityButton->onClick = [this]
-    {
-        visualizerVisible = visualizerVisibilityButton->getToggleState();
-        updateEditorWidthForVisualizerVisibility();
-        updateSectionStates();
-        resized();
-        clearKeyboardFocus(*this);
-    };
-    addAndMakeVisible(*visualizerVisibilityButton);
 }

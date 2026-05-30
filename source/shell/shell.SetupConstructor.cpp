@@ -2,6 +2,28 @@
 #include "shell.EditorPresetSections.h"
 #include "shell.SetupSupport.h"
 #include "../modules/spe/module.spe.SpeProcessor.h"
+#include "../modules/mxe/module.mxe.EditorControls.h"
+
+namespace
+{
+class FocusedParameterSlider final : public juce::Slider
+{
+public:
+    FocusedParameterSlider()
+        : juce::Slider(juce::Slider::LinearBarVertical, juce::Slider::NoTextBox)
+    {
+    }
+
+    void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override
+    {
+        auto scaledWheel = wheel;
+        const auto scale = focusedParameterScrollSensitivity / 220.0f;
+        scaledWheel.deltaX *= scale;
+        scaledWheel.deltaY *= scale;
+        juce::Slider::mouseWheelMove(event, scaledWheel);
+    }
+};
+}
 
 VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit)
     : AudioProcessorEditor(&processorToEdit),
@@ -9,6 +31,9 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
       valueTreeState(processorToEdit.getValueTreeState()),
       lookAndFeel(std::make_unique<VxLookAndFeel>())
 {
+    shell_parameter_focus::clearFocus();
+    mxe::editor::parameter_focus::clearFocus();
+
     setLookAndFeel(lookAndFeel.get());
     setOpaque(true);
     setResizable(true, true);
@@ -19,11 +44,49 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     globalViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
     globalViewport.setWantsKeyboardFocus(false);
     addAndMakeVisible(globalViewport);
+    shellGlobalHostViewport.setViewedComponent(&shellGlobalHostContent, false);
+    shellGlobalHostViewport.setScrollBarsShown(false, true);
+    shellGlobalHostViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
+    shellGlobalHostViewport.setWantsKeyboardFocus(false);
+    addAndMakeVisible(shellGlobalHostViewport);
     filterViewport.setViewedComponent(&filterContent, false);
     filterViewport.setScrollBarsShown(false, false);
     filterViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
     filterViewport.setWantsKeyboardFocus(false);
     addAndMakeVisible(filterViewport);
+
+    focusedParameterControl = std::make_unique<FocusedParameterSlider>();
+    focusedParameterControl->setSliderStyle(juce::Slider::LinearBarVertical);
+    focusedParameterControl->setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+    focusedParameterControl->setSliderSnapsToMousePosition(false);
+    focusedParameterControl->setVelocityBasedMode(true);
+    focusedParameterControl->setMouseDragSensitivity(focusedParameterDragSensitivity);
+    focusedParameterControl->setVelocityModeParameters(static_cast<double>(juce::jmax(1, focusedParameterDragSensitivity)),
+                                                       1,
+                                                       0.0,
+                                                       false);
+    focusedParameterControl->setScrollWheelEnabled(true);
+    focusedParameterControl->setColour(juce::Slider::backgroundColourId, uiGrey800);
+    focusedParameterControl->setColour(juce::Slider::trackColourId, uiGrey500);
+    focusedParameterControl->setColour(juce::Slider::thumbColourId, uiGrey500);
+    focusedParameterControl->setColour(juce::Slider::rotarySliderFillColourId, uiGrey500);
+    focusedParameterControl->setColour(juce::Slider::rotarySliderOutlineColourId, uiGrey500);
+    focusedParameterControl->setRange(0.0, 1.0, 0.0);
+    focusedParameterControl->setValue(0.5, juce::dontSendNotification);
+    focusedParameterControl->setEnabled(false);
+    focusedParameterControl->setAlpha(1.0f);
+    focusedParameterControlPinnedWidth = rowHeight;
+    focusedParameterControl->onValueChange = [this]
+    {
+        if (suppressFocusedParameterControlChangeHandlers || focusedParameterControl == nullptr || focusedParameterTargetSlider == nullptr)
+            return;
+
+        const auto& targetRange = focusedParameterTargetSlider->getNormalisableRange();
+        const auto normalizedValue = static_cast<float>(focusedParameterControl->getValue());
+        focusedParameterTargetSlider->setValue(targetRange.convertFrom0to1(normalizedValue),
+                                               juce::sendNotificationSync);
+    };
+    addAndMakeVisible(*focusedParameterControl);
 
     shellGlobalHeader = std::make_unique<BoxTextButton>(uiClip);
     shellGlobalHeader->setButtonText("GLOBAL");
@@ -47,6 +110,17 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
         clearKeyboardFocus(*this);
     };
     addAndMakeVisible(*shellGlobalMiscHeader);
+
+    shellGlobalHostHeader = std::make_unique<BoxTextButton>(uiAccent);
+    shellGlobalHostHeader->setButtonText("HOST");
+    shellGlobalHostHeader->setTextJustification(juce::Justification::centred);
+    shellGlobalHostHeader->setClickingTogglesState(true);
+    shellGlobalHostHeader->onClick = [this]
+    {
+        openShellGlobalHostSection();
+        clearKeyboardFocus(*this);
+    };
+    addAndMakeVisible(*shellGlobalHostHeader);
 
     moduleAddButton = std::make_unique<BoxTextButton>(uiClip);
     moduleAddButton->setButtonText("ADD-MODULE");
@@ -90,14 +164,6 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     setupShellControls();
     setupVisualizerControls();
 
-    visualizerComponent = shell_setup_support::createEqResponseVisualizerComponent(audioProcessor,
-                                                                                   [this] (const int bellIndex)
-                                                                                   {
-                                                                                       selectBellSection(bellIndex);
-                                                                                       clearKeyboardFocus(*this);
-                                                                                   });
-    addAndMakeVisible(*visualizerComponent);
-
     setupPresetControls();
 
     bellDisplayOrder.reserve(VxAudioProcessor::maxBellFilterCount);
@@ -138,41 +204,24 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     eqeModuleFrame->setVisible(false);
     shellGlobalSectionFrame->setVisible(false);
 
-    startTimerHz(30);
+    startTimerHz(60);
     registerParameterListeners();
     rebindActiveModuleEditors();
 
     rebuildModuleTabRows();
     updateSectionStates();
-    setResizeLimits(minimumEditorWidth, minimumEditorHeight, maximumEditorWidth, maximumEditorHeight);
+    setResizeLimits(minimumEditorWidthWithFocusedControl, minimumEditorHeight, maximumEditorWidth, maximumEditorHeight);
 
     const auto restoredEditorSize = getRestoredEditorSize();
     lastCollapsedEditorWidth = juce::jlimit(minimumEditorWidth,
                                             juce::jmax(minimumEditorWidth, maximumEditorWidth - minimumVisualizerWidth),
                                             lastCollapsedEditorWidth);
-    lastVisualizerWidth = juce::jmax(minimumVisualizerWidth, lastVisualizerWidth);
-
-    if (shouldShowDetachedVisualizerPanel())
-    {
-        const auto minimumVisibleWidth = lastCollapsedEditorWidth + visualizerPanelGap + minimumVisualizerWidth;
-        const auto preferredVisibleWidth = lastCollapsedEditorWidth + visualizerPanelGap + lastVisualizerWidth;
-        const auto width = juce::jmax(minimumVisibleWidth,
-                                      juce::jmax(restoredEditorSize.x, preferredVisibleWidth));
-        setResizeLimits(minimumVisibleWidth,
-                        minimumEditorHeight,
-                        maximumEditorWidth,
-                        maximumEditorHeight);
-        setSize(width, restoredEditorSize.y);
-        audioProcessor.setLastEditorSize(width, restoredEditorSize.y);
-    }
-    else
-    {
-        setResizeLimits(minimumEditorWidth, minimumEditorHeight, maximumEditorWidth, maximumEditorHeight);
-        setSize(restoredEditorSize.x, restoredEditorSize.y);
-        audioProcessor.setLastEditorSize(restoredEditorSize.x, restoredEditorSize.y);
-    }
+    setResizeLimits(minimumEditorWidthWithFocusedControl, minimumEditorHeight, maximumEditorWidth, maximumEditorHeight);
+    setSize(restoredEditorSize.x, restoredEditorSize.y);
+    audioProcessor.setLastEditorSize(restoredEditorSize.x, restoredEditorSize.y);
 
     suppressEditorSizeStateSave = false;
+    syncFocusedParameterControl();
     refreshVisualizerResponse();
 
     audioProcessor.getStateInformation(committedHistorySnapshot);

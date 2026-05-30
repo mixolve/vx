@@ -129,7 +129,7 @@ public:
     void paint(juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().toFloat();
-        auto plotBounds = bounds.reduced(10.0f);
+        auto plotBounds = bounds.reduced(1.0f);
         g.setColour(juce::Colours::black);
         g.fillRect(plotBounds);
 
@@ -562,7 +562,7 @@ public:
     void refreshResponse()
     {
         processor.copyAnalyserData(scopeData, sampleRate);
-        processor.copyGainReductionData(gainReductionData);
+        processor.copyGainReductionData(leftGainReductionData, rightGainReductionData);
         displaySettings = processor.getDisplaySettings();
         repaint();
     }
@@ -570,7 +570,7 @@ public:
     void paint(juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().toFloat();
-        auto plotBounds = bounds.reduced(10.0f);
+        auto plotBounds = bounds;
 
         g.setColour(uiGrey800);
         g.fillRect(bounds);
@@ -580,8 +580,10 @@ public:
             return;
 
         juce::Path postSpectrumPath;
-        juce::Path reductionPath;
-        juce::Path thresholdPath;
+        juce::Path leftReductionPath;
+        juce::Path rightReductionPath;
+        juce::Path leftThresholdPath;
+        juce::Path rightThresholdPath;
 
         const auto sourceMaximumHz = juce::jlimit(21.0f,
                                                   22000.0f,
@@ -599,30 +601,40 @@ public:
             const auto x = plotBounds.getX() + proportion * plotBounds.getWidth();
             const auto frequency = juce::mapToLog10(proportion, minimumHz, maximumHz);
             const auto sampledDecibels = sampleScopeAtFrequency(scopeData, frequency, sourceMaximumHz);
-            const auto sampledReductionDb = juce::jmax(0.0f,
-                                                       sampleScopeAtFrequency(gainReductionData,
-                                                                              frequency,
-                                                                              sourceMaximumHz));
+            const auto sampledLeftReductionDb = juce::jmax(0.0f,
+                                                           sampleScopeAtFrequency(leftGainReductionData,
+                                                                                  frequency,
+                                                                                  sourceMaximumHz));
+            const auto sampledRightReductionDb = juce::jmax(0.0f,
+                                                            sampleScopeAtFrequency(rightGainReductionData,
+                                                                                   frequency,
+                                                                                   sourceMaximumHz));
             const auto octavesFromSlopeReference = std::log2(frequency / 632.455532f);
             const auto displaySlopeOffset = displaySettings.slopeDbPerOct * octavesFromSlopeReference;
-            const auto thresholdDbAtFrequency = displaySettings.thresholdDb;
             const auto postDecibels = sampledDecibels + displaySlopeOffset;
             const auto postY = decibelsToY(postDecibels, plotBounds);
-            const auto thresholdY = decibelsToY(thresholdDbAtFrequency, plotBounds);
-            const auto reductionY = decibelsToY(thresholdDbAtFrequency - sampledReductionDb, plotBounds);
+            const auto leftThresholdY = decibelsToY(displaySettings.leftThresholdDb, plotBounds);
+            const auto rightThresholdY = decibelsToY(displaySettings.rightThresholdDb, plotBounds);
+            const auto leftReductionY = decibelsToY(displaySettings.leftThresholdDb - sampledLeftReductionDb, plotBounds);
+            const auto rightReductionY = decibelsToY(displaySettings.rightThresholdDb - sampledRightReductionDb, plotBounds);
 
             if (index == 0)
             {
                 postSpectrumPath.startNewSubPath(x, postY);
-                thresholdPath.startNewSubPath(x, thresholdY);
-                reductionPath.startNewSubPath(x, thresholdY);
-                reductionPath.lineTo(x, reductionY);
+                leftThresholdPath.startNewSubPath(x, leftThresholdY);
+                rightThresholdPath.startNewSubPath(x, rightThresholdY);
+                leftReductionPath.startNewSubPath(x, leftThresholdY);
+                leftReductionPath.lineTo(x, leftReductionY);
+                rightReductionPath.startNewSubPath(x, rightThresholdY);
+                rightReductionPath.lineTo(x, rightReductionY);
             }
             else
             {
                 postSpectrumPath.lineTo(x, postY);
-                thresholdPath.lineTo(x, thresholdY);
-                reductionPath.lineTo(x, reductionY);
+                leftThresholdPath.lineTo(x, leftThresholdY);
+                rightThresholdPath.lineTo(x, rightThresholdY);
+                leftReductionPath.lineTo(x, leftReductionY);
+                rightReductionPath.lineTo(x, rightReductionY);
             }
         }
 
@@ -635,18 +647,25 @@ public:
         {
             const auto proportion = static_cast<float>(index) / static_cast<float>(spe::analyserScopeSize - 1);
             const auto x = plotBounds.getX() + proportion * plotBounds.getWidth();
-            reductionPath.lineTo(x, decibelsToY(displaySettings.thresholdDb, plotBounds));
+            leftReductionPath.lineTo(x, decibelsToY(displaySettings.leftThresholdDb, plotBounds));
+            rightReductionPath.lineTo(x, decibelsToY(displaySettings.rightThresholdDb, plotBounds));
         }
 
-        reductionPath.closeSubPath();
+        leftReductionPath.closeSubPath();
+        rightReductionPath.closeSubPath();
 
         g.setColour(uiGrey500);
         g.drawRect(plotBounds, 1.0f);
         g.setColour(uiAccent);
         g.fillPath(spectrumFillPath);
-        g.setColour(uiClip);
-        g.fillPath(reductionPath);
-        g.strokePath(thresholdPath, juce::PathStrokeType(1.0f));
+        g.setColour(visualizerLeftColour);
+        g.fillPath(leftReductionPath);
+        g.setColour(visualizerRightColour);
+        g.fillPath(rightReductionPath);
+        g.setColour(visualizerLeftColour);
+        g.strokePath(leftThresholdPath, juce::PathStrokeType(1.0f));
+        g.setColour(visualizerRightColour);
+        g.strokePath(rightThresholdPath, juce::PathStrokeType(1.0f));
     }
 
 private:
@@ -674,16 +693,19 @@ private:
 
     float decibelsToY(const float decibels, const juce::Rectangle<float> bounds) const
     {
-        return juce::jmap(juce::jlimit(displaySettings.rangeLowDb, displaySettings.rangeHighDb, decibels),
-                          displaySettings.rangeLowDb,
-                          displaySettings.rangeHighDb,
+        const auto low = juce::jmin(displaySettings.rangeLowDb, displaySettings.rangeHighDb - 6.0f);
+        const auto high = juce::jmax(displaySettings.rangeHighDb, low + 6.0f);
+        return juce::jmap(juce::jlimit(low, high, decibels),
+                          low,
+                          high,
                           bounds.getBottom(),
                           bounds.getY());
     }
 
     SpeModuleProcessor& processor;
     std::array<float, spe::analyserScopeSize> scopeData {};
-    std::array<float, spe::analyserScopeSize> gainReductionData {};
+    std::array<float, spe::analyserScopeSize> leftGainReductionData {};
+    std::array<float, spe::analyserScopeSize> rightGainReductionData {};
     spe::DisplaySettings displaySettings;
     double sampleRate = 44100.0;
 };
@@ -776,45 +798,6 @@ void removeOwnedChild(juce::Component& owner, std::unique_ptr<juce::Component>& 
 
 void VxAudioProcessorEditor::refreshVisualizerResponse()
 {
-    if (speModuleLoaded && eqeModuleExpanded && visualizerVisible)
+    if (speModuleLoaded)
         shell_setup_support::refreshSpeAnalyserComponent(speAnalyserComponent.get());
-
-    if (! eqeModuleLoaded || ! eqeModuleExpanded || ! visualizerVisible)
-        return;
-
-    std::vector<shell_setup_support::VisualizerMarkerData> markers;
-    const auto activeCount = getActiveBellCount();
-    markers.reserve(static_cast<size_t>(activeCount));
-
-    for (int displayIndex = 0; displayIndex < activeCount; ++displayIndex)
-    {
-        const auto bellIndex = getBellIndexForOrderPosition(displayIndex);
-
-        if (bellIndex < 0)
-            continue;
-
-        auto* section = bellSections[static_cast<size_t>(bellIndex)].get();
-
-        if (section == nullptr)
-            continue;
-
-        markers.push_back({ bellIndex,
-                            displayIndex + 1,
-                            juce::jlimit(minimumVisibleFilterFrequency,
-                                         maximumVisibleFilterFrequency,
-                                         static_cast<float>(section->getFrequency())),
-                            section->getPlace(),
-                            filtersExpanded && expandedBellIndex == bellIndex });
-    }
-
-    shell_setup_support::refreshEqResponseVisualizerComponent(visualizerComponent.get(),
-                                                              visualizerRangeLowDb,
-                                                              visualizerRangeHighDb,
-                                                              visualizerCursorEnabled,
-                                                              visualizerShowStereo,
-                                                              visualizerShowLeft,
-                                                              visualizerShowRight,
-                                                              visualizerShowMid,
-                                                              visualizerShowSide,
-                                                              std::move(markers));
 }

@@ -1,55 +1,57 @@
 #include "shell.EditorParameterControls.h"
+#include "shell.SetupSupport.h"
 #include "../modules/spe/module.spe.SpeProcessor.h"
 
 #include <array>
 #include <cmath>
 #include <limits>
 
+void VxAudioProcessorEditor::refreshSpeAnalyserControls(SpeModuleProcessor& speProcessor)
+{
+        const juce::ScopedValueSetter<bool> scopedIgnore(suppressSpeAnalyserControlChangeHandlers, true);
+        static constexpr std::array<const char*, 5> fftSizeLabels { "1024", "2048", "4096", "8192", "16384" };
+    static constexpr std::array<const char*, 5> overlapLabels { "2", "4", "8", "16", "32" };
+
+        if (speAnalyserFftSizeControl != nullptr)
+        {
+            const auto fftIndex = juce::jlimit(0,
+                                               static_cast<int>(fftSizeLabels.size()) - 1,
+                                               juce::roundToInt(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramFftSizeId)));
+            speAnalyserFftSizeControl->setValue(static_cast<double>(fftIndex), false);
+            speAnalyserFftSizeControl->setOverrideText(fftSizeLabels[static_cast<size_t>(fftIndex)]);
+        }
+
+        if (speAnalyserOverlapControl != nullptr)
+        {
+            const auto overlapIndex = juce::jlimit(0,
+                                                   static_cast<int>(overlapLabels.size()) - 1,
+                                                   juce::roundToInt(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramOverlapId)));
+            speAnalyserOverlapControl->setValue(static_cast<double>(overlapIndex), false);
+            speAnalyserOverlapControl->setOverrideText(overlapLabels[static_cast<size_t>(overlapIndex)]);
+        }
+
+        if (speAnalyserLeftControl != nullptr)
+            speAnalyserLeftControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramLeftId), false);
+
+        if (speAnalyserRightControl != nullptr)
+            speAnalyserRightControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRightId), false);
+
+        if (speAnalyserRangeLowControl != nullptr)
+            speAnalyserRangeLowControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRangeLowId), false);
+
+        if (speAnalyserRangeHighControl != nullptr)
+            speAnalyserRangeHighControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRangeHighId), false);
+
+        if (speAnalyserSlopeControl != nullptr)
+            speAnalyserSlopeControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramSlopeId), false);
+
+        if (speAnalyserTimeControl != nullptr)
+            speAnalyserTimeControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramTimeId), false);
+}
+
 void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState& speState,
                                               SpeModuleProcessor& speProcessor)
 {
-        auto refreshAnalyserControls = [this, &speProcessor]
-        {
-            static constexpr std::array<const char*, 5> fftSizeLabels { "1024", "2048", "4096", "8192", "16384" };
-            static constexpr std::array<const char*, 5> overlapLabels { "2x", "4x", "8x", "16x", "32x" };
-
-            if (speAnalyserFftSizeControl != nullptr)
-            {
-                const auto fftIndex = juce::jlimit(0,
-                                                   static_cast<int>(fftSizeLabels.size()) - 1,
-                                                   juce::roundToInt(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramFftSizeId)));
-                speAnalyserFftSizeControl->setValue(static_cast<double>(fftIndex), false);
-                speAnalyserFftSizeControl->setOverrideText(fftSizeLabels[static_cast<size_t>(fftIndex)]);
-            }
-
-            if (speAnalyserOverlapControl != nullptr)
-            {
-                const auto overlapIndex = juce::jlimit(0,
-                                                       static_cast<int>(overlapLabels.size()) - 1,
-                                                       juce::roundToInt(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramOverlapId)));
-                speAnalyserOverlapControl->setValue(static_cast<double>(overlapIndex), false);
-                speAnalyserOverlapControl->setOverrideText(overlapLabels[static_cast<size_t>(overlapIndex)]);
-            }
-
-            if (speAnalyserLeftControl != nullptr)
-                speAnalyserLeftControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramLeftId), false);
-
-            if (speAnalyserRightControl != nullptr)
-                speAnalyserRightControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRightId), false);
-
-            if (speAnalyserRangeLowControl != nullptr)
-                speAnalyserRangeLowControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRangeLowId), false);
-
-            if (speAnalyserRangeHighControl != nullptr)
-                speAnalyserRangeHighControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRangeHighId), false);
-
-            if (speAnalyserSlopeControl != nullptr)
-                speAnalyserSlopeControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramSlopeId), false);
-
-            if (speAnalyserTimeControl != nullptr)
-                speAnalyserTimeControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramTimeId), false);
-        };
-
         const auto parseDiscreteAnalyserChoice = [] (const juce::String& text, const std::initializer_list<double> values)
         {
             const auto targetValue = text.retainCharacters("0123456789.-").getDoubleValue();
@@ -71,6 +73,39 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
             }
 
             return static_cast<double>(bestIndex);
+        };
+
+        const auto refreshSpeAnalyserState = [this, &speProcessor]
+        {
+            refreshSpeAnalyserControls(speProcessor);
+            shell_setup_support::refreshSpeAnalyserComponent(speAnalyserComponent.get());
+            scheduleHistorySnapshot();
+        };
+
+        const auto showDiscreteChoicePrompt = [this] (juce::Component& anchor,
+                                                       juce::Rectangle<int> anchorBounds,
+                                                       const juce::StringArray& options,
+                                                       const int currentIndex,
+                                                       std::function<void(int)> onSelectCallback)
+        {
+            if (anchorBounds.isEmpty())
+                anchorBounds = anchor.getLocalBounds();
+
+            std::vector<bool> enabledStates(static_cast<size_t>(options.size()), true);
+            const auto clampedCurrentIndex = juce::jlimit(0, juce::jmax(0, options.size() - 1), currentIndex);
+
+            showChoicePrompt(getLocalArea(&anchor, anchorBounds),
+                             options,
+                             clampedCurrentIndex,
+                             std::move(enabledStates),
+                             juce::Justification::centred,
+                             [this, onSelectFn = std::move(onSelectCallback)] (const int selectedIndex)
+                             {
+                                 if (selectedIndex >= 0 && onSelectFn != nullptr)
+                                     onSelectFn(selectedIndex);
+
+                                 clearKeyboardFocus(*this);
+                             });
         };
 
         speInputGainControl = std::make_unique<ParameterControl>(speState,
@@ -114,7 +149,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
         speWideControl = std::make_unique<ParameterControl>(speState,
                                                             SpeModuleProcessor::paramWideId,
-                                                            "WIDE",
+                                                            "IN-WIDE",
                                                             0);
         speWideControl->setTitleLongPressAction([this]
         {
@@ -136,7 +171,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speAttackControl);
+        filterContent.addAndMakeVisible(*speAttackControl);
 
         speReleaseControl = std::make_unique<ParameterControl>(speState,
                                                                SpeModuleProcessor::paramReleaseId,
@@ -149,7 +184,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speReleaseControl);
+        filterContent.addAndMakeVisible(*speReleaseControl);
 
         speKneeControl = std::make_unique<ParameterControl>(speState,
                                                             SpeModuleProcessor::paramKneeId,
@@ -162,7 +197,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speKneeControl);
+        filterContent.addAndMakeVisible(*speKneeControl);
 
         speRatioControl = std::make_unique<ParameterControl>(speState,
                                                              SpeModuleProcessor::paramRatioId,
@@ -175,13 +210,46 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speRatioControl);
+        filterContent.addAndMakeVisible(*speRatioControl);
 
         speDspFftSizeControl = std::make_unique<ParameterControl>(speState,
                                                                   SpeModuleProcessor::paramDspFftSizeId,
                                                                   "WIN-SIZE",
                                                                   0);
-        addAndMakeVisible(*speDspFftSizeControl);
+        speDspFftSizeControl->setTitleLongPressAction([this]
+        {
+            if (speDspFftSizeControl != nullptr)
+                speDspFftSizeControl->setValue(2.0, true);
+
+            clearKeyboardFocus(*this);
+        });
+        speDspFftSizeControl->setValueClickAction([this, showDiscreteChoicePrompt]
+        {
+            auto* activeSpeProcessor = audioProcessor.getSpeModuleProcessor();
+
+            if (activeSpeProcessor == nullptr)
+                return;
+
+            auto& activeSpeState = activeSpeProcessor->getValueTreeState();
+            auto* fftSizeParameter = activeSpeState.getRawParameterValue(SpeModuleProcessor::paramDspFftSizeId);
+
+            if (speDspFftSizeControl == nullptr || fftSizeParameter == nullptr)
+                return;
+
+            const juce::StringArray options { "1024", "2048", "4096", "8192", "16384" };
+            const auto currentIndex = juce::roundToInt(fftSizeParameter->load(std::memory_order_relaxed));
+
+            showDiscreteChoicePrompt(*speDspFftSizeControl,
+                                     speDspFftSizeControl->getValueBounds(),
+                                     options,
+                                     currentIndex,
+                                     [this] (const int selectedIndex)
+                                     {
+                                         if (speDspFftSizeControl != nullptr)
+                                             speDspFftSizeControl->setValue(static_cast<double>(selectedIndex), true);
+                                     });
+        });
+        filterContent.addAndMakeVisible(*speDspFftSizeControl);
 
         speDspSlopeControl = std::make_unique<ParameterControl>(speState,
                                                                 SpeModuleProcessor::paramDspSlopeId,
@@ -190,11 +258,11 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         speDspSlopeControl->setTitleLongPressAction([this]
         {
             if (speDspSlopeControl != nullptr)
-                speDspSlopeControl->setValue(4.0, true);
+                speDspSlopeControl->setValue(4.5, true);
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speDspSlopeControl);
+        filterContent.addAndMakeVisible(*speDspSlopeControl);
 
         speMakeupControl = std::make_unique<ParameterControl>(speState,
                                                               SpeModuleProcessor::paramMakeupId,
@@ -221,58 +289,6 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
             clearKeyboardFocus(*this);
         };
         globalContent.addAndMakeVisible(*speDeltaButton);
-
-        speThresholdControl = std::make_unique<ParameterControl>(speState,
-                                                                 SpeModuleProcessor::paramThresholdId,
-                                                                 "THRESH",
-                                                                 2);
-        speThresholdControl->setTitleLongPressAction([this]
-        {
-            if (speThresholdControl != nullptr)
-                speThresholdControl->setValue(12.0, true);
-
-            clearKeyboardFocus(*this);
-        });
-        addAndMakeVisible(*speThresholdControl);
-
-        speStereoAdaptiveControl = std::make_unique<ParameterControl>(speState,
-                                                                      SpeModuleProcessor::paramStereoAdaptiveId,
-                                                                      "ADAP",
-                                                                      0);
-        speStereoAdaptiveControl->setTitleLongPressAction([this]
-        {
-            if (speStereoAdaptiveControl != nullptr)
-                speStereoAdaptiveControl->setValue(0.0, true);
-
-            clearKeyboardFocus(*this);
-        });
-        addAndMakeVisible(*speStereoAdaptiveControl);
-
-        speStereoAdaptiveOffsetControl = std::make_unique<ParameterControl>(speState,
-                                                                            SpeModuleProcessor::paramStereoAdaptiveOffsetId,
-                                                                            "OFFSET",
-                                                                            2);
-        speStereoAdaptiveOffsetControl->setTitleLongPressAction([this]
-        {
-            if (speStereoAdaptiveOffsetControl != nullptr)
-                speStereoAdaptiveOffsetControl->setValue(0.0, true);
-
-            clearKeyboardFocus(*this);
-        });
-        addAndMakeVisible(*speStereoAdaptiveOffsetControl);
-
-        speStereoBypassButton = std::make_unique<BoxTextButton>(uiAccent);
-        speStereoBypassButton->setButtonText("BYPASS");
-        speStereoBypassButton->setTextJustification(juce::Justification::centred);
-        speStereoBypassButton->setClickingTogglesState(true);
-        speStereoBypassAttachment = std::make_unique<ButtonAttachment>(speState,
-                                                                       SpeModuleProcessor::paramBypassId,
-                                                                       *speStereoBypassButton);
-        speStereoBypassButton->onClick = [this]
-        {
-            clearKeyboardFocus(*this);
-        };
-        addAndMakeVisible(*speStereoBypassButton);
 
         speBypassButton = std::make_unique<BoxTextButton>(uiAccent);
         speBypassButton->setButtonText("BYPASS");
@@ -307,11 +323,11 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         speDualMonoLeftThresholdControl->setTitleLongPressAction([this]
         {
             if (speDualMonoLeftThresholdControl != nullptr)
-                speDualMonoLeftThresholdControl->setValue(12.0, true);
+                speDualMonoLeftThresholdControl->setValue(0.0, true);
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speDualMonoLeftThresholdControl);
+        filterContent.addAndMakeVisible(*speDualMonoLeftThresholdControl);
 
         speDualMonoLeftAdaptiveControl = std::make_unique<ParameterControl>(speState,
                                                                             SpeModuleProcessor::paramDualMonoLeftAdaptiveId,
@@ -324,7 +340,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speDualMonoLeftAdaptiveControl);
+        filterContent.addAndMakeVisible(*speDualMonoLeftAdaptiveControl);
 
         speDualMonoLeftAdaptiveOffsetControl = std::make_unique<ParameterControl>(speState,
                                                                                   SpeModuleProcessor::paramDualMonoLeftAdaptiveOffsetId,
@@ -337,7 +353,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speDualMonoLeftAdaptiveOffsetControl);
+        filterContent.addAndMakeVisible(*speDualMonoLeftAdaptiveOffsetControl);
 
         speDualMonoRightThresholdControl = std::make_unique<ParameterControl>(speState,
                                                                               SpeModuleProcessor::paramDualMonoRightThresholdId,
@@ -346,11 +362,11 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         speDualMonoRightThresholdControl->setTitleLongPressAction([this]
         {
             if (speDualMonoRightThresholdControl != nullptr)
-                speDualMonoRightThresholdControl->setValue(12.0, true);
+                speDualMonoRightThresholdControl->setValue(0.0, true);
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speDualMonoRightThresholdControl);
+        filterContent.addAndMakeVisible(*speDualMonoRightThresholdControl);
 
         speDualMonoRightAdaptiveControl = std::make_unique<ParameterControl>(speState,
                                                                              SpeModuleProcessor::paramDualMonoRightAdaptiveId,
@@ -363,7 +379,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speDualMonoRightAdaptiveControl);
+        filterContent.addAndMakeVisible(*speDualMonoRightAdaptiveControl);
 
         speDualMonoRightAdaptiveOffsetControl = std::make_unique<ParameterControl>(speState,
                                                                                    SpeModuleProcessor::paramDualMonoRightAdaptiveOffsetId,
@@ -376,37 +392,65 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        addAndMakeVisible(*speDualMonoRightAdaptiveOffsetControl);
+        filterContent.addAndMakeVisible(*speDualMonoRightAdaptiveOffsetControl);
 
-        speDualMonoBypassButton = std::make_unique<BoxTextButton>(uiAccent);
-        speDualMonoBypassButton->setButtonText("BYPASS");
-        speDualMonoBypassButton->setTextJustification(juce::Justification::centred);
-        speDualMonoBypassButton->setClickingTogglesState(true);
-        speDualMonoBypassAttachment = std::make_unique<ButtonAttachment>(speState,
-                                                                         SpeModuleProcessor::paramDualMonoBypassId,
-                                                                         *speDualMonoBypassButton);
-        speDualMonoBypassButton->onClick = [this]
+        speDualMonoLinkButton = std::make_unique<BoxTextButton>(uiAccent);
+        speDualMonoLinkButton->setButtonText("LINK-LR (STEREO)");
+        speDualMonoLinkButton->setTextJustification(juce::Justification::centred);
+        speDualMonoLinkButton->setClickingTogglesState(true);
+        speDualMonoLinkAttachment = std::make_unique<ButtonAttachment>(speState,
+                                                                       SpeModuleProcessor::paramDualMonoLinkId,
+                                                                       *speDualMonoLinkButton);
+        speDualMonoLinkButton->onClick = [this]
         {
             clearKeyboardFocus(*this);
         };
-        addAndMakeVisible(*speDualMonoBypassButton);
+        filterContent.addAndMakeVisible(*speDualMonoLinkButton);
 
         speAnalyserFftSizeControl = std::make_unique<LocalParameterControl>("FFT-SIZE",
                                                                             0,
                                                                             0.0,
                                                                             4.0,
                                                                             1.0,
-                                                                            3.0);
+                                                                            2.0);
         speAnalyserFftSizeControl->setTextToValueParser([parseDiscreteAnalyserChoice] (const juce::String& text)
         {
             return parseDiscreteAnalyserChoice(text, { 1024.0, 2048.0, 4096.0, 8192.0, 16384.0 });
         });
-        speAnalyserFftSizeControl->onValueChanged = [this, &speProcessor, refreshAnalyserControls]
+        speAnalyserFftSizeControl->setTitleLongPressAction([this]
         {
+            if (speAnalyserFftSizeControl != nullptr)
+                speAnalyserFftSizeControl->setValue(2.0, true);
+
+            clearKeyboardFocus(*this);
+        });
+        speAnalyserFftSizeControl->onValueChanged = [this, &speProcessor, refreshSpeAnalyserState]
+        {
+            if (suppressSpeAnalyserControlChangeHandlers)
+                return;
+
             speProcessor.setAnalyserParameterValue(SpeModuleProcessor::paramFftSizeId,
                                                    static_cast<float>(speAnalyserFftSizeControl->getValue()));
-            refreshAnalyserControls();
+            refreshSpeAnalyserState();
         };
+        speAnalyserFftSizeControl->setValueClickAction([this, showDiscreteChoicePrompt]
+        {
+            if (speAnalyserFftSizeControl == nullptr)
+                return;
+
+            const juce::StringArray options { "1024", "2048", "4096", "8192", "16384" };
+            const auto currentIndex = juce::roundToInt(speAnalyserFftSizeControl->getValue());
+
+            showDiscreteChoicePrompt(*speAnalyserFftSizeControl,
+                                     speAnalyserFftSizeControl->getValueBounds(),
+                                     options,
+                                     currentIndex,
+                                     [this] (const int selectedIndex)
+                                     {
+                                         if (speAnalyserFftSizeControl != nullptr)
+                                             speAnalyserFftSizeControl->setValue(static_cast<double>(selectedIndex), true);
+                                     });
+        });
         filterContent.addAndMakeVisible(*speAnalyserFftSizeControl);
 
         speAnalyserOverlapControl = std::make_unique<LocalParameterControl>("OVERLAP",
@@ -419,12 +463,33 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         {
             return parseDiscreteAnalyserChoice(text, { 2.0, 4.0, 8.0, 16.0, 32.0 });
         });
-        speAnalyserOverlapControl->onValueChanged = [this, &speProcessor, refreshAnalyserControls]
+        speAnalyserOverlapControl->onValueChanged = [this, &speProcessor, refreshSpeAnalyserState]
         {
+            if (suppressSpeAnalyserControlChangeHandlers)
+                return;
+
             speProcessor.setAnalyserParameterValue(SpeModuleProcessor::paramOverlapId,
                                                    static_cast<float>(speAnalyserOverlapControl->getValue()));
-            refreshAnalyserControls();
+            refreshSpeAnalyserState();
         };
+        speAnalyserOverlapControl->setValueClickAction([this, showDiscreteChoicePrompt]
+        {
+            if (speAnalyserOverlapControl == nullptr)
+                return;
+
+            const juce::StringArray options { "2", "4", "8", "16", "32" };
+            const auto currentIndex = juce::roundToInt(speAnalyserOverlapControl->getValue());
+
+            showDiscreteChoicePrompt(*speAnalyserOverlapControl,
+                                     speAnalyserOverlapControl->getValueBounds(),
+                                     options,
+                                     currentIndex,
+                                     [this] (const int selectedIndex)
+                                     {
+                                         if (speAnalyserOverlapControl != nullptr)
+                                             speAnalyserOverlapControl->setValue(static_cast<double>(selectedIndex), true);
+                                     });
+        });
         filterContent.addAndMakeVisible(*speAnalyserOverlapControl);
 
         speAnalyserLeftControl = std::make_unique<LocalParameterControl>("LEFT",
@@ -443,11 +508,14 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        speAnalyserLeftControl->onValueChanged = [this, &speProcessor, refreshAnalyserControls]
+        speAnalyserLeftControl->onValueChanged = [this, &speProcessor, refreshSpeAnalyserState]
         {
+            if (suppressSpeAnalyserControlChangeHandlers)
+                return;
+
             speProcessor.setAnalyserParameterValue(SpeModuleProcessor::paramLeftId,
                                                    static_cast<float>(speAnalyserLeftControl->getValue()));
-            refreshAnalyserControls();
+            refreshSpeAnalyserState();
         };
         filterContent.addAndMakeVisible(*speAnalyserLeftControl);
 
@@ -467,11 +535,14 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        speAnalyserRightControl->onValueChanged = [this, &speProcessor, refreshAnalyserControls]
+        speAnalyserRightControl->onValueChanged = [this, &speProcessor, refreshSpeAnalyserState]
         {
+            if (suppressSpeAnalyserControlChangeHandlers)
+                return;
+
             speProcessor.setAnalyserParameterValue(SpeModuleProcessor::paramRightId,
                                                    static_cast<float>(speAnalyserRightControl->getValue()));
-            refreshAnalyserControls();
+            refreshSpeAnalyserState();
         };
         filterContent.addAndMakeVisible(*speAnalyserRightControl);
 
@@ -488,11 +559,14 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        speAnalyserRangeLowControl->onValueChanged = [this, &speProcessor, refreshAnalyserControls]
+        speAnalyserRangeLowControl->onValueChanged = [this, &speProcessor, refreshSpeAnalyserState]
         {
+            if (suppressSpeAnalyserControlChangeHandlers)
+                return;
+
             speProcessor.setAnalyserParameterValue(SpeModuleProcessor::paramRangeLowId,
                                                    static_cast<float>(speAnalyserRangeLowControl->getValue()));
-            refreshAnalyserControls();
+            refreshSpeAnalyserState();
         };
         filterContent.addAndMakeVisible(*speAnalyserRangeLowControl);
 
@@ -509,11 +583,14 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        speAnalyserRangeHighControl->onValueChanged = [this, &speProcessor, refreshAnalyserControls]
+        speAnalyserRangeHighControl->onValueChanged = [this, &speProcessor, refreshSpeAnalyserState]
         {
+            if (suppressSpeAnalyserControlChangeHandlers)
+                return;
+
             speProcessor.setAnalyserParameterValue(SpeModuleProcessor::paramRangeHighId,
                                                    static_cast<float>(speAnalyserRangeHighControl->getValue()));
-            refreshAnalyserControls();
+            refreshSpeAnalyserState();
         };
         filterContent.addAndMakeVisible(*speAnalyserRangeHighControl);
 
@@ -522,19 +599,22 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                                                                           0.0,
                                                                           6.0,
                                                                           0.01,
-                                                                          4.0);
+                                                                          4.5);
         speAnalyserSlopeControl->setTitleLongPressAction([this]
         {
             if (speAnalyserSlopeControl != nullptr)
-                speAnalyserSlopeControl->setValue(4.0, true);
+                speAnalyserSlopeControl->setValue(4.5, true);
 
             clearKeyboardFocus(*this);
         });
-        speAnalyserSlopeControl->onValueChanged = [this, &speProcessor, refreshAnalyserControls]
+        speAnalyserSlopeControl->onValueChanged = [this, &speProcessor, refreshSpeAnalyserState]
         {
+            if (suppressSpeAnalyserControlChangeHandlers)
+                return;
+
             speProcessor.setAnalyserParameterValue(SpeModuleProcessor::paramSlopeId,
                                                    static_cast<float>(speAnalyserSlopeControl->getValue()));
-            refreshAnalyserControls();
+            refreshSpeAnalyserState();
         };
         filterContent.addAndMakeVisible(*speAnalyserSlopeControl);
 
@@ -551,30 +631,17 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         });
-        speAnalyserTimeControl->onValueChanged = [this, &speProcessor, refreshAnalyserControls]
+        speAnalyserTimeControl->onValueChanged = [this, &speProcessor, refreshSpeAnalyserState]
         {
+            if (suppressSpeAnalyserControlChangeHandlers)
+                return;
+
             speProcessor.setAnalyserParameterValue(SpeModuleProcessor::paramTimeId,
                                                    static_cast<float>(speAnalyserTimeControl->getValue()));
-            refreshAnalyserControls();
+            refreshSpeAnalyserState();
         };
         filterContent.addAndMakeVisible(*speAnalyserTimeControl);
 
-        speAnalyserVisibilityButton = std::make_unique<BoxTextButton>(uiGrey500);
-        speAnalyserVisibilityButton->setButtonText("SHOW");
-        speAnalyserVisibilityButton->setClickingTogglesState(true);
-        speAnalyserVisibilityButton->onClick = [this]
-        {
-            const auto preservedScrollY = filterViewport.getViewPositionY();
-            visualizerVisible = speAnalyserVisibilityButton->getToggleState();
-            updateEditorWidthForVisualizerVisibility();
-            updateSectionStates();
-            resized();
-            const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
-            filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
-            clearKeyboardFocus(*this);
-        };
-        filterContent.addAndMakeVisible(*speAnalyserVisibilityButton);
-
-        refreshAnalyserControls();
+        refreshSpeAnalyserControls(speProcessor);
 
 }

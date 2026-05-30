@@ -61,7 +61,7 @@ public:
         std::function<void(const ExternalParameterChange&)> pushMirroredParameterValue;
     };
 
-    MxeAudioProcessor();
+    explicit MxeAudioProcessor(juce::AudioProcessor& ownerProcessor);
     ~MxeAudioProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;

@@ -128,7 +128,47 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     const auto mxeLoaded = isMxeModuleLoaded();
     const auto tseLoaded = isTseModuleLoaded();
 
-    auto applyShellGlobalBlock = [this, &buffer]
+    auto applyShellGlobalInputStage = [this, &buffer]
+    {
+        const auto processChannels = juce::jmin(buffer.getNumChannels(), preparedNumChannels);
+
+        if (processChannels <= 0)
+            return;
+
+        const auto wideAmount = globalWideParam != nullptr
+            ? juce::jlimit(0.0f, 4.0f, globalWideParam->load(std::memory_order_relaxed) / 100.0f)
+            : 1.0f;
+
+        if (processChannels > 1 && std::abs(wideAmount - 1.0f) > 1.0e-6f)
+        {
+            const auto numSamples = buffer.getNumSamples();
+            auto* left = buffer.getWritePointer(0);
+            auto* right = buffer.getWritePointer(1);
+
+            for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
+            {
+                const auto mid = 0.5f * (left[sampleIndex] + right[sampleIndex]);
+                const auto side = 0.5f * (left[sampleIndex] - right[sampleIndex]) * wideAmount;
+                left[sampleIndex] = mid + side;
+                right[sampleIndex] = mid - side;
+            }
+        }
+
+        const auto gainLDb = globalGainLParam != nullptr ? globalGainLParam->load(std::memory_order_relaxed) : 0.0f;
+        const auto gainRDb = globalGainRParam != nullptr ? globalGainRParam->load(std::memory_order_relaxed) : 0.0f;
+        const auto gainLrDb = globalGainLrParam != nullptr ? globalGainLrParam->load(std::memory_order_relaxed) : 0.0f;
+
+        const auto effectiveGainLDb = gainLDb + gainLrDb;
+        const auto effectiveGainRDb = gainRDb + gainLrDb;
+
+        if (processChannels > 0 && std::abs(effectiveGainLDb) > 1.0e-6f)
+            buffer.applyGain(0, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveGainLDb));
+
+        if (processChannels > 1 && std::abs(effectiveGainRDb) > 1.0e-6f)
+            buffer.applyGain(1, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveGainRDb));
+    };
+
+    auto applyShellGlobalOutputStage = [this, &buffer]
     {
         const auto processChannels = juce::jmin(buffer.getNumChannels(), preparedNumChannels);
 
@@ -136,53 +176,6 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
         {
             globalClipIndicator.store(0.0f, std::memory_order_relaxed);
             return;
-        }
-
-        const auto bypassAll = globalBypassParam != nullptr
-            && globalBypassParam->load(std::memory_order_relaxed) >= 0.5f;
-
-        if (bypassAll)
-        {
-            globalClipIndicator.store(0.0f, std::memory_order_relaxed);
-            return;
-        }
-
-        const auto bypassExceptOutGain = globalBypassOutGainOnlyParam != nullptr
-            && globalBypassOutGainOnlyParam->load(std::memory_order_relaxed) >= 0.5f;
-
-        if (! bypassExceptOutGain)
-        {
-            const auto wideAmount = globalWideParam != nullptr
-                ? juce::jlimit(0.0f, 4.0f, globalWideParam->load(std::memory_order_relaxed) / 100.0f)
-                : 1.0f;
-
-            if (processChannels > 1 && std::abs(wideAmount - 1.0f) > 1.0e-6f)
-            {
-                const auto numSamples = buffer.getNumSamples();
-                auto* left = buffer.getWritePointer(0);
-                auto* right = buffer.getWritePointer(1);
-
-                for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
-                {
-                    const auto mid = 0.5f * (left[sampleIndex] + right[sampleIndex]);
-                    const auto side = 0.5f * (left[sampleIndex] - right[sampleIndex]) * wideAmount;
-                    left[sampleIndex] = mid + side;
-                    right[sampleIndex] = mid - side;
-                }
-            }
-
-            const auto gainLDb = globalGainLParam != nullptr ? globalGainLParam->load(std::memory_order_relaxed) : 0.0f;
-            const auto gainRDb = globalGainRParam != nullptr ? globalGainRParam->load(std::memory_order_relaxed) : 0.0f;
-            const auto gainLrDb = globalGainLrParam != nullptr ? globalGainLrParam->load(std::memory_order_relaxed) : 0.0f;
-
-            const auto effectiveGainLDb = gainLDb + gainLrDb;
-            const auto effectiveGainRDb = gainRDb + gainLrDb;
-
-            if (processChannels > 0 && std::abs(effectiveGainLDb) > 1.0e-6f)
-                buffer.applyGain(0, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveGainLDb));
-
-            if (processChannels > 1 && std::abs(effectiveGainRDb) > 1.0e-6f)
-                buffer.applyGain(1, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveGainRDb));
         }
 
         const auto outGainDb = outGainParam != nullptr ? outGainParam->load(std::memory_order_relaxed) : 0.0f;
@@ -208,13 +201,21 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
         if (getLatencySamples() != 0)
             setLatencySamples(0);
 
-        applyShellGlobalBlock();
+        if (globalBypassActive)
+        {
+            globalClipIndicator.store(0.0f, std::memory_order_relaxed);
+            return;
+        }
+
+        applyShellGlobalOutputStage();
         return;
     }
 
+    applyShellGlobalInputStage();
+
     if (! eqeLoaded && ! speLoaded && ! mxeLoaded && ! tseLoaded)
     {
-        applyShellGlobalBlock();
+        applyShellGlobalOutputStage();
         return;
     }
 
@@ -303,7 +304,7 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
         }
     }
 
-    applyShellGlobalBlock();
+    applyShellGlobalOutputStage();
     updateShellLatency();
 }
 

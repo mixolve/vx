@@ -6,6 +6,7 @@
 #include "module.mxe.EditorUiState.h"
 #include "module.mxe.HostParameterEditing.h"
 #include "module.mxe.ParameterIds.h"
+#include "../../shared/shared.UiConstants.h"
 
 #include <cmath>
 
@@ -254,7 +255,10 @@ void MxeModuleComponent::scrollPageViewport(const juce::MouseEvent& event, const
     if (std::abs(dominantDelta) < 1.0e-6f)
         return;
 
-    auto pixelDelta = juce::roundToInt(-dominantDelta * (wheel.isSmooth ? 180.0f : 90.0f));
+    auto pixelDelta = juce::roundToInt(-dominantDelta
+                                       * (wheel.isSmooth
+                                              ? focusedParameterScrollSensitivity
+                                              : (focusedParameterScrollSensitivity / 2.0f)));
 
     if (pixelDelta == 0)
         pixelDelta = dominantDelta < 0.0f ? 24 : -24;

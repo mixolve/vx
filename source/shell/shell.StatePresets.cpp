@@ -90,8 +90,11 @@ void VxAudioProcessorEditor::openPresetsSection()
     expandedBellIndex = -1;
 
     if (presetsExpanded)
+    {
+        filterViewport.setViewPosition(0, 0);
         refreshFilterPresetList(getActiveEqeProcessor() != nullptr ? getActiveEqeProcessor()->getLastFilterPresetName()
                                                                    : juce::String {});
+    }
 
     storeEditorStateToValueTree();
     updateSectionStates();

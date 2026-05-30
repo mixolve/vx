@@ -3,7 +3,6 @@
 #include "module.mxe.ModuleComponent.h"
 #include "module.mxe.EditorTheme.h"
 #include "module.mxe.HostParameterEditing.h"
-#include "module.mxe.ParameterIds.h"
 
 #include <cmath>
 
@@ -11,118 +10,39 @@ namespace mxe::editor
 {
 namespace
 {
-using mxe::parameters::makeBandParameterId;
-
 const juce::Colour leftLabelColour { 0xFF99CC99 };
 const juce::Colour rightLabelColour { 0xFFFF9999 };
 const juce::Colour upLabelColour { 0xFF9999FF };
 const juce::Colour downLabelColour { 0xFFFFCC99 };
+const juce::Colour focusLabelColour { 0xFF99CC99 };
 
-bool parseBandParameterId(const juce::String& parameterId,
-                         size_t& bandIndex,
-                         juce::String& suffix)
+BoxTextButton* focusedParameterTitleButton = nullptr;
+juce::Slider* focusedParameterValueSlider = nullptr;
+
+void focusParameterTitleButton(BoxTextButton* button, juce::Slider* valueSlider)
 {
-    if (! parameterId.startsWith("band"))
-        return false;
-
-    const auto underscoreIndex = parameterId.indexOfChar('_');
-
-    if (underscoreIndex <= 4)
-        return false;
-
-    const auto bandText = parameterId.substring(4, underscoreIndex);
-
-    if (! bandText.containsOnly("0123456789"))
-        return false;
-
-    const auto bandNumber = bandText.getIntValue();
-
-    if (bandNumber <= 0)
-        return false;
-
-    bandIndex = static_cast<size_t>(bandNumber - 1);
-    suffix = parameterId.substring(underscoreIndex + 1);
-    return suffix.isNotEmpty();
-}
-
-juce::RangedAudioParameter* getBandParameter(juce::AudioProcessorValueTreeState& state,
-                                             const size_t bandIndex,
-                                             const char* suffix)
-{
-    return dynamic_cast<juce::RangedAudioParameter*>(state.getParameter(makeBandParameterId(bandIndex, suffix)));
-}
-
-bool isBandToggleEnabled(juce::AudioProcessorValueTreeState& state,
-                         const size_t bandIndex,
-                         const char* suffix)
-{
-    if (auto* parameter = getBandParameter(state, bandIndex, suffix))
-        return parameter->getValue() >= 0.5f;
-
-    return false;
-}
-
-void mirrorLinkedInputValue(juce::AudioProcessorValueTreeState& state,
-                            const juce::String& sourceParameterId,
-                            const float sourceValue,
-                            juce::UndoManager* const undoManager)
-{
-    size_t bandIndex = 0;
-    juce::String suffix;
-
-    if (! parseBandParameterId(sourceParameterId, bandIndex, suffix))
+    if (button == nullptr)
         return;
 
-    const auto mirrorTo = [&state, bandIndex, sourceValue, undoManager] (const char* targetSuffix)
-    {
-        auto* target = getBandParameter(state, bandIndex, targetSuffix);
+    if (focusedParameterTitleButton != nullptr && focusedParameterTitleButton != button)
+        focusedParameterTitleButton->setAlwaysAccentOutline(false);
 
-        if (target == nullptr)
-            return;
+    focusedParameterTitleButton = button;
+    focusedParameterValueSlider = valueSlider;
+    focusedParameterTitleButton->setAlwaysAccentOutline(true);
+}
 
-        const auto targetNormalised = target->convertTo0to1(sourceValue);
-        setNormalisedParameterValueForHost(*target, targetNormalised, undoManager);
-    };
+void clearFocusedParameterTitleButton(BoxTextButton* button, juce::Slider* valueSlider)
+{
+    if (valueSlider != nullptr && focusedParameterValueSlider == valueSlider)
+        focusedParameterValueSlider = nullptr;
 
-    if (isBandToggleEnabled(state, bandIndex, "linkUpDn"))
-    {
-        if (suffix == "thLU")
-            mirrorTo("thRU");
-        else if (suffix == "thLD")
-            mirrorTo("thRD");
-        else if (suffix == "mkLU")
-            mirrorTo("mkRU");
-        else if (suffix == "mkLD")
-            mirrorTo("mkRD");
-        else if (suffix == "thRU")
-            mirrorTo("thLU");
-        else if (suffix == "thRD")
-            mirrorTo("thLD");
-        else if (suffix == "mkRU")
-            mirrorTo("mkLU");
-        else if (suffix == "mkRD")
-            mirrorTo("mkLD");
-    }
+    if (button == nullptr || focusedParameterTitleButton != button)
+        return;
 
-    if (isBandToggleEnabled(state, bandIndex, "linkLr"))
-    {
-        if (suffix == "LLThResh")
-            mirrorTo("RRThResh");
-        else if (suffix == "RRThResh")
-            mirrorTo("LLThResh");
-        else if (suffix == "LLTension")
-            mirrorTo("RRTension");
-        else if (suffix == "RRTension")
-            mirrorTo("LLTension");
-        else if (suffix == "LLRelease")
-            mirrorTo("RRRelease");
-        else if (suffix == "RRRelease")
-            mirrorTo("LLRelease");
-        else if (suffix == "LLmk")
-            mirrorTo("RRmk");
-        else if (suffix == "RRmk")
-            mirrorTo("LLmk");
-    }
+    focusedParameterTitleButton->setAlwaysAccentOutline(false);
+    focusedParameterTitleButton = nullptr;
+    focusedParameterValueSlider = nullptr;
 }
 
 bool drawDirectionalTokenHighlight(juce::Graphics& graphics,
@@ -203,6 +123,40 @@ public:
 private:
 };
 } // namespace
+
+juce::Slider* parameter_focus::getFocusedValueSlider() noexcept
+{
+    return focusedParameterValueSlider;
+}
+
+void parameter_focus::clearFocus() noexcept
+{
+    if (focusedParameterTitleButton != nullptr)
+        focusedParameterTitleButton->setAlwaysAccentOutline(false);
+
+    focusedParameterTitleButton = nullptr;
+    focusedParameterValueSlider = nullptr;
+}
+
+void parameter_focus::clearFocusIfNotShowing() noexcept
+{
+    if (focusedParameterTitleButton == nullptr && focusedParameterValueSlider == nullptr)
+        return;
+
+    if (focusedParameterTitleButton != nullptr)
+    {
+        if (focusedParameterTitleButton->isShowing())
+            return;
+
+        parameter_focus::clearFocus();
+        return;
+    }
+
+    if (focusedParameterValueSlider != nullptr && focusedParameterValueSlider->isShowing())
+        return;
+
+    parameter_focus::clearFocus();
+}
 
 class ValueBoxComponent final : public juce::Component
 {
@@ -389,7 +343,6 @@ private:
 
         const auto normalisedValue = parameter->convertTo0to1(legalValue);
         setNormalisedParameterValueForHost(*parameter, normalisedValue, undoManager);
-        mirrorLinkedInputValue(state, parameterId, legalValue, undoManager);
 
         slider.setValue(legalValue, juce::dontSendNotification);
 
@@ -472,6 +425,15 @@ void BoxTextButton::setTextColour(const juce::Colour colour)
     repaint();
 }
 
+void BoxTextButton::setAlwaysAccentOutline(const bool shouldAlwaysAccent)
+{
+    if (alwaysAccentOutline == shouldAlwaysAccent)
+        return;
+
+    alwaysAccentOutline = shouldAlwaysAccent;
+    repaint();
+}
+
 void BoxTextButton::setLongPressAction(std::function<void()> action, const int delayMs, juce::String confirmationText)
 {
     longPressAction = std::move(action);
@@ -485,7 +447,7 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
     juce::ignoreUnused(shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
 
     const auto fill = pressHighlight ? uiGrey700 : uiGrey800;
-    const auto outline = getToggleState() ? accentColour : uiGrey500;
+    const auto outline = (alwaysAccentOutline || getToggleState()) ? accentColour : uiGrey500;
 
     graphics.setColour(fill);
     graphics.fillRect(getLocalBounds());
@@ -637,9 +599,9 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
       onSoloClick(std::move(onSoloClickIn)),
       isSoloActive(std::move(isSoloActiveIn)),
       isSoloEnabled(std::move(isSoloEnabledIn)),
-      toggle(accent),
-      soloButton(accent),
-      title(accent)
+    toggle(accent),
+    soloButton(accent),
+    title(focusLabelColour)
 {
     jassert(parameter != nullptr);
 
@@ -675,9 +637,13 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
         title.setTextJustification(juce::Justification::centred);
         if (spec.labelColour != 0)
             title.setTextColour(juce::Colour(spec.labelColour));
-        title.onClick = [] {};
+        title.onClick = [this]
+        {
+            focusParameterTitleButton(&title, &slider);
+        };
         title.setLongPressAction([this]
         {
+            focusParameterTitleButton(&title, &slider);
             resetParameterToDefault();
         });
 
@@ -730,7 +696,10 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     applyCurrentAppearance();
 }
 
-ParameterControl::~ParameterControl() = default;
+ParameterControl::~ParameterControl()
+{
+    clearFocusedParameterTitleButton(&title, &slider);
+}
 
 int ParameterControl::getPreferredHeight() const noexcept
 {

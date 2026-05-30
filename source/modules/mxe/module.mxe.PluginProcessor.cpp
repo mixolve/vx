@@ -2,14 +2,17 @@
 
 #include "module.mxe.ParameterIds.h"
 
+#include <array>
 #include <cmath>
+#include <optional>
 
-MxeAudioProcessor::MxeAudioProcessor()
+MxeAudioProcessor::MxeAudioProcessor(juce::AudioProcessor& ownerProcessor)
     : juce::AudioProcessor(BusesProperties()
                                .withInput("Input", juce::AudioChannelSet::stereo(), true)
                                .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       valueTreeState(*this, &undoManager, "PARAMETERS", createParameterLayout())
 {
+    juce::ignoreUnused(ownerProcessor);
     cacheParameterPointers();
     registerParameterListeners();
 }
@@ -137,6 +140,118 @@ void MxeAudioProcessor::setStateInformation(const void* data, const int sizeInBy
         if (xmlState->hasTagName(valueTreeState.state.getType()))
         {
             valueTreeState.replaceState(juce::ValueTree::fromXml(*xmlState));
+
+            using mxe::parameters::makeBandParameterId;
+            using mxe::parameters::parameterSpecs;
+            using mxe::parameters::ParameterSlot;
+            using mxe::parameters::toIndex;
+
+            const auto setBandSlotValue = [this] (const size_t bandIndex,
+                                                  const ParameterSlot targetSlot,
+                                                  const float targetValue)
+            {
+                const auto targetIndex = toIndex(targetSlot);
+                auto* target = dynamic_cast<juce::RangedAudioParameter*>(valueTreeState.getParameter(
+                    makeBandParameterId(bandIndex, parameterSpecs[targetIndex].suffix)));
+
+                if (target == nullptr)
+                    return;
+
+                const auto normalizedValue = target->convertTo0to1(targetValue);
+
+                if (std::abs(target->getValue() - normalizedValue) <= 1.0e-6f)
+                    return;
+
+                target->setValueNotifyingHost(normalizedValue);
+            };
+
+            const auto readBandSlotValue = [this] (const size_t bandIndex, const ParameterSlot slot) -> float
+            {
+                const auto* value = rawBandParameters[bandIndex][toIndex(slot)];
+                return value != nullptr ? value->load(std::memory_order_relaxed) : 0.0f;
+            };
+
+            for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
+            {
+                auto* linkLr = dynamic_cast<juce::RangedAudioParameter*>(valueTreeState.getParameter(
+                    makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::linkLr)].suffix)));
+                auto* linkUpDn = dynamic_cast<juce::RangedAudioParameter*>(valueTreeState.getParameter(
+                    makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::linkUpDn)].suffix)));
+
+                if (linkLr == nullptr || linkUpDn == nullptr)
+                    continue;
+
+                const auto linkLrOn = linkLr->convertFrom0to1(linkLr->getValue()) >= 0.5f;
+                const auto linkUpDnOn = linkUpDn->convertFrom0to1(linkUpDn->getValue()) >= 0.5f;
+
+                if (linkLrOn && linkUpDnOn)
+                    linkUpDn->setValueNotifyingHost(linkUpDn->convertTo0to1(0.0f));
+
+                const auto syncAllFieldSlots = [&] (const ParameterSlot lu,
+                                                    const ParameterSlot ld,
+                                                    const ParameterSlot ru,
+                                                    const ParameterSlot rd)
+                {
+                    const auto masterValue = readBandSlotValue(bandIndex, lu);
+                    setBandSlotValue(bandIndex, lu, masterValue);
+                    setBandSlotValue(bandIndex, ld, masterValue);
+                    setBandSlotValue(bandIndex, ru, masterValue);
+                    setBandSlotValue(bandIndex, rd, masterValue);
+                };
+
+                const auto syncUpDnPairs = [&] (const ParameterSlot lu,
+                                                const ParameterSlot ld,
+                                                const ParameterSlot ru,
+                                                const ParameterSlot rd)
+                {
+                    const auto leftValue = readBandSlotValue(bandIndex, lu);
+                    const auto rightValue = readBandSlotValue(bandIndex, ru);
+                    setBandSlotValue(bandIndex, lu, leftValue);
+                    setBandSlotValue(bandIndex, ld, leftValue);
+                    setBandSlotValue(bandIndex, ru, rightValue);
+                    setBandSlotValue(bandIndex, rd, rightValue);
+                };
+
+                const auto effectiveLinkLrOn = linkLr->convertFrom0to1(linkLr->getValue()) >= 0.5f;
+                const auto effectiveLinkUpDnOn = linkUpDn->convertFrom0to1(linkUpDn->getValue()) >= 0.5f;
+
+                if (effectiveLinkLrOn)
+                {
+                    syncAllFieldSlots(ParameterSlot::thLU, ParameterSlot::thLD, ParameterSlot::thRU, ParameterSlot::thRD);
+                    syncAllFieldSlots(ParameterSlot::tensLU, ParameterSlot::tensLD, ParameterSlot::tensRU, ParameterSlot::tensRD);
+                    syncAllFieldSlots(ParameterSlot::relLU, ParameterSlot::relLD, ParameterSlot::relRU, ParameterSlot::relRD);
+                    syncAllFieldSlots(ParameterSlot::outLU, ParameterSlot::outLD, ParameterSlot::outRU, ParameterSlot::outRD);
+                }
+                else if (effectiveLinkUpDnOn)
+                {
+                    syncUpDnPairs(ParameterSlot::thLU, ParameterSlot::thLD, ParameterSlot::thRU, ParameterSlot::thRD);
+                    syncUpDnPairs(ParameterSlot::tensLU, ParameterSlot::tensLD, ParameterSlot::tensRU, ParameterSlot::tensRD);
+                    syncUpDnPairs(ParameterSlot::relLU, ParameterSlot::relLD, ParameterSlot::relRU, ParameterSlot::relRD);
+                    syncUpDnPairs(ParameterSlot::outLU, ParameterSlot::outLD, ParameterSlot::outRU, ParameterSlot::outRD);
+                }
+            }
+
+            if (numBands > 0)
+            {
+                const auto syncGlobalFromBand0 = [&] (const ParameterSlot slot)
+                {
+                    const auto* source = rawBandParameters[0][toIndex(slot)];
+
+                    if (source == nullptr)
+                        return;
+
+                    const auto sourceValue = source->load(std::memory_order_relaxed);
+
+                    for (size_t targetBand = 0; targetBand < numBands; ++targetBand)
+                        setBandSlotValue(targetBand, slot, sourceValue);
+                };
+
+                syncGlobalFromBand0(ParameterSlot::moRph);
+                syncGlobalFromBand0(ParameterSlot::peakHoldHz);
+                syncGlobalFromBand0(ParameterSlot::TensionFlooR);
+                syncGlobalFromBand0(ParameterSlot::TensionHysT);
+            }
+
             syncExternalParameterValueTreeState();
             markParametersDirty();
             syncParameters(true);
@@ -245,9 +360,15 @@ void MxeAudioProcessor::registerParameterListeners()
     using mxe::parameters::makeSoloParameterId;
     using mxe::parameters::parameterSpecs;
 
-    valueTreeState.addParameterListener(makeActiveSplitCountParameterId(), this);
-    valueTreeState.addParameterListener(makeModuleBypassParameterId(), this);
-    valueTreeState.addParameterListener(makeModuleBypassWithGainParameterId(), this);
+    const auto addListenerIfPresent = [this] (const juce::String& parameterId)
+    {
+        if (valueTreeState.getParameter(parameterId) != nullptr)
+            valueTreeState.addParameterListener(parameterId, this);
+    };
+
+    addListenerIfPresent(makeActiveSplitCountParameterId());
+    addListenerIfPresent(makeModuleBypassParameterId());
+    addListenerIfPresent(makeModuleBypassWithGainParameterId());
 
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
     {
@@ -258,13 +379,13 @@ void MxeAudioProcessor::registerParameterListeners()
     }
 
     for (const auto& spec : fullbandAutomationSpecs)
-        valueTreeState.addParameterListener(makeFullbandParameterId(spec.suffix), this);
+        addListenerIfPresent(makeFullbandParameterId(spec.suffix));
 
     for (const auto& spec : fullbandVisibleSpecs)
-        valueTreeState.addParameterListener(makeFullbandParameterId(spec.suffix), this);
+        addListenerIfPresent(makeFullbandParameterId(spec.suffix));
 
     for (const auto& spec : crossoverSpecs)
-        valueTreeState.addParameterListener(makeFullbandParameterId(spec.suffix), this);
+        addListenerIfPresent(makeFullbandParameterId(spec.suffix));
 }
 
 void MxeAudioProcessor::unregisterParameterListeners()
@@ -280,9 +401,15 @@ void MxeAudioProcessor::unregisterParameterListeners()
     using mxe::parameters::makeSoloParameterId;
     using mxe::parameters::parameterSpecs;
 
-    valueTreeState.removeParameterListener(makeActiveSplitCountParameterId(), this);
-    valueTreeState.removeParameterListener(makeModuleBypassParameterId(), this);
-    valueTreeState.removeParameterListener(makeModuleBypassWithGainParameterId(), this);
+    const auto removeListenerIfPresent = [this] (const juce::String& parameterId)
+    {
+        if (valueTreeState.getParameter(parameterId) != nullptr)
+            valueTreeState.removeParameterListener(parameterId, this);
+    };
+
+    removeListenerIfPresent(makeActiveSplitCountParameterId());
+    removeListenerIfPresent(makeModuleBypassParameterId());
+    removeListenerIfPresent(makeModuleBypassWithGainParameterId());
 
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
     {
@@ -293,13 +420,13 @@ void MxeAudioProcessor::unregisterParameterListeners()
     }
 
     for (const auto& spec : fullbandAutomationSpecs)
-        valueTreeState.removeParameterListener(makeFullbandParameterId(spec.suffix), this);
+        removeListenerIfPresent(makeFullbandParameterId(spec.suffix));
 
     for (const auto& spec : fullbandVisibleSpecs)
-        valueTreeState.removeParameterListener(makeFullbandParameterId(spec.suffix), this);
+        removeListenerIfPresent(makeFullbandParameterId(spec.suffix));
 
     for (const auto& spec : crossoverSpecs)
-        valueTreeState.removeParameterListener(makeFullbandParameterId(spec.suffix), this);
+        removeListenerIfPresent(makeFullbandParameterId(spec.suffix));
 }
 
 void MxeAudioProcessor::parameterChanged(const juce::String& parameterID, float)
@@ -383,24 +510,17 @@ void MxeAudioProcessor::parameterChanged(const juce::String& parameterID, float)
         }
     }
 
-    const auto mirrorBandParameter = [this] (const size_t bandIndex,
-                                             const ParameterSlot sourceSlot,
-                                             const ParameterSlot targetSlot)
+    const auto setBandSlotValue = [this] (const size_t bandIndex,
+                                                                 const ParameterSlot targetSlot,
+                                                                 const float targetValue)
     {
-        const auto sourceIndex = toIndex(sourceSlot);
         const auto targetIndex = toIndex(targetSlot);
-        const auto* source = rawBandParameters[bandIndex][sourceIndex];
-
-        if (source == nullptr)
-            return;
-
         auto* target = dynamic_cast<juce::RangedAudioParameter*>(valueTreeState.getParameter(
             makeBandParameterId(bandIndex, parameterSpecs[targetIndex].suffix)));
 
         if (target == nullptr)
             return;
 
-        const auto targetValue = source->load(std::memory_order_relaxed);
         const auto normalizedValue = target->convertTo0to1(targetValue);
 
         if (std::abs(target->getValue() - normalizedValue) <= 1.0e-6f)
@@ -409,43 +529,312 @@ void MxeAudioProcessor::parameterChanged(const juce::String& parameterID, float)
         target->setValueNotifyingHost(normalizedValue);
     };
 
-    for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
+    const auto parseSlotForBand = [&] (const size_t bandIndex, const juce::String& id) -> std::optional<ParameterSlot>
     {
-        const auto linkLrActive = rawBandParameters[bandIndex][toIndex(ParameterSlot::linkLr)] != nullptr
-            && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkLr)]->load(std::memory_order_relaxed) >= 0.5f;
-        const auto linkUpDnActive = rawBandParameters[bandIndex][toIndex(ParameterSlot::linkUpDn)] != nullptr
-            && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkUpDn)]->load(std::memory_order_relaxed) >= 0.5f;
+        for (size_t slotIndex = 0; slotIndex < numParameterSlots; ++slotIndex)
+        {
+            const auto slot = static_cast<ParameterSlot>(slotIndex);
+
+            if (id == makeBandParameterId(bandIndex, parameterSpecs[slotIndex].suffix))
+                return slot;
+        }
+
+        return std::nullopt;
+    };
+
+    const auto branchIndexFromSlot = [] (const ParameterSlot slot) -> int
+    {
+        switch (slot)
+        {
+            case ParameterSlot::thLU:
+            case ParameterSlot::tensLU:
+            case ParameterSlot::relLU:
+            case ParameterSlot::outLU:
+                return 0;
+            case ParameterSlot::thLD:
+            case ParameterSlot::tensLD:
+            case ParameterSlot::relLD:
+            case ParameterSlot::outLD:
+                return 1;
+            case ParameterSlot::thRU:
+            case ParameterSlot::tensRU:
+            case ParameterSlot::relRU:
+            case ParameterSlot::outRU:
+                return 2;
+            case ParameterSlot::thRD:
+            case ParameterSlot::tensRD:
+            case ParameterSlot::relRD:
+            case ParameterSlot::outRD:
+                return 3;
+            default:
+                return -1;
+        }
+    };
+
+    const auto fieldSlotsFor = [] (const ParameterSlot slot) -> std::array<ParameterSlot, 4>
+    {
+        switch (slot)
+        {
+            case ParameterSlot::thLU:
+            case ParameterSlot::thLD:
+            case ParameterSlot::thRU:
+            case ParameterSlot::thRD:
+                return { ParameterSlot::thLU, ParameterSlot::thLD, ParameterSlot::thRU, ParameterSlot::thRD };
+            case ParameterSlot::tensLU:
+            case ParameterSlot::tensLD:
+            case ParameterSlot::tensRU:
+            case ParameterSlot::tensRD:
+                return { ParameterSlot::tensLU, ParameterSlot::tensLD, ParameterSlot::tensRU, ParameterSlot::tensRD };
+            case ParameterSlot::relLU:
+            case ParameterSlot::relLD:
+            case ParameterSlot::relRU:
+            case ParameterSlot::relRD:
+                return { ParameterSlot::relLU, ParameterSlot::relLD, ParameterSlot::relRU, ParameterSlot::relRD };
+            case ParameterSlot::outLU:
+            case ParameterSlot::outLD:
+            case ParameterSlot::outRU:
+            case ParameterSlot::outRD:
+                return { ParameterSlot::outLU, ParameterSlot::outLD, ParameterSlot::outRU, ParameterSlot::outRD };
+            default:
+                return { slot, slot, slot, slot };
+        }
+    };
+
+    const auto outSlotForThresholdSlot = [] (const ParameterSlot slot) -> std::optional<ParameterSlot>
+    {
+        switch (slot)
+        {
+            case ParameterSlot::thLU: return ParameterSlot::outLU;
+            case ParameterSlot::thLD: return ParameterSlot::outLD;
+            case ParameterSlot::thRU: return ParameterSlot::outRU;
+            case ParameterSlot::thRD: return ParameterSlot::outRD;
+            default: return std::nullopt;
+        }
+    };
+
+    const auto isThresholdSlot = [] (const ParameterSlot slot)
+    {
+        return slot == ParameterSlot::thLU
+            || slot == ParameterSlot::thLD
+            || slot == ParameterSlot::thRU
+            || slot == ParameterSlot::thRD;
+    };
+
+    const auto thresholdScopeFor = [&branchIndexFromSlot] (const size_t bandIndex,
+                                                                const ParameterSlot sourceSlot,
+                                                                const bool linkUpDnActive,
+                                                                const bool linkLrActive)
+    {
+        std::array<ParameterSlot, 4> scope { sourceSlot, sourceSlot, sourceSlot, sourceSlot };
+        size_t scopeSize = 1;
 
         if (linkLrActive)
         {
-            if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::LLThResh)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::LLThResh, ParameterSlot::RRThResh);
-            else if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::LLTension)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::LLTension, ParameterSlot::RRTension);
-            else if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::LLRelease)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::LLRelease, ParameterSlot::RRRelease);
-            else if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::LLmk)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::LLmk, ParameterSlot::RRmk);
+            scope = { ParameterSlot::thLU, ParameterSlot::thLD, ParameterSlot::thRU, ParameterSlot::thRD };
+            scopeSize = 4;
+            return std::pair { scope, scopeSize };
         }
 
         if (linkUpDnActive)
         {
-            if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::thLU)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::thLU, ParameterSlot::thRU);
-            else if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::thLD)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::thLD, ParameterSlot::thRD);
-            else if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::mkLU)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::mkLU, ParameterSlot::mkRU);
-            else if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::mkLD)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::mkLD, ParameterSlot::mkRD);
-            else if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::thRU)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::thRU, ParameterSlot::thLU);
-            else if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::thRD)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::thRD, ParameterSlot::thLD);
-            else if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::mkRU)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::mkRU, ParameterSlot::mkLU);
-            else if (parameterID == makeBandParameterId(bandIndex, parameterSpecs[toIndex(ParameterSlot::mkRD)].suffix))
-                mirrorBandParameter(bandIndex, ParameterSlot::mkRD, ParameterSlot::mkLD);
+            const auto sourceBranch = branchIndexFromSlot(sourceSlot);
+
+            if (sourceBranch < 0)
+                return std::pair { scope, scopeSize };
+
+            if (sourceBranch < 2)
+                scope = { ParameterSlot::thLU, ParameterSlot::thLD, sourceSlot, sourceSlot };
+            else
+                scope = { ParameterSlot::thRU, ParameterSlot::thRD, sourceSlot, sourceSlot };
+
+            scopeSize = 2;
+            return std::pair { scope, scopeSize };
+        }
+
+        juce::ignoreUnused(bandIndex);
+        return std::pair { scope, scopeSize };
+    };
+
+    for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
+    {
+        auto linkLrActive = rawBandParameters[bandIndex][toIndex(ParameterSlot::linkLr)] != nullptr
+            && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkLr)]->load(std::memory_order_relaxed) >= 0.5f;
+        auto linkUpDnActive = rawBandParameters[bandIndex][toIndex(ParameterSlot::linkUpDn)] != nullptr
+            && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkUpDn)]->load(std::memory_order_relaxed) >= 0.5f;
+        const auto linkOppActive = rawBandParameters[bandIndex][toIndex(ParameterSlot::linkOpp)] != nullptr
+            && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkOpp)]->load(std::memory_order_relaxed) >= 0.5f;
+
+        const auto slot = parseSlotForBand(bandIndex, parameterID);
+
+        if (! slot.has_value())
+            continue;
+
+        const auto sourceSlot = *slot;
+
+        const auto isGlobalMainSlot = [] (const ParameterSlot slotToCheck)
+        {
+            return slotToCheck == ParameterSlot::moRph
+                || slotToCheck == ParameterSlot::peakHoldHz
+                || slotToCheck == ParameterSlot::TensionFlooR
+                || slotToCheck == ParameterSlot::TensionHysT;
+        };
+
+        if (isGlobalMainSlot(sourceSlot))
+        {
+            const auto* source = rawBandParameters[bandIndex][toIndex(sourceSlot)];
+
+            if (source != nullptr)
+            {
+                const auto sourceValue = source->load(std::memory_order_relaxed);
+
+                for (size_t targetBand = 0; targetBand < numBands; ++targetBand)
+                    setBandSlotValue(targetBand, sourceSlot, sourceValue);
+            }
+
+            continue;
+        }
+
+        if (sourceSlot == ParameterSlot::linkUpDn && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkUpDn)] != nullptr)
+        {
+            if (rawBandParameters[bandIndex][toIndex(ParameterSlot::linkUpDn)]->load(std::memory_order_relaxed) >= 0.5f
+                && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkLr)] != nullptr)
+                setBandSlotValue(bandIndex, ParameterSlot::linkLr, 0.0f);
+        }
+        else if (sourceSlot == ParameterSlot::linkLr && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkLr)] != nullptr)
+        {
+            if (rawBandParameters[bandIndex][toIndex(ParameterSlot::linkLr)]->load(std::memory_order_relaxed) >= 0.5f
+                && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkUpDn)] != nullptr)
+                setBandSlotValue(bandIndex, ParameterSlot::linkUpDn, 0.0f);
+        }
+
+        linkLrActive = rawBandParameters[bandIndex][toIndex(ParameterSlot::linkLr)] != nullptr
+            && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkLr)]->load(std::memory_order_relaxed) >= 0.5f;
+        linkUpDnActive = rawBandParameters[bandIndex][toIndex(ParameterSlot::linkUpDn)] != nullptr
+            && rawBandParameters[bandIndex][toIndex(ParameterSlot::linkUpDn)]->load(std::memory_order_relaxed) >= 0.5f;
+
+        const auto syncAllFieldSlots = [&] (const ParameterSlot lu,
+                                            const ParameterSlot ld,
+                                            const ParameterSlot ru,
+                                            const ParameterSlot rd)
+        {
+            const auto* source = rawBandParameters[bandIndex][toIndex(lu)];
+
+            if (source == nullptr)
+                return;
+
+            const auto value = source->load(std::memory_order_relaxed);
+            setBandSlotValue(bandIndex, lu, value);
+            setBandSlotValue(bandIndex, ld, value);
+            setBandSlotValue(bandIndex, ru, value);
+            setBandSlotValue(bandIndex, rd, value);
+        };
+
+        const auto syncUpDnPairs = [&] (const ParameterSlot lu,
+                                        const ParameterSlot ld,
+                                        const ParameterSlot ru,
+                                        const ParameterSlot rd)
+        {
+            const auto* leftSource = rawBandParameters[bandIndex][toIndex(lu)];
+            const auto* rightSource = rawBandParameters[bandIndex][toIndex(ru)];
+
+            if (leftSource != nullptr)
+            {
+                const auto leftValue = leftSource->load(std::memory_order_relaxed);
+                setBandSlotValue(bandIndex, lu, leftValue);
+                setBandSlotValue(bandIndex, ld, leftValue);
+            }
+
+            if (rightSource != nullptr)
+            {
+                const auto rightValue = rightSource->load(std::memory_order_relaxed);
+                setBandSlotValue(bandIndex, ru, rightValue);
+                setBandSlotValue(bandIndex, rd, rightValue);
+            }
+        };
+
+        if (sourceSlot == ParameterSlot::linkLr && linkLrActive)
+        {
+            syncAllFieldSlots(ParameterSlot::thLU, ParameterSlot::thLD, ParameterSlot::thRU, ParameterSlot::thRD);
+            syncAllFieldSlots(ParameterSlot::tensLU, ParameterSlot::tensLD, ParameterSlot::tensRU, ParameterSlot::tensRD);
+            syncAllFieldSlots(ParameterSlot::relLU, ParameterSlot::relLD, ParameterSlot::relRU, ParameterSlot::relRD);
+            syncAllFieldSlots(ParameterSlot::outLU, ParameterSlot::outLD, ParameterSlot::outRU, ParameterSlot::outRD);
+            continue;
+        }
+
+        if (sourceSlot == ParameterSlot::linkUpDn && linkUpDnActive)
+        {
+            syncUpDnPairs(ParameterSlot::thLU, ParameterSlot::thLD, ParameterSlot::thRU, ParameterSlot::thRD);
+            syncUpDnPairs(ParameterSlot::tensLU, ParameterSlot::tensLD, ParameterSlot::tensRU, ParameterSlot::tensRD);
+            syncUpDnPairs(ParameterSlot::relLU, ParameterSlot::relLD, ParameterSlot::relRU, ParameterSlot::relRD);
+            syncUpDnPairs(ParameterSlot::outLU, ParameterSlot::outLD, ParameterSlot::outRU, ParameterSlot::outRD);
+            continue;
+        }
+
+        if (isThresholdSlot(sourceSlot))
+        {
+            const auto* source = rawBandParameters[bandIndex][toIndex(sourceSlot)];
+
+            if (source == nullptr)
+                continue;
+
+            const auto sourceValue = source->load(std::memory_order_relaxed);
+            const auto [thresholdSlots, thresholdSlotCount] = thresholdScopeFor(bandIndex, sourceSlot, linkUpDnActive, linkLrActive);
+
+            for (size_t thresholdIndex = 0; thresholdIndex < thresholdSlotCount; ++thresholdIndex)
+            {
+                const auto thresholdSlot = thresholdSlots[thresholdIndex];
+                setBandSlotValue(bandIndex, thresholdSlot, sourceValue);
+            }
+
+            if (linkOppActive)
+            {
+                for (size_t thresholdIndex = 0; thresholdIndex < thresholdSlotCount; ++thresholdIndex)
+                {
+                    const auto thresholdSlot = thresholdSlots[thresholdIndex];
+                    const auto* thresholdParam = rawBandParameters[bandIndex][toIndex(thresholdSlot)];
+
+                    if (thresholdParam == nullptr)
+                        continue;
+
+                    const auto compensatedOut = juce::jlimit(-48.0f, 48.0f, -thresholdParam->load(std::memory_order_relaxed));
+                    const auto outSlot = outSlotForThresholdSlot(thresholdSlot);
+
+                    if (outSlot.has_value())
+                        setBandSlotValue(bandIndex, *outSlot, compensatedOut);
+                }
+            }
+
+            continue;
+        }
+
+        const auto sourceBranch = branchIndexFromSlot(sourceSlot);
+
+        if (sourceBranch < 0)
+            continue;
+
+        const auto fieldSlots = fieldSlotsFor(sourceSlot);
+        const auto* source = rawBandParameters[bandIndex][toIndex(sourceSlot)];
+
+        if (source == nullptr)
+            continue;
+
+        const auto sourceValue = source->load(std::memory_order_relaxed);
+
+        for (const auto targetSlot : fieldSlots)
+        {
+            const auto targetBranch = branchIndexFromSlot(targetSlot);
+
+            if (targetBranch < 0)
+                continue;
+
+            const auto sameSide = (sourceBranch < 2) == (targetBranch < 2);
+            const auto connected = sourceBranch == targetBranch
+                || linkLrActive
+                || (linkUpDnActive && sameSide)
+                || (linkUpDnActive && linkLrActive);
+
+            if (connected)
+                setBandSlotValue(bandIndex, targetSlot, sourceValue);
         }
     }
 

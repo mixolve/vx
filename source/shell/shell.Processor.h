@@ -5,6 +5,7 @@
 #include <atomic>
 
 #include "../modules/eqe/module.eqe.Processor.h"
+#include "../shared/shared.InternalParameterHost.h"
 
 class SpeModuleProcessor;
 class MxeAudioProcessor;
@@ -22,14 +23,7 @@ public:
     inline static constexpr auto paramOutGainId = "out_gain";
     inline static constexpr auto paramGlobalBypassId = "global_bypass";
     inline static constexpr auto paramGlobalBypassOutGainOnlyId = "global_bypass_out_gain_only";
-    inline static constexpr auto paramMxeBypassId = "mxe_module_bypass";
-    inline static constexpr auto paramMxeBypassOutGainOnlyId = "mxe_module_bypass_out_gain_only";
-    inline static constexpr auto paramMxeInGainLrId = "mxe_in_gain_lr";
-    inline static constexpr auto paramMxeInGainLId = "mxe_in_gain_l";
-    inline static constexpr auto paramMxeInGainRId = "mxe_in_gain_r";
-    inline static constexpr auto paramMxeWideId = "mxe_wide";
-    inline static constexpr auto paramMxeOutGainId = "mxe_out_gain";
-    static constexpr int mxeBandCount = 6;
+    inline static constexpr auto paramHostSlotPrefix = "host_slot_";
     inline static constexpr auto activeBellCountStateKey = EqeModuleProcessor::activeBellCountStateKey;
     inline static constexpr float fixedSlopeDbPerOct = EqeModuleProcessor::fixedSlopeDbPerOct;
     inline static constexpr auto filterPresetLastSelectedStateKey = "filter_preset_last_selected";
@@ -47,6 +41,7 @@ public:
     inline static constexpr auto editorHeightStateKey = "mxe.editor.height";
     static constexpr int maxBellFilterCount = EqeModuleProcessor::maxBellFilterCount;
     static constexpr int visualizerScopeSize = EqeModuleProcessor::visualizerScopeSize;
+    static constexpr int hostAutomationSlotCount = 64;
     static constexpr int maxModuleInstanceCount = 8;
     static constexpr int maxEqeModuleInstanceCount = maxModuleInstanceCount;
     static constexpr int maxModuleSlotCount = 16;
@@ -99,6 +94,9 @@ public:
 
     juce::AudioProcessorValueTreeState& getValueTreeState() noexcept;
     const juce::AudioProcessorValueTreeState& getValueTreeState() const noexcept;
+    static juce::String getHostSlotParameterId(int slotIndex);
+    static juce::String getHostSlotLetterLabel(int slotIndex);
+    static juce::String getHostSlotParameterName(int slotIndex);
     ActiveModule getActiveModule() const noexcept;
     void setActiveModule(ActiveModule module);
     void setActiveModule(ActiveModule module, int instanceIndex);
@@ -166,12 +164,11 @@ private:
     int createTseModuleInstance();
     int getModuleChainLatencySamples() const noexcept;
     void updateShellLatency() noexcept;
-    void connectMxeProcessor(MxeAudioProcessor& processor);
-    void setMxeShellParameterValue(const juce::String& parameterId, float value);
     juce::String encodeModuleChainStateText() const;
     void restoreModuleChainFromStateText(const juce::String& text);
     void storeModuleChainStateProperty();
 
+    InternalParameterHost internalParameterHost;
     juce::AudioProcessorValueTreeState parameters;
     std::atomic<float>* globalGainLParam = nullptr;
     std::atomic<float>* globalGainRParam = nullptr;
@@ -180,20 +177,6 @@ private:
     std::atomic<float>* outGainParam = nullptr;
     std::atomic<float>* globalBypassParam = nullptr;
     std::atomic<float>* globalBypassOutGainOnlyParam = nullptr;
-    std::atomic<float>* mxeBypassParam = nullptr;
-    std::atomic<float>* mxeBypassOutGainOnlyParam = nullptr;
-    std::atomic<float>* mxeInGainLrParam = nullptr;
-    std::atomic<float>* mxeInGainLParam = nullptr;
-    std::atomic<float>* mxeInGainRParam = nullptr;
-    std::atomic<float>* mxeWideParam = nullptr;
-    std::atomic<float>* mxeOutGainParam = nullptr;
-    std::array<std::atomic<float>*, mxeBandCount> mxeBandBypassParams {};
-    std::array<std::atomic<float>*, mxeBandCount> mxeBandBypassWithGainParams {};
-    std::array<std::atomic<float>*, mxeBandCount> mxeBandInGainLrParams {};
-    std::array<std::atomic<float>*, mxeBandCount> mxeBandInGainLParams {};
-    std::array<std::atomic<float>*, mxeBandCount> mxeBandInGainRParams {};
-    std::array<std::atomic<float>*, mxeBandCount> mxeBandWideParams {};
-    std::array<std::atomic<float>*, mxeBandCount> mxeBandOutGainParams {};
     std::atomic<float> globalClipIndicator { 0.0f };
     std::vector<std::unique_ptr<EqeModuleProcessor>> eqeModuleProcessors;
     std::vector<std::unique_ptr<SpeModuleProcessor>> speModuleProcessors;

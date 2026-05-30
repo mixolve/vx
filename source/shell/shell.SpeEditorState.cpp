@@ -17,7 +17,6 @@ void VxAudioProcessorEditor::loadSpeModule()
     filtersExpanded = false;
     presetsExpanded = false;
     visualizerExpanded = false;
-    visualizerVisible = false;
     expandedBellIndex = -1;
 
     rebindActiveModuleEditors();
@@ -71,11 +70,18 @@ int VxAudioProcessorEditor::getSpeMainContentHeight() const
     };
 
     return sumHeights({ speAttackControl != nullptr ? speAttackControl->getPreferredHeight() : 0,
+                        rowHeight,
                         speReleaseControl != nullptr ? speReleaseControl->getPreferredHeight() : 0,
                         speKneeControl != nullptr ? speKneeControl->getPreferredHeight() : 0,
                         speRatioControl != nullptr ? speRatioControl->getPreferredHeight() : 0,
                         speDspFftSizeControl != nullptr ? speDspFftSizeControl->getPreferredHeight() : 0,
-                        speDspSlopeControl != nullptr ? speDspSlopeControl->getPreferredHeight() : 0 });
+                        speDspSlopeControl != nullptr ? speDspSlopeControl->getPreferredHeight() : 0,
+                        speDualMonoLeftThresholdControl != nullptr ? speDualMonoLeftThresholdControl->getPreferredHeight() : 0,
+                        speDualMonoLeftAdaptiveControl != nullptr ? speDualMonoLeftAdaptiveControl->getPreferredHeight() : 0,
+                        speDualMonoLeftAdaptiveOffsetControl != nullptr ? speDualMonoLeftAdaptiveOffsetControl->getPreferredHeight() : 0,
+                        speDualMonoRightThresholdControl != nullptr ? speDualMonoRightThresholdControl->getPreferredHeight() : 0,
+                        speDualMonoRightAdaptiveControl != nullptr ? speDualMonoRightAdaptiveControl->getPreferredHeight() : 0,
+                        speDualMonoRightAdaptiveOffsetControl != nullptr ? speDualMonoRightAdaptiveOffsetControl->getPreferredHeight() : 0 });
 }
 
 int VxAudioProcessorEditor::getSpeAnalyserContentHeight() const
@@ -100,8 +106,7 @@ int VxAudioProcessorEditor::getSpeAnalyserContentHeight() const
                         speAnalyserRangeLowControl != nullptr ? speAnalyserRangeLowControl->getPreferredHeight() : 0,
                         speAnalyserRangeHighControl != nullptr ? speAnalyserRangeHighControl->getPreferredHeight() : 0,
                         speAnalyserSlopeControl != nullptr ? speAnalyserSlopeControl->getPreferredHeight() : 0,
-                        speAnalyserTimeControl != nullptr ? speAnalyserTimeControl->getPreferredHeight() : 0,
-                        rowHeight });
+                        speAnalyserTimeControl != nullptr ? speAnalyserTimeControl->getPreferredHeight() : 0 });
 }
 
 int VxAudioProcessorEditor::getSpeSectionContentHeight() const
@@ -124,21 +129,6 @@ int VxAudioProcessorEditor::getSpeSectionContentHeight() const
 
     if (speMainExpanded)
         return getSpeMainContentHeight();
-
-    if (filtersExpanded)
-        return sumHeights({ speThresholdControl != nullptr ? speThresholdControl->getPreferredHeight() : 0,
-                            speStereoAdaptiveControl != nullptr ? speStereoAdaptiveControl->getPreferredHeight() : 0,
-                            speStereoAdaptiveOffsetControl != nullptr ? speStereoAdaptiveOffsetControl->getPreferredHeight() : 0,
-                            rowHeight });
-
-    if (presetsExpanded)
-        return sumHeights({ speDualMonoLeftThresholdControl != nullptr ? speDualMonoLeftThresholdControl->getPreferredHeight() : 0,
-                            speDualMonoLeftAdaptiveControl != nullptr ? speDualMonoLeftAdaptiveControl->getPreferredHeight() : 0,
-                            speDualMonoLeftAdaptiveOffsetControl != nullptr ? speDualMonoLeftAdaptiveOffsetControl->getPreferredHeight() : 0,
-                            speDualMonoRightThresholdControl != nullptr ? speDualMonoRightThresholdControl->getPreferredHeight() : 0,
-                            speDualMonoRightAdaptiveControl != nullptr ? speDualMonoRightAdaptiveControl->getPreferredHeight() : 0,
-                            speDualMonoRightAdaptiveOffsetControl != nullptr ? speDualMonoRightAdaptiveOffsetControl->getPreferredHeight() : 0,
-                            rowHeight });
 
     if (visualizerExpanded)
         return getSpeAnalyserContentHeight();

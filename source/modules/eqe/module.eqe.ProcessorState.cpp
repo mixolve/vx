@@ -1,10 +1,38 @@
 #include "module.eqe.ProcessorSupport.h"
 
+#include <array>
 #include <memory>
 #include <vector>
 
 namespace
 {
+struct ParameterOrderEntry
+{
+    const char* key;
+    const char* label;
+};
+
+inline constexpr auto eqeMiscOrder = std::to_array<ParameterOrderEntry>({
+    { "bypass", "BYPASS" },
+    { "bypass_wt_gain", "BYPASS.WT-GAIN" },
+    { "in_gain_lr", "IN-GAIN-LR" },
+    { "in_gain_l", "IN-GAIN-L" },
+    { "in_gain_r", "IN-GAIN-R" },
+    { "in_wide", "IN-WIDE" },
+    { "out_gain", "OUT-GAIN" },
+});
+
+inline constexpr auto eqeFilterOrder = std::to_array<ParameterOrderEntry>({
+    { "type", "TYPE" },
+    { "ttss", "TTSS" },
+    { "place", "PLACE" },
+    { "order", "ORDER" },
+    { "freq", "FREQ" },
+    { "bw", "BW" },
+    { "gain", "GAIN" },
+    { "bypass", "BYPASS" },
+});
+
 bool supportsPersistentEqePresets() noexcept
 {
     return true;
@@ -78,8 +106,9 @@ void ensureStateParameterElement(juce::XmlElement& stateElement,
 }
 
 EqeModuleProcessor::EqeModuleProcessor(juce::AudioProcessor& ownerProcessor)
-    : parameters(ownerProcessor, nullptr, "eqe_state", createParameterLayout())
+    : parameters(internalParameterHost, nullptr, "eqe_state", createParameterLayout())
 {
+    juce::ignoreUnused(ownerProcessor);
     bypassParam = parameters.getRawParameterValue(paramBypassId);
     bypassWithGainParam = parameters.getRawParameterValue(paramBypassWithGainId);
     inGainLrParam = parameters.getRawParameterValue(paramInGainLrId);
@@ -136,147 +165,217 @@ void EqeModuleProcessor::appendEqeParameters(std::vector<std::unique_ptr<juce::R
 {
     const auto makeEqeMiscName = [] (const juce::String& parameterName)
     {
-        return "EQE - MISC - " + parameterName;
+        return "MISC - " + parameterName;
     };
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID { paramBypassId, 1 },
-        makeEqeMiscName("BYPASS"),
-        false,
-        juce::AudioParameterBoolAttributes().withAutomatable(true)));
+    for (const auto& entry : eqeMiscOrder)
+    {
+        const auto key = juce::String(entry.key);
+        const auto name = makeEqeMiscName(entry.label);
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID { paramBypassWithGainId, 1 },
-        makeEqeMiscName("BYPASS.WT-GAIN"),
-        false,
-        juce::AudioParameterBoolAttributes().withAutomatable(true)));
+        if (key == "bypass")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
+                juce::ParameterID { paramBypassId, 1 },
+                name,
+                false,
+                juce::AudioParameterBoolAttributes()));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramInGainLrId, 1 },
-        makeEqeMiscName("IN-GAIN-LR"),
-        juce::NormalisableRange<float> { -48.0f, 48.0f, 0.01f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "bypass_wt_gain")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
+                juce::ParameterID { paramBypassWithGainId, 1 },
+                name,
+                false,
+                juce::AudioParameterBoolAttributes()));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramInGainLId, 1 },
-        makeEqeMiscName("IN-GAIN-L"),
-        juce::NormalisableRange<float> { -48.0f, 48.0f, 0.01f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "in_gain_lr")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramInGainLrId, 1 },
+                name,
+                juce::NormalisableRange<float> { -48.0f, 48.0f, 0.01f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramInGainRId, 1 },
-        makeEqeMiscName("IN-GAIN-R"),
-        juce::NormalisableRange<float> { -48.0f, 48.0f, 0.01f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "in_gain_l")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramInGainLId, 1 },
+                name,
+                juce::NormalisableRange<float> { -48.0f, 48.0f, 0.01f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramWideId, 1 },
-        makeEqeMiscName("WIDE"),
-        juce::NormalisableRange<float> { 0.0f, 400.0f, 0.01f },
-        100.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return juce::String::formatted("%.0f", static_cast<double>(value));
-            })));
+        if (key == "in_gain_r")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramInGainRId, 1 },
+                name,
+                juce::NormalisableRange<float> { -48.0f, 48.0f, 0.01f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramOutGainId, 1 },
-        makeEqeMiscName("OUT-GAIN"),
-        juce::NormalisableRange<float> { -48.0f, 48.0f, 0.01f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "in_wide")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramWideId, 1 },
+                name,
+                juce::NormalisableRange<float> { 0.0f, 400.0f, 0.01f },
+                100.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return juce::String::formatted("%.0f", static_cast<double>(value));
+                    })));
+            continue;
+        }
+
+        if (key == "out_gain")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramOutGainId, 1 },
+                name,
+                juce::NormalisableRange<float> { -48.0f, 48.0f, 0.01f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+        }
+    }
 
     for (int bellIndex = 0; bellIndex < maxBellFilterCount; ++bellIndex)
     {
-        parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID { getFilterTypeParamId(bellIndex), 1 },
-            makeFilterTypeName(bellIndex),
-            filterTypeChoices,
-            EqeModuleProcessor::choiceIndexFromFilterType(EqeModuleProcessor::FilterType::bell),
-            juce::AudioParameterChoiceAttributes().withAutomatable(true)));
+        for (const auto& entry : eqeFilterOrder)
+        {
+            const auto key = juce::String(entry.key);
+            const auto name = "FILTER " + juce::String(bellIndex + 1) + " - " + juce::String(entry.label);
 
-        parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID { getFilterTtssParamId(bellIndex), 1 },
-            makeFilterTtssName(bellIndex),
-            filterTtssChoices,
-            0,
-            juce::AudioParameterChoiceAttributes().withAutomatable(true)));
+            if (key == "type")
+            {
+                parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
+                    juce::ParameterID { getFilterTypeParamId(bellIndex), 1 },
+                    name,
+                    filterTypeChoices,
+                    EqeModuleProcessor::choiceIndexFromFilterType(EqeModuleProcessor::FilterType::bell),
+                    juce::AudioParameterChoiceAttributes()));
+                continue;
+            }
 
-        parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID { getFilterLrmsParamId(bellIndex), 1 },
-            makeFilterLrmsName(bellIndex),
-            filterLrmsChoices,
-            0,
-            juce::AudioParameterChoiceAttributes().withAutomatable(true)));
+            if (key == "ttss")
+            {
+                parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
+                    juce::ParameterID { getFilterTtssParamId(bellIndex), 1 },
+                    name,
+                    filterTtssChoices,
+                    0,
+                    juce::AudioParameterChoiceAttributes()));
+                continue;
+            }
 
-        parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
-            juce::ParameterID { getBellSlopeParamId(bellIndex), 1 },
-            makeBellParameterName("ORDER", bellIndex),
-            EqeModuleProcessor::getBellSlopeChoices(),
-            EqeModuleProcessor::getBellSlopeChoiceIndexForValue(EqeModuleProcessor::fixedSlopeDbPerOct),
-            juce::AudioParameterChoiceAttributes().withAutomatable(true)));
+            if (key == "place")
+            {
+                parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
+                    juce::ParameterID { getFilterLrmsParamId(bellIndex), 1 },
+                    name,
+                    filterLrmsChoices,
+                    0,
+                    juce::AudioParameterChoiceAttributes()));
+                continue;
+            }
 
-        auto filterFrequencyRange = juce::NormalisableRange<float> { minimumVisibleFilterFrequency, maximumVisibleFilterFrequency, 0.01f };
-        filterFrequencyRange.setSkewForCentre(defaultTiltFrequency);
+            if (key == "order")
+            {
+                parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
+                    juce::ParameterID { getBellSlopeParamId(bellIndex), 1 },
+                    name,
+                    EqeModuleProcessor::getBellSlopeChoices(),
+                    EqeModuleProcessor::getBellSlopeChoiceIndexForValue(EqeModuleProcessor::fixedSlopeDbPerOct),
+                    juce::AudioParameterChoiceAttributes()));
+                continue;
+            }
 
-        parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID { getBellFrequencyParamId(bellIndex), 1 },
-            makeBellParameterName("FREQ", bellIndex),
-            filterFrequencyRange,
-            defaultTiltFrequency,
-            juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-                [] (float value, int)
-                {
-                    return formatFrequencyValue(value);
-                })));
+            if (key == "freq")
+            {
+                auto filterFrequencyRange = juce::NormalisableRange<float> { minimumVisibleFilterFrequency, maximumVisibleFilterFrequency, 0.01f };
+                filterFrequencyRange.setSkewForCentre(defaultTiltFrequency);
 
-        parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID { getBellBandwidthParamId(bellIndex), 1 },
-            makeBellParameterName("BW", bellIndex),
-            juce::NormalisableRange<float> { minimumBellBandwidth, maximumBellBandwidth, 0.001f },
-            1.0f,
-            juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-                [] (float value, int)
-                {
-                    return formatBandwidthValue(value);
-                })));
+                parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                    juce::ParameterID { getBellFrequencyParamId(bellIndex), 1 },
+                    name,
+                    filterFrequencyRange,
+                    defaultTiltFrequency,
+                    juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                        [] (float value, int)
+                        {
+                            return formatFrequencyValue(value);
+                        })));
+                continue;
+            }
 
-        parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-            juce::ParameterID { getBellGainParamId(bellIndex), 1 },
-            makeBellParameterName("GAIN", bellIndex),
-            juce::NormalisableRange<float> { -48.0f, 48.0f, 0.01f },
-            0.0f,
-            juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-                [] (float value, int)
-                {
-                    return formatDecibelValue(value);
-                })));
+            if (key == "bw")
+            {
+                parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                    juce::ParameterID { getBellBandwidthParamId(bellIndex), 1 },
+                    name,
+                    juce::NormalisableRange<float> { minimumBellBandwidth, maximumBellBandwidth, 0.001f },
+                    1.0f,
+                    juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                        [] (float value, int)
+                        {
+                            return formatBandwidthValue(value);
+                        })));
+                continue;
+            }
 
-        parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
-            juce::ParameterID { getBellBypassParamId(bellIndex), 1 },
-            makeBellParameterName("BYPASS", bellIndex),
-            false,
-            juce::AudioParameterBoolAttributes().withAutomatable(true)));
+            if (key == "gain")
+            {
+                parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                    juce::ParameterID { getBellGainParamId(bellIndex), 1 },
+                    name,
+                    juce::NormalisableRange<float> { -48.0f, 48.0f, 0.01f },
+                    0.0f,
+                    juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                        [] (float value, int)
+                        {
+                            return formatDecibelValue(value);
+                        })));
+                continue;
+            }
+
+            if (key == "bypass")
+            {
+                parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
+                    juce::ParameterID { getBellBypassParamId(bellIndex), 1 },
+                    name,
+                    false,
+                    juce::AudioParameterBoolAttributes()));
+            }
+        }
     }
 }
 

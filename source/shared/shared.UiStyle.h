@@ -5,9 +5,9 @@
 #include <JuceHeader.h>
 
 inline constexpr int initialEditorWidth = 306;
-inline constexpr int initialEditorHeight = 612;
+inline constexpr int initialEditorHeight = 650;
 inline constexpr int minimumEditorWidth = 306;
-inline constexpr int minimumEditorHeight = 612;
+inline constexpr int minimumEditorHeight = 650;
 inline constexpr int maximumEditorWidth = 4096;
 inline constexpr int maximumEditorHeight = 4096;
 inline constexpr int visualizerPanelGap = uiGap;
@@ -23,6 +23,8 @@ inline constexpr int globalToFilterGap = uiGap;
 inline constexpr int addFilterToFooterGap = uiGap;
 inline constexpr int addFilterToPresetsGap = uiGap;
 inline constexpr int rowHeight = 30;
+inline constexpr int speInlineAnalyserHeight = rowHeight * speInlineAnalyserHeightRows;
+inline constexpr int minimumEditorWidthWithFocusedControl = minimumEditorWidth + rowHeight + parameterGap;
 inline constexpr int presetRowGap = uiGap;
 inline constexpr float uiFontSize = 22.0f;
 

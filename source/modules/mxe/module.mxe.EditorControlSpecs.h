@@ -29,45 +29,11 @@ struct SectionSpec
     bool staysExpandedOnSelfClick = false;
 };
 
-inline constexpr auto halfWaveControls = std::to_array<ControlSpec>({
-    { "hwBypass", "BYPASS", true, false },
-    { "linkUpDn", "LINK-UPDN", true, false },
-    { "thLU", "L.UP.THR" },
-    { "mkLU", "L.UP.OUT" },
-    { "thLD", "L.DN.THR" },
-    { "mkLD", "L.DN.OUT" },
-    { "thRU", "R.UP.THR" },
-    { "mkRU", "R.UP.OUT" },
-    { "thRD", "R.DN.THR" },
-    { "mkRD", "R.DN.OUT" },
-});
-
-inline constexpr auto dmControls = std::to_array<ControlSpec>({
-    { "DMbypass", "BYPASS", true, false },
-    { "linkLr", "LINK-LR", true, false },
-    { "LLThResh", "L.THR" },
-    { "LLTension", "L.TENS" },
-    { "LLRelease", "L.REL" },
-    { "LLmk", "L.OUT" },
-    { "RRThResh", "R.THR" },
-    { "RRTension", "R.TENS" },
-    { "RRRelease", "R.REL" },
-    { "RRmk", "R.OUT" },
-});
-
-inline constexpr auto ffControls = std::to_array<ControlSpec>({
-    { "FFbypass", "BYPASS", true, false },
-    { "FFThResh", "THRESH" },
-    { "FFTension", "TENSION" },
-    { "FFRelease", "RELEASE" },
-    { "FFmk", "OUT-GAIN" },
-});
-
 inline constexpr auto globalControls = std::to_array<ControlSpec>({
     { "inGn", "INPUT-GAIN" },
     { "inRight", "IN-RIGHT" },
     { "inLeft", "IN-LEFT" },
-    { "wide", "WIDE" },
+    { "wide", "IN-WIDE" },
     { "moRph", "MORPH" },
     { "peakHoldHz", "PEAK-HOLD" },
     { "TensionFlooR", "TEN-FLOOR" },
@@ -91,9 +57,6 @@ inline constexpr auto crossoverControls = std::to_array<ControlSpec>({
 inline constexpr std::array<ControlSpec, 0> moduleMiscControls {};
 
 inline const auto moduleMiscSection = SectionSpec { "MISC", moduleMiscControls, false, false };
-inline const auto halfWaveSection = SectionSpec { "HALF-WAVE", halfWaveControls, false, false };
-inline const auto dmSection = SectionSpec { "DUAL-MONO", dmControls, false, false };
-inline const auto ffSection = SectionSpec { "STEREO", ffControls, false, false };
 inline const auto globalSection = SectionSpec { "MISC", globalControls, false, false };
 inline const auto fullbandSection = SectionSpec { "FULLBAND", fullbandControls, false, false };
 inline const auto crossoverSection = SectionSpec { "CROSSOVER", crossoverControls, false, false };

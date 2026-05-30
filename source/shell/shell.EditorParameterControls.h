@@ -7,6 +7,13 @@
 #include <memory>
 #include <vector>
 
+namespace shell_parameter_focus
+{
+juce::Slider* getFocusedValueSlider() noexcept;
+void clearFocus() noexcept;
+void clearFocusIfNotShowing() noexcept;
+}
+
 class ChoiceControl final : public juce::Component
 {
 public:
@@ -16,6 +23,7 @@ public:
                   const juce::String& parameterIdIn,
                   const juce::String& titleText,
                   std::vector<int> displayOrderIn = {});
+    ~ChoiceControl() override;
 
     int getPreferredHeight() const noexcept;
     void detach() noexcept;
@@ -60,6 +68,7 @@ public:
                           double skewCentre = 0.0,
                           bool supportsBrickwText = false,
                           bool supportsNoteTextIn = false);
+    ~LocalParameterControl() override;
 
     int getPreferredHeight() const noexcept;
     double getValue() const noexcept;
@@ -67,6 +76,8 @@ public:
     void setOverrideText(const juce::String& text);
     void clearOverrideText();
     void setInteractionEnabled(bool shouldEnable);
+    void setValueClickAction(std::function<void()> action);
+    juce::Rectangle<int> getValueBounds() const noexcept;
     void setTitleBorderVisible(bool shouldShow);
     void setTitleMouseEnabled(bool shouldEnable);
     void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);

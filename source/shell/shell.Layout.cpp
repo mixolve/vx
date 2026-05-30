@@ -15,12 +15,7 @@ juce::Rectangle<int> VxAudioProcessorEditor::getGlobalHeaderBounds() const noexc
 
 juce::Rectangle<int> VxAudioProcessorEditor::getMainPanelBounds() const noexcept
 {
-    auto bounds = getLocalBounds();
-
-    if (shouldShowDetachedVisualizerPanel())
-        bounds = bounds.removeFromLeft(getCurrentMainPanelWidth());
-
-    return bounds;
+    return getLocalBounds();
 }
 
 int VxAudioProcessorEditor::getFilterContentHeight() const
@@ -107,13 +102,27 @@ int VxAudioProcessorEditor::getActiveGlobalContentHeight() const
 
 int VxAudioProcessorEditor::getActiveFilterContentHeight() const
 {
-    if (speModuleLoaded && visualizerExpanded)
-        return getSpeAnalyserContentHeight();
-
     if (mxeModuleLoaded || tseModuleLoaded)
         return 0;
 
-    return getFilterContentHeight();
+    if (speModuleLoaded)
+    {
+        if (speMainExpanded)
+            return getSpeMainContentHeight();
+
+        if (visualizerExpanded)
+            return getSpeAnalyserContentHeight();
+
+        return 0;
+    }
+
+    if (filtersExpanded)
+        return getFilterContentHeight();
+
+    if (presetsExpanded && presetsSection != nullptr)
+        return presetsSection->getPresetRowPreferredHeight();
+
+    return 0;
 }
 
 int VxAudioProcessorEditor::getShellGlobalContentHeight() const
@@ -121,58 +130,27 @@ int VxAudioProcessorEditor::getShellGlobalContentHeight() const
     if (! shellGlobalExpanded)
         return 0;
 
-    if (! shellGlobalMiscExpanded)
-        return rowHeight;
-
-    return (rowHeight * 6)
+    const auto baseHeaderHeight = (rowHeight * 3) + (verticalGap * 2);
+    const auto miscExpandedHeight = (rowHeight * 9)
         + clipControl->getPreferredHeight()
         + outGainControl->getPreferredHeight()
         + globalInGainLrControl->getPreferredHeight()
         + gainLControl->getPreferredHeight()
         + gainRControl->getPreferredHeight()
         + wideControl->getPreferredHeight()
-        + (verticalGap * 11);
+        + (verticalGap * 12);
+
+    if (shellGlobalHostExpanded)
+        return miscExpandedHeight;
+
+    if (! shellGlobalMiscExpanded)
+        return baseHeaderHeight;
+
+    return miscExpandedHeight;
 }
 
 void VxAudioProcessorEditor::updateVisualizerPanelBounds(juce::Rectangle<int>& bounds)
 {
-    if (shouldShowDetachedVisualizerPanel())
-    {
-        const auto minimumVisibleWidth = lastCollapsedEditorWidth + visualizerPanelGap + minimumVisualizerWidth;
-        const auto totalWidth = juce::jmax(minimumVisibleWidth, getWidth());
-        lastCollapsedEditorWidth = juce::jlimit(minimumEditorWidth,
-                                                juce::jmax(minimumEditorWidth, maximumEditorWidth - minimumVisualizerWidth),
-                                                juce::jmin(lastCollapsedEditorWidth,
-                                                           totalWidth - visualizerPanelGap - minimumVisualizerWidth));
-        lastVisualizerWidth = juce::jmax(minimumVisualizerWidth,
-                                         totalWidth - visualizerPanelGap - lastCollapsedEditorWidth);
-
-        const auto mainPanelWidth = getCurrentMainPanelWidth();
-        auto visualizerBounds = bounds.withTrimmedLeft(mainPanelWidth + visualizerPanelGap);
-
-        if (visualizerComponent != nullptr || speAnalyserComponent != nullptr)
-        {
-            const auto visualizerInsetX = getEditorInsetX(mainPanelWidth);
-            visualizerBounds.removeFromLeft(visualizerInsetX);
-            visualizerBounds.removeFromRight(visualizerInsetX);
-
-            const auto totalHeight = visualizerBounds.getHeight();
-            const auto editorInsetTop = juce::roundToInt(static_cast<float>(totalHeight) * editorInsetTopRatio);
-            const auto editorInsetBottom = juce::roundToInt(static_cast<float>(totalHeight) * editorInsetBottomRatio);
-            visualizerBounds.removeFromTop(editorInsetTop);
-            visualizerBounds.removeFromBottom(editorInsetBottom);
-
-            if (eqeModuleLoaded && visualizerComponent != nullptr)
-                visualizerComponent->setBounds(visualizerBounds);
-
-            if (speModuleLoaded && speAnalyserComponent != nullptr)
-                speAnalyserComponent->setBounds(visualizerBounds);
-        }
-
-        bounds = bounds.removeFromLeft(mainPanelWidth);
-        return;
-    }
-
     lastCollapsedEditorWidth = juce::jmax(minimumEditorWidth, getWidth());
 
     if (visualizerComponent != nullptr)
@@ -184,6 +162,10 @@ void VxAudioProcessorEditor::updateVisualizerPanelBounds(juce::Rectangle<int>& b
 
 void VxAudioProcessorEditor::layoutShellGlobalSection(juce::Rectangle<int>& bounds, const int editorInsetX)
 {
+    shellGlobalHostViewport.setVisible(false);
+    shellGlobalHostViewport.setBounds({});
+    shellGlobalHostContent.setSize(0, 0);
+
     auto shellGlobalBounds = bounds.removeFromTop(rowHeight);
     shellGlobalBounds.removeFromLeft(editorInsetX);
     shellGlobalBounds.removeFromRight(editorInsetX);
@@ -198,11 +180,40 @@ void VxAudioProcessorEditor::layoutShellGlobalSection(juce::Rectangle<int>& boun
         return;
     }
 
-    auto shellGlobalContentBounds = bounds.removeFromTop(getShellGlobalContentHeight());
+    const auto minimumBelowShellGlobal = addFilterToFooterGap;
+    const auto shellGlobalViewportHeight = juce::jmax(0, bounds.getHeight() - minimumBelowShellGlobal);
+    auto shellGlobalContentBounds = bounds.removeFromTop(shellGlobalViewportHeight);
 
     if (! shellGlobalContentBounds.isEmpty())
     {
         juce::Rectangle<int> shellMiscFrameBounds;
+        auto placeShellTab = [&shellGlobalContentBounds, editorInsetX] (BoxTextButton* tab)
+        {
+            if (tab == nullptr)
+                return;
+
+            auto tabBounds = shellGlobalContentBounds.removeFromTop(rowHeight);
+            tabBounds.removeFromLeft(editorInsetX);
+            tabBounds.removeFromRight(editorInsetX);
+            tab->setBounds(tabBounds);
+        };
+
+        placeShellTab(shellGlobalMiscHeader.get());
+
+        if (! shellGlobalContentBounds.isEmpty())
+            shellGlobalContentBounds.removeFromTop(verticalGap);
+
+        placeShellTab(shellGlobalHostHeader.get());
+
+        if (! shellGlobalContentBounds.isEmpty())
+            shellGlobalContentBounds.removeFromTop(verticalGap);
+
+        if (! shellGlobalContentBounds.isEmpty())
+            shellGlobalContentBounds.removeFromBottom(verticalGap);
+
+        auto shellGlobalFrameContentBounds = shellGlobalContentBounds;
+        shellGlobalFrameContentBounds.removeFromLeft(editorInsetX);
+        shellGlobalFrameContentBounds.removeFromRight(editorInsetX);
 
         auto placeShellGlobalControl = [&shellGlobalContentBounds, editorInsetX] (auto& control)
         {
@@ -226,11 +237,13 @@ void VxAudioProcessorEditor::layoutShellGlobalSection(juce::Rectangle<int>& boun
                 shellGlobalContentBounds.removeFromTop(verticalGap);
         };
 
-        placeShellGlobalButton(*shellGlobalMiscHeader);
-
-        if (! shellGlobalMiscExpanded)
+        if (! shellGlobalMiscExpanded && ! shellGlobalHostExpanded)
         {
-            placeSectionFrame(shellGlobalSectionFrame.get(), false, {});
+            includeComponentBounds(shellMiscFrameBounds, shellGlobalMiscHeader.get());
+            includeComponentBounds(shellMiscFrameBounds, shellGlobalHostHeader.get());
+            includeBounds(shellMiscFrameBounds, shellGlobalFrameContentBounds);
+
+            placeSectionFrame(shellGlobalSectionFrame.get(), shellGlobalExpanded, shellMiscFrameBounds);
 
             if (! bounds.isEmpty())
                 bounds.removeFromTop(globalToFilterGap);
@@ -238,19 +251,55 @@ void VxAudioProcessorEditor::layoutShellGlobalSection(juce::Rectangle<int>& boun
             return;
         }
 
-        placeShellGlobalButton(*moduleAddButton);
-        placeShellGlobalControl(*clipControl);
-        placeShellGlobalButton(*globalBypassButton);
-        placeShellGlobalButton(*globalBypassOutGainOnlyButton);
-        placeShellGlobalControl(*globalInGainLrControl);
-        placeShellGlobalControl(*gainLControl);
-        placeShellGlobalControl(*gainRControl);
-        placeShellGlobalControl(*wideControl);
-        placeShellGlobalControl(*outGainControl);
-        placeShellGlobalButton(*undoButton);
-        placeShellGlobalButton(*redoButton);
+        if (shellGlobalHostExpanded)
+        {
+            auto hostViewportBounds = shellGlobalContentBounds;
+            hostViewportBounds.removeFromLeft(editorInsetX);
+            hostViewportBounds.removeFromRight(editorInsetX);
+            shellGlobalHostViewport.setVisible(true);
+            shellGlobalHostViewport.setBounds(hostViewportBounds);
+
+            const auto slotCount = static_cast<int>(hostSlotButtons.size());
+            const auto hostContentHeight = slotCount > 0
+                ? (slotCount * rowHeight) + ((slotCount - 1) * verticalGap)
+                : 0;
+            shellGlobalHostContent.setSize(hostViewportBounds.getWidth(),
+                                           juce::jmax(hostViewportBounds.getHeight(), hostContentHeight));
+
+            auto hostContentBounds = shellGlobalHostContent.getLocalBounds();
+
+            for (int slotIndex = 0; slotIndex < slotCount; ++slotIndex)
+            {
+                auto* slotButton = hostSlotButtons[static_cast<size_t>(slotIndex)].get();
+
+                if (slotButton == nullptr)
+                    continue;
+
+                auto slotBounds = hostContentBounds.removeFromTop(rowHeight);
+                slotButton->setBounds(slotBounds);
+
+                if (! hostContentBounds.isEmpty())
+                    hostContentBounds.removeFromTop(verticalGap);
+            }
+        }
+        else if (shellGlobalMiscExpanded)
+        {
+            placeShellGlobalButton(*moduleAddButton);
+            placeShellGlobalControl(*clipControl);
+            placeShellGlobalButton(*globalBypassButton);
+            placeShellGlobalButton(*globalBypassOutGainOnlyButton);
+            placeShellGlobalControl(*globalInGainLrControl);
+            placeShellGlobalControl(*gainLControl);
+            placeShellGlobalControl(*gainRControl);
+            placeShellGlobalControl(*wideControl);
+            placeShellGlobalControl(*outGainControl);
+            placeShellGlobalButton(*undoButton);
+            placeShellGlobalButton(*redoButton);
+        }
 
         includeComponentBounds(shellMiscFrameBounds, shellGlobalMiscHeader.get());
+        includeComponentBounds(shellMiscFrameBounds, shellGlobalHostHeader.get());
+        includeBounds(shellMiscFrameBounds, shellGlobalFrameContentBounds);
         includeComponentBounds(shellMiscFrameBounds, moduleAddButton.get());
         includeComponentBounds(shellMiscFrameBounds, clipControl.get());
         includeComponentBounds(shellMiscFrameBounds, globalBypassButton.get());
@@ -262,6 +311,9 @@ void VxAudioProcessorEditor::layoutShellGlobalSection(juce::Rectangle<int>& boun
         includeComponentBounds(shellMiscFrameBounds, gainRControl.get());
         includeComponentBounds(shellMiscFrameBounds, undoButton.get());
         includeComponentBounds(shellMiscFrameBounds, redoButton.get());
+
+        includeComponentBounds(shellMiscFrameBounds, &shellGlobalHostViewport);
+
         placeSectionFrame(shellGlobalSectionFrame.get(), shellGlobalExpanded, shellMiscFrameBounds);
 
         if (! bounds.isEmpty())
@@ -314,6 +366,8 @@ void VxAudioProcessorEditor::layoutModuleTabRows(juce::Rectangle<int>& bounds, c
 
 void VxAudioProcessorEditor::finalizeLayout() noexcept
 {
+    shell_parameter_focus::clearFocusIfNotShowing();
+
     eqeModuleFrame->toFront(false);
 
     for (const auto& row : moduleTabRows)
@@ -328,6 +382,27 @@ void VxAudioProcessorEditor::finalizeLayout() noexcept
 
     shellGlobalHeader->toFront(false);
     footerTab->toFront(false);
+
+    if (focusedParameterControl != nullptr)
+    {
+        auto focusedControlBounds = focusedParameterControl->getBounds();
+        focusedControlBounds.setY(shellGlobalHeader->getY());
+        focusedControlBounds.setHeight(juce::jmax(0, footerTab->getBottom() - shellGlobalHeader->getY()));
+
+        const auto editorInsetX = getEditorInsetX(getWidth());
+        const auto maxFocusedX = juce::jmax(0, getWidth() - editorInsetX - rowHeight);
+        auto focusedX = juce::jmax(0, getWidth() - (editorInsetX * 2) - rowHeight + moduleFrameInsetX);
+
+        if (eqeModuleFrame != nullptr && eqeModuleFrame->isVisible() && ! eqeModuleFrame->getBounds().isEmpty())
+            focusedX = eqeModuleFrame->getRight() + parameterGap;
+        else if (shellGlobalSectionFrame != nullptr && shellGlobalSectionFrame->isVisible() && ! shellGlobalSectionFrame->getBounds().isEmpty())
+            focusedX = shellGlobalSectionFrame->getRight() + parameterGap;
+
+        focusedControlBounds.setX(juce::jlimit(0, maxFocusedX, focusedX));
+        focusedParameterControl->setBounds(focusedControlBounds);
+
+        focusedParameterControl->toFront(false);
+    }
 
     if (textPromptOverlay != nullptr)
     {
@@ -363,7 +438,6 @@ void VxAudioProcessorEditor::resized()
         || sortPlaceButton == nullptr
         || sortFreqButton == nullptr
         || sortDuoButton == nullptr
-        || speStereoBypassButton == nullptr
         || eqeModuleFrame == nullptr
         || shellGlobalSectionFrame == nullptr
         || footerTab == nullptr)
@@ -376,6 +450,7 @@ void VxAudioProcessorEditor::resized()
     }
 
     auto bounds = getLocalBounds();
+
     updateVisualizerPanelBounds(bounds);
 
     const auto editorInsetX = getEditorInsetX(bounds.getWidth());
@@ -383,13 +458,45 @@ void VxAudioProcessorEditor::resized()
     const auto editorInsetTop = juce::roundToInt(static_cast<float>(totalHeight) * editorInsetTopRatio);
     const auto editorInsetBottom = juce::roundToInt(static_cast<float>(totalHeight) * editorInsetBottomRatio);
 
+    if (focusedParameterControl != nullptr)
+    {
+        auto focusedControlBounds = juce::Rectangle<int>(rowHeight, bounds.getHeight());
+
+        const auto editorInsetX = getEditorInsetX(getWidth());
+        const auto maxFocusedX = juce::jmax(0, getWidth() - editorInsetX - rowHeight);
+        auto focusedX = juce::jmax(0, getWidth() - (editorInsetX * 2) - rowHeight + moduleFrameInsetX);
+
+        if (eqeModuleFrame != nullptr && eqeModuleFrame->isVisible() && ! eqeModuleFrame->getBounds().isEmpty())
+            focusedX = eqeModuleFrame->getRight() + parameterGap;
+        else if (shellGlobalSectionFrame != nullptr && shellGlobalSectionFrame->isVisible() && ! shellGlobalSectionFrame->getBounds().isEmpty())
+            focusedX = shellGlobalSectionFrame->getRight() + parameterGap;
+
+        focusedControlBounds.setX(juce::jlimit(0, maxFocusedX, focusedX));
+        focusedControlBounds.setY(bounds.getY());
+        focusedParameterControl->setBounds(focusedControlBounds);
+    }
+
     bounds.removeFromLeft(editorInsetX);
     bounds.removeFromRight(editorInsetX);
+
+    if (focusedParameterControl != nullptr)
+        bounds.removeFromRight(rowHeight + parameterGap);
+
     bounds.removeFromBottom(editorInsetBottom);
     bounds.removeFromTop(editorInsetTop);
 
-    layoutShellGlobalSection(bounds, editorInsetX);
+    const auto showShellGlobalStrip = shellGlobalExpanded || ! eqeModuleExpanded;
+
     layoutFooter(bounds, editorInsetX);
+    if (showShellGlobalStrip)
+        layoutShellGlobalSection(bounds, editorInsetX);
+
+    if (shellGlobalExpanded)
+    {
+        layoutCollapsedModuleState();
+        finalizeLayout();
+        return;
+    }
 
     if (! eqeModuleLoaded && ! speModuleLoaded && ! mxeModuleLoaded && ! tseModuleLoaded)
     {

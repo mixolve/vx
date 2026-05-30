@@ -1,5 +1,6 @@
 #include "module.tse.Component.h"
 
+#include "../../shared/shared.UiConstants.h"
 #include "../../shared/shared.UiParameterControls.h"
 
 #include <atomic>
@@ -123,7 +124,7 @@ TseModuleComponent::TseModuleComponent(TseModuleProcessor& processorToEdit, Call
     };
     content.addAndMakeVisible(*miscHeader);
 
-    stereoHeader = makeHeaderButton("STEREO");
+    stereoHeader = makeHeaderButton("MAIN");
     stereoHeader->setClickingTogglesState(true);
     stereoHeader->setToggleState(stereoExpanded, juce::dontSendNotification);
     stereoHeader->onClick = [this]
@@ -283,7 +284,7 @@ TseModuleComponent::TseModuleComponent(TseModuleProcessor& processorToEdit, Call
                                                           1);
     thresholdControl->setTitleLongPressAction([this]
     {
-        resetControl(thresholdControl.get(), -42.0, [this] { clearFocus(); });
+        resetControl(thresholdControl.get(), -48.0, [this] { clearFocus(); });
     });
     content.addAndMakeVisible(*thresholdControl);
 
@@ -339,7 +340,7 @@ TseModuleComponent::TseModuleComponent(TseModuleProcessor& processorToEdit, Call
 
     wideControl = std::make_unique<ParameterControl>(valueTreeState,
                                                      TseModuleProcessor::paramMiscWideId,
-                                                     "WIDE",
+                                                     "IN-WIDE",
                                                      0);
     wideControl->setTitleLongPressAction([this]
     {
@@ -398,6 +399,7 @@ void TseModuleComponent::resized()
     content.setSize(bounds.getWidth(), juce::jmax(bounds.getHeight(), getPreferredContentHeight()));
 
     auto contentBounds = content.getLocalBounds();
+    contentBounds = contentBounds.withTrimmedLeft(internalFrameInsetX).withTrimmedRight(internalFrameInsetX);
     const auto placeRow = [&contentBounds] (juce::Component* component)
     {
         if (component == nullptr)
@@ -542,7 +544,10 @@ void TseModuleComponent::scrollViewport(const juce::MouseWheelDetails& wheel)
     if (std::abs(dominantDelta) < 1.0e-6f)
         return;
 
-    auto pixelDelta = juce::roundToInt(-dominantDelta * (wheel.isSmooth ? 180.0f : 90.0f));
+    auto pixelDelta = juce::roundToInt(-dominantDelta
+                                       * (wheel.isSmooth
+                                              ? focusedParameterScrollSensitivity
+                                              : (focusedParameterScrollSensitivity / 2.0f)));
 
     if (pixelDelta == 0)
         pixelDelta = dominantDelta < 0.0f ? 24 : -24;

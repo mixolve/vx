@@ -41,41 +41,29 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
     filterViewport.setVisible(false);
     filterContent.setSize(0, 0);
 
-    auto sumHeights = [] (std::initializer_list<int> heights)
+    if (speAnalyserComponent != nullptr)
     {
-        auto total = 0;
+        auto inlineAnalyserBounds = bounds.removeFromTop(juce::jmin(bounds.getHeight(), speInlineAnalyserHeight));
+        inlineAnalyserBounds.removeFromLeft(editorInsetX);
+        inlineAnalyserBounds.removeFromRight(editorInsetX);
+        speAnalyserComponent->setBounds(inlineAnalyserBounds);
+    }
 
-        for (const auto height : heights)
-            total += height;
-
-        return total + (verticalGap * juce::jmax(0, static_cast<int>(heights.size()) - 1));
-    };
-
-    const auto stereoSectionHeight = rowHeight + verticalGap + (filtersExpanded
-        ? sumHeights({ speThresholdControl->getPreferredHeight(),
-                       speStereoAdaptiveControl->getPreferredHeight(),
-                       speStereoAdaptiveOffsetControl->getPreferredHeight(),
-                       rowHeight })
-        : 0);
-    const auto mainSectionHeight = rowHeight + verticalGap + (speMainExpanded
-        ? getSpeMainContentHeight()
-        : 0);
-    const auto dualMonoSectionHeight = rowHeight + verticalGap + (presetsExpanded
-        ? sumHeights({ speDualMonoLeftThresholdControl->getPreferredHeight(),
-                       speDualMonoLeftAdaptiveControl->getPreferredHeight(),
-                       speDualMonoLeftAdaptiveOffsetControl->getPreferredHeight(),
-                       speDualMonoRightThresholdControl->getPreferredHeight(),
-                       speDualMonoRightAdaptiveControl->getPreferredHeight(),
-                       speDualMonoRightAdaptiveOffsetControl->getPreferredHeight(),
-                       rowHeight })
-        : 0);
-    const auto analyserReservedHeight = rowHeight + (visualizerExpanded ? verticalGap : 0);
+    if (! bounds.isEmpty())
+        bounds.removeFromTop(verticalGap);
 
     placeSpeHeader(*globalHeader);
     if (globalExpanded)
     {
         const auto miscContentHeight = getSpeMiscContentHeight();
-        const auto reservedBelowMisc = verticalGap + mainSectionHeight + stereoSectionHeight + dualMonoSectionHeight + analyserReservedHeight;
+        const auto minimumMainViewportHeight = speMainExpanded
+            ? juce::jmin(getSpeMainContentHeight(), (rowHeight * 3) + (verticalGap * 2))
+            : 0;
+        const auto reservedBelowMisc = addFilterToFooterGap
+            + (verticalGap * 2)
+            + rowHeight
+            + rowHeight
+            + minimumMainViewportHeight;
         const auto miscViewportHeight = juce::jmin(juce::jmax(0, bounds.getHeight() - reservedBelowMisc),
                                                    miscContentHeight);
         auto globalViewportBounds = bounds.removeFromTop(miscViewportHeight);
@@ -104,49 +92,54 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
         globalContent.setSize(0, 0);
     }
 
-    placeSpeHeader(*speMainHeader);
-    if (speMainExpanded)
-    {
-        placeControl(bounds, *speAttackControl);
-        placeControl(bounds, *speReleaseControl);
-        placeControl(bounds, *speKneeControl);
-        placeControl(bounds, *speRatioControl);
-        placeControl(bounds, *speDspFftSizeControl);
-        placeControl(bounds, *speDspSlopeControl);
-    }
-
-    placeSpeHeader(*presetsSection->header);
-    if (presetsExpanded)
-    {
-        placeControl(bounds, *speDualMonoLeftThresholdControl);
-        placeControl(bounds, *speDualMonoLeftAdaptiveControl);
-        placeControl(bounds, *speDualMonoLeftAdaptiveOffsetControl);
-        placeControl(bounds, *speDualMonoRightThresholdControl);
-        placeControl(bounds, *speDualMonoRightAdaptiveControl);
-        placeControl(bounds, *speDualMonoRightAdaptiveOffsetControl);
-        placeButton(bounds, *speDualMonoBypassButton);
-    }
-
-    placeSpeHeader(*filtersHeader);
-    if (filtersExpanded)
-    {
-        placeControl(bounds, *speThresholdControl);
-        placeControl(bounds, *speStereoAdaptiveControl);
-        placeControl(bounds, *speStereoAdaptiveOffsetControl);
-        placeButton(bounds, *speStereoBypassButton);
-    }
-
     if (! bounds.isEmpty())
         bounds.removeFromBottom(addFilterToFooterGap);
 
-    auto analyserSectionBounds = bounds.removeFromBottom(juce::jmin(bounds.getHeight(), rowHeight + (visualizerExpanded ? verticalGap + getSpeSectionContentHeight() : 0)));
+    auto analyserSectionBounds = bounds.removeFromBottom(juce::jmin(bounds.getHeight(),
+                                                                    rowHeight + (visualizerExpanded
+                                                                                 ? verticalGap + speInlineAnalyserHeight + verticalGap + getSpeAnalyserContentHeight()
+                                                                                 : 0)));
     auto analyserContentBounds = analyserSectionBounds;
     auto analyserHeaderBounds = analyserContentBounds.removeFromTop(rowHeight);
     analyserHeaderBounds.removeFromLeft(editorInsetX);
     analyserHeaderBounds.removeFromRight(editorInsetX);
     visualizerHeader->setBounds(analyserHeaderBounds);
 
-    if (visualizerExpanded)
+    placeSpeHeader(*speMainHeader);
+
+    if (speMainExpanded)
+    {
+        auto mainViewportBounds = bounds;
+
+        if (visualizerHeader != nullptr && visualizerHeader->isVisible())
+        {
+            const auto maxMainViewportBottom = visualizerHeader->getY() - verticalGap;
+
+            if (maxMainViewportBottom > mainViewportBounds.getY())
+                mainViewportBounds.setBottom(juce::jmin(mainViewportBounds.getBottom(), maxMainViewportBottom));
+        }
+
+        filterViewport.setBounds(mainViewportBounds);
+        filterViewport.setVisible(true);
+        filterContent.setSize(mainViewportBounds.getWidth(),
+                              juce::jmax(mainViewportBounds.getHeight(), getSpeMainContentHeight()));
+
+        auto mainBounds = filterContent.getLocalBounds();
+        placeButton(mainBounds, *speDualMonoLinkButton);
+        placeControl(mainBounds, *speAttackControl);
+        placeControl(mainBounds, *speReleaseControl);
+        placeControl(mainBounds, *speKneeControl);
+        placeControl(mainBounds, *speRatioControl);
+        placeControl(mainBounds, *speDspFftSizeControl);
+        placeControl(mainBounds, *speDspSlopeControl);
+        placeControl(mainBounds, *speDualMonoLeftThresholdControl);
+        placeControl(mainBounds, *speDualMonoLeftAdaptiveControl);
+        placeControl(mainBounds, *speDualMonoLeftAdaptiveOffsetControl);
+        placeControl(mainBounds, *speDualMonoRightThresholdControl);
+        placeControl(mainBounds, *speDualMonoRightAdaptiveControl);
+        placeControl(mainBounds, *speDualMonoRightAdaptiveOffsetControl);
+    }
+    else if (visualizerExpanded)
     {
         if (! analyserContentBounds.isEmpty())
             analyserContentBounds.removeFromTop(verticalGap);
@@ -167,7 +160,6 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
         placeControl(analyserBounds, *speAnalyserRangeHighControl);
         placeControl(analyserBounds, *speAnalyserSlopeControl);
         placeControl(analyserBounds, *speAnalyserTimeControl);
-        placeButton(analyserBounds, *speAnalyserVisibilityButton);
     }
     else
     {
@@ -189,36 +181,34 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
 
     juce::Rectangle<int> mainFrameBounds;
     includeComponentBounds(mainFrameBounds, speMainHeader.get());
-    includeComponentBounds(mainFrameBounds, speAttackControl.get());
-    includeComponentBounds(mainFrameBounds, speReleaseControl.get());
-    includeComponentBounds(mainFrameBounds, speKneeControl.get());
-    includeComponentBounds(mainFrameBounds, speRatioControl.get());
-    includeComponentBounds(mainFrameBounds, speDspFftSizeControl.get());
-    includeComponentBounds(mainFrameBounds, speDspSlopeControl.get());
+
+    if (speMainExpanded && filterViewport.isVisible())
+    {
+        auto mainViewportContentBounds = filterViewport.getBounds();
+        mainViewportContentBounds.removeFromLeft(editorInsetX);
+        mainViewportContentBounds.removeFromRight(editorInsetX);
+        includeBounds(mainFrameBounds, mainViewportContentBounds);
+    }
+
+    if (! mainFrameBounds.isEmpty() && visualizerHeader != nullptr && visualizerHeader->isVisible())
+    {
+        const auto maxMainFrameBottom = visualizerHeader->getY() - (internalFrameInsetY * 2) - 1;
+
+        if (maxMainFrameBottom > mainFrameBounds.getY())
+            mainFrameBounds.setBottom(juce::jmin(mainFrameBounds.getBottom(), maxMainFrameBottom));
+    }
+
     placeSectionFrame(speMainSectionFrame.get(), speMainExpanded, mainFrameBounds);
 
-    juce::Rectangle<int> stereoFrameBounds;
-    includeComponentBounds(stereoFrameBounds, filtersHeader.get());
-    includeComponentBounds(stereoFrameBounds, speThresholdControl.get());
-    includeComponentBounds(stereoFrameBounds, speStereoAdaptiveControl.get());
-    includeComponentBounds(stereoFrameBounds, speStereoAdaptiveOffsetControl.get());
-    includeComponentBounds(stereoFrameBounds, speStereoBypassButton.get());
-    placeSectionFrame(filtersSectionFrame.get(), filtersExpanded, stereoFrameBounds);
-
-    juce::Rectangle<int> dualMonoFrameBounds;
-    includeComponentBounds(dualMonoFrameBounds, presetsSection != nullptr ? presetsSection->header.get() : nullptr);
-    includeComponentBounds(dualMonoFrameBounds, speDualMonoLeftThresholdControl.get());
-    includeComponentBounds(dualMonoFrameBounds, speDualMonoLeftAdaptiveControl.get());
-    includeComponentBounds(dualMonoFrameBounds, speDualMonoLeftAdaptiveOffsetControl.get());
-    includeComponentBounds(dualMonoFrameBounds, speDualMonoRightThresholdControl.get());
-    includeComponentBounds(dualMonoFrameBounds, speDualMonoRightAdaptiveControl.get());
-    includeComponentBounds(dualMonoFrameBounds, speDualMonoRightAdaptiveOffsetControl.get());
-    includeComponentBounds(dualMonoFrameBounds, speDualMonoBypassButton.get());
-    placeSectionFrame(presetsSectionFrame.get(), presetsExpanded, dualMonoFrameBounds);
+    placeSectionFrame(filtersSectionFrame.get(), false, {});
+    placeSectionFrame(presetsSectionFrame.get(), false, {});
 
     juce::Rectangle<int> analyserFrameBounds;
     includeComponentBounds(analyserFrameBounds, visualizerHeader.get());
-    if (filterViewport.isVisible())
+    if (visualizerExpanded)
+        includeComponentBounds(analyserFrameBounds, speAnalyserComponent.get());
+
+    if (visualizerExpanded && filterViewport.isVisible())
     {
         auto analyserViewportContentBounds = filterViewport.getBounds();
         analyserViewportContentBounds.removeFromLeft(editorInsetX);
@@ -234,14 +224,12 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
     {
         includeModuleTabRowBounds(moduleFrameBounds);
 
+        includeComponentBounds(moduleFrameBounds, speAnalyserComponent.get());
+
         includeComponentBounds(moduleFrameBounds, globalHeader.get());
         includeComponentBounds(moduleFrameBounds, speMainHeader.get());
-        includeComponentBounds(moduleFrameBounds, presetsSection != nullptr ? presetsSection->header.get() : nullptr);
-        includeComponentBounds(moduleFrameBounds, filtersHeader.get());
         includeBounds(moduleFrameBounds, globalFrameBounds);
         includeBounds(moduleFrameBounds, mainFrameBounds);
-        includeBounds(moduleFrameBounds, dualMonoFrameBounds);
-        includeBounds(moduleFrameBounds, stereoFrameBounds);
         includeComponentBounds(moduleFrameBounds, visualizerHeader.get());
         includeBounds(moduleFrameBounds, analyserFrameBounds);
     }

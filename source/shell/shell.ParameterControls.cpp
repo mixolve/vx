@@ -1,6 +1,75 @@
 #include "shell.EditorParameterControls.h"
+#include "shell.Editor.h"
 
 #include <utility>
+
+namespace
+{
+const juce::Colour parameterTitleFocusColour { 0xFF99CC99 };
+BoxTextButton* focusedParameterTitleButton = nullptr;
+juce::Slider* focusedParameterValueSlider = nullptr;
+
+void focusParameterTitleButton(BoxTextButton* button, juce::Slider* valueSlider)
+{
+    if (button == nullptr)
+        return;
+
+    if (focusedParameterTitleButton != nullptr && focusedParameterTitleButton != button)
+        focusedParameterTitleButton->setAlwaysAccentOutline(false);
+
+    focusedParameterTitleButton = button;
+    focusedParameterValueSlider = valueSlider;
+    focusedParameterTitleButton->setAlwaysAccentOutline(true);
+}
+
+void clearFocusedParameterTitleButton(BoxTextButton* button, juce::Slider* valueSlider)
+{
+    if (valueSlider != nullptr && focusedParameterValueSlider == valueSlider)
+        focusedParameterValueSlider = nullptr;
+
+    if (button == nullptr || focusedParameterTitleButton != button)
+        return;
+
+    focusedParameterTitleButton->setAlwaysAccentOutline(false);
+    focusedParameterTitleButton = nullptr;
+    focusedParameterValueSlider = nullptr;
+}
+}
+
+juce::Slider* shell_parameter_focus::getFocusedValueSlider() noexcept
+{
+    return focusedParameterValueSlider;
+}
+
+void shell_parameter_focus::clearFocus() noexcept
+{
+    if (focusedParameterTitleButton != nullptr)
+        focusedParameterTitleButton->setAlwaysAccentOutline(false);
+
+    focusedParameterTitleButton = nullptr;
+    focusedParameterValueSlider = nullptr;
+}
+
+void shell_parameter_focus::clearFocusIfNotShowing() noexcept
+{
+    if (focusedParameterTitleButton == nullptr && focusedParameterValueSlider == nullptr)
+        return;
+
+    // Numeric controls use an internal non-visible slider; visibility is driven by the title button.
+    if (focusedParameterTitleButton != nullptr)
+    {
+        if (focusedParameterTitleButton->isShowing())
+            return;
+
+        shell_parameter_focus::clearFocus();
+        return;
+    }
+
+    if (focusedParameterValueSlider != nullptr && focusedParameterValueSlider->isShowing())
+        return;
+
+    shell_parameter_focus::clearFocus();
+}
 
 ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
                                    const juce::String& parameterIdIn,
@@ -15,15 +84,34 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     setWantsKeyboardFocus(false);
     setMouseClickGrabsKeyboardFocus(false);
 
-    titleButton = std::make_unique<BoxTextButton>(uiGrey500);
+    titleButton = std::make_unique<BoxTextButton>(parameterTitleFocusColour);
     titleButton->setButtonText(titleText);
     titleButton->setTextJustification(juce::Justification::centred);
+    titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+    {
+        if (! modifiers.isCtrlDown() && ! modifiers.isCommandDown())
+            return;
+
+        if (parameter == nullptr)
+            return;
+
+        if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
+        {
+            auto* rangedParameter = static_cast<juce::RangedAudioParameter*>(parameter);
+            owner->handleHostSlotAssignRequest(parameterId,
+                                               titleButton != nullptr ? titleButton->getButtonText() : parameterId,
+                                               rangedParameter != nullptr ? rangedParameter->getValue() : 0.0f);
+        }
+    };
     titleButton->onClick = [this]
     {
+        focusParameterTitleButton(titleButton.get(), &slider);
         clearKeyboardFocus(*this);
     };
     titleButton->setLongPressAction([this]
     {
+        focusParameterTitleButton(titleButton.get(), &slider);
+
         if (onTitleClick)
             onTitleClick();
 
@@ -91,7 +179,10 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     addAndMakeVisible(*valueBox);
 }
 
-ParameterControl::~ParameterControl() = default;
+ParameterControl::~ParameterControl()
+{
+    clearFocusedParameterTitleButton(titleButton.get(), &slider);
+}
 
 int ParameterControl::getPreferredHeight() const noexcept
 {
@@ -249,15 +340,34 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
     setWantsKeyboardFocus(false);
     setMouseClickGrabsKeyboardFocus(false);
 
-    titleButton = std::make_unique<BoxTextButton>(uiGrey500);
+    titleButton = std::make_unique<BoxTextButton>(parameterTitleFocusColour);
     titleButton->setButtonText(titleText);
     titleButton->setTextJustification(juce::Justification::centred);
+    titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+    {
+        if (! modifiers.isCtrlDown() && ! modifiers.isCommandDown())
+            return;
+
+        if (parameter == nullptr)
+            return;
+
+        if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
+        {
+            auto* rangedParameter = static_cast<juce::RangedAudioParameter*>(parameter);
+            owner->handleHostSlotAssignRequest(parameterId,
+                                               titleButton != nullptr ? titleButton->getButtonText() : parameterId,
+                                               rangedParameter != nullptr ? rangedParameter->getValue() : 0.0f);
+        }
+    };
     titleButton->onClick = [this]
     {
+        focusParameterTitleButton(titleButton.get(), nullptr);
         clearKeyboardFocus(*this);
     };
     titleButton->setLongPressAction([this]
     {
+        focusParameterTitleButton(titleButton.get(), nullptr);
+
         if (onTitleClick)
             onTitleClick();
 
@@ -344,6 +454,11 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
 int ChoiceControl::getPreferredHeight() const noexcept
 {
     return rowHeight;
+}
+
+ChoiceControl::~ChoiceControl()
+{
+    clearFocusedParameterTitleButton(titleButton.get(), nullptr);
 }
 
 void ChoiceControl::detach() noexcept
@@ -547,11 +662,17 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
     setWantsKeyboardFocus(false);
     setMouseClickGrabsKeyboardFocus(false);
 
-    titleButton = std::make_unique<BoxTextButton>(uiGrey500);
+    titleButton = std::make_unique<BoxTextButton>(parameterTitleFocusColour);
     titleButton->setButtonText(titleText);
     titleButton->setTextJustification(juce::Justification::centred);
+    titleButton->onClick = [this]
+    {
+        focusParameterTitleButton(titleButton.get(), &slider);
+        clearKeyboardFocus(*this);
+    };
     titleButton->setLongPressAction([this]
     {
+        focusParameterTitleButton(titleButton.get(), &slider);
         setValue(defaultValue, true);
         clearKeyboardFocus(*this);
     });
@@ -631,6 +752,11 @@ int LocalParameterControl::getPreferredHeight() const noexcept
     return rowHeight;
 }
 
+LocalParameterControl::~LocalParameterControl()
+{
+    clearFocusedParameterTitleButton(titleButton.get(), &slider);
+}
+
 double LocalParameterControl::getValue() const noexcept
 {
     return slider.getValue();
@@ -676,6 +802,17 @@ void LocalParameterControl::setInteractionEnabled(const bool shouldEnable)
 {
     if (valueBox != nullptr)
         valueBox->setInteractionEnabled(shouldEnable);
+}
+
+void LocalParameterControl::setValueClickAction(std::function<void()> action)
+{
+    if (valueBox != nullptr)
+        valueBox->setCustomPromptAction(std::move(action));
+}
+
+juce::Rectangle<int> LocalParameterControl::getValueBounds() const noexcept
+{
+    return valueBox != nullptr ? valueBox->getBounds() : juce::Rectangle<int>();
 }
 
 void LocalParameterControl::setTitleBorderVisible(const bool shouldShow)

@@ -9,6 +9,11 @@
 
 void VxAudioProcessorEditor::updateSectionStates()
 {
+    if (shellGlobalMiscExpanded && shellGlobalHostExpanded)
+        shellGlobalMiscExpanded = false;
+
+    const auto showShellGlobalStrip = shellGlobalExpanded || ! eqeModuleExpanded;
+
     const auto activeBellCount = getActiveBellCount();
     const auto loadedModuleCount = audioProcessor.getLoadedModuleCount();
     const auto activeModule = audioProcessor.getActiveModule();
@@ -29,7 +34,7 @@ void VxAudioProcessorEditor::updateSectionStates()
 
     if (shellGlobalHeader != nullptr)
     {
-        shellGlobalHeader->setVisible(true);
+        shellGlobalHeader->setVisible(showShellGlobalStrip);
         shellGlobalHeader->setButtonText("GLOBAL");
         shellGlobalHeader->setToggleState(shellGlobalExpanded, juce::dontSendNotification);
     }
@@ -43,6 +48,12 @@ void VxAudioProcessorEditor::updateSectionStates()
         shellGlobalMiscHeader->setToggleState(shellGlobalMiscExpanded, juce::dontSendNotification);
     }
 
+    if (shellGlobalHostHeader != nullptr)
+    {
+        shellGlobalHostHeader->setVisible(shellGlobalExpanded);
+        shellGlobalHostHeader->setToggleState(shellGlobalHostExpanded, juce::dontSendNotification);
+    }
+
     rebuildModuleTabRows();
 
     for (int rowIndex = 0; rowIndex < static_cast<int>(moduleTabRows.size()); ++rowIndex)
@@ -52,7 +63,8 @@ void VxAudioProcessorEditor::updateSectionStates()
         const auto active = eqeModuleExpanded
             && activeModule == slot.module
             && audioProcessor.getActiveModuleInstanceIndex() == slot.instanceIndex;
-        const auto shouldShow = slot.module != VxAudioProcessor::ActiveModule::none
+        const auto shouldShow = ! shellGlobalExpanded
+            && slot.module != VxAudioProcessor::ActiveModule::none
             && (active || ! eqeModuleExpanded);
 
         row.tabButton->setVisible(shouldShow);
@@ -66,9 +78,12 @@ void VxAudioProcessorEditor::updateSectionStates()
         eqeModuleFrame->setVisible(shellGlobalExpanded || eqeTabActive || speTabActive || mxeTabActive || tseTabActive);
 
     if (shellGlobalSectionFrame != nullptr)
-        shellGlobalSectionFrame->setVisible(shellGlobalExpanded && shellGlobalMiscExpanded);
+        shellGlobalSectionFrame->setVisible(shellGlobalExpanded);
 
-    const auto shellGlobalsVisible = shellGlobalExpanded && shellGlobalMiscExpanded;
+    const auto shellGlobalsVisible = shellGlobalExpanded && shellGlobalMiscExpanded && ! shellGlobalHostExpanded;
+    const auto shellHostVisible = shellGlobalExpanded && shellGlobalHostExpanded;
+
+    shellGlobalHostViewport.setVisible(shellHostVisible);
 
     if (moduleAddButton != nullptr)
         moduleAddButton->setVisible(shellGlobalsVisible);
@@ -102,6 +117,10 @@ void VxAudioProcessorEditor::updateSectionStates()
 
     if (redoButton != nullptr)
         redoButton->setVisible(shellGlobalsVisible);
+
+    for (auto& hostSlotButton : hostSlotButtons)
+        if (hostSlotButton != nullptr)
+            hostSlotButton->setVisible(shellHostVisible);
 
     if (moduleCloseButton != nullptr)
         moduleCloseButton->setVisible(globalExpanded && eqeModuleLoaded);
@@ -209,9 +228,6 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (visualizerShowSideButton != nullptr)
             visualizerShowSideButton->setVisible(false);
 
-        if (visualizerVisibilityButton != nullptr)
-            visualizerVisibilityButton->setVisible(false);
-
         for (auto& section : bellSections)
         {
             if (section == nullptr)
@@ -243,10 +259,6 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (speDspSlopeControl != nullptr) speDspSlopeControl->setVisible(false);
         if (speMakeupControl != nullptr) speMakeupControl->setVisible(false);
         if (speDeltaButton != nullptr) speDeltaButton->setVisible(false);
-        if (speThresholdControl != nullptr) speThresholdControl->setVisible(false);
-        if (speStereoAdaptiveControl != nullptr) speStereoAdaptiveControl->setVisible(false);
-        if (speStereoAdaptiveOffsetControl != nullptr) speStereoAdaptiveOffsetControl->setVisible(false);
-        if (speStereoBypassButton != nullptr) speStereoBypassButton->setVisible(false);
         if (speBypassButton != nullptr) speBypassButton->setVisible(false);
         if (speBypassWithGainButton != nullptr) speBypassWithGainButton->setVisible(false);
         if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->setVisible(false);
@@ -255,7 +267,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->setVisible(false);
         if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->setVisible(false);
         if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->setVisible(false);
-        if (speDualMonoBypassButton != nullptr) speDualMonoBypassButton->setVisible(false);
+        if (speDualMonoLinkButton != nullptr) speDualMonoLinkButton->setVisible(false);
         if (speAnalyserFftSizeControl != nullptr) speAnalyserFftSizeControl->setVisible(false);
         if (speAnalyserOverlapControl != nullptr) speAnalyserOverlapControl->setVisible(false);
         if (speAnalyserLeftControl != nullptr) speAnalyserLeftControl->setVisible(false);
@@ -275,7 +287,6 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (speModuleCloseButton != nullptr) speModuleCloseButton->setVisible(false);
         if (mxeModuleEditor != nullptr) mxeModuleEditor->setVisible(false);
         if (tseModuleEditor != nullptr) tseModuleEditor->setVisible(false);
-        if (speAnalyserVisibilityButton != nullptr) speAnalyserVisibilityButton->setVisible(false);
         if (speAnalyserComponent != nullptr) speAnalyserComponent->setVisible(false);
 
         return;
@@ -311,8 +322,6 @@ void VxAudioProcessorEditor::updateSectionStates()
             speAnalyserComponent->setVisible(false);
         if (visualizerSectionFrame != nullptr)
             visualizerSectionFrame->setVisible(false);
-        if (speAnalyserVisibilityButton != nullptr)
-            speAnalyserVisibilityButton->setVisible(false);
         if (visualizerRangeLowControl != nullptr) visualizerRangeLowControl->setVisible(false);
         if (visualizerRangeHighControl != nullptr) visualizerRangeHighControl->setVisible(false);
         if (visualizerCursorButton != nullptr) visualizerCursorButton->setVisible(false);
@@ -321,8 +330,6 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (visualizerShowRightButton != nullptr) visualizerShowRightButton->setVisible(false);
         if (visualizerShowMidButton != nullptr) visualizerShowMidButton->setVisible(false);
         if (visualizerShowSideButton != nullptr) visualizerShowSideButton->setVisible(false);
-        if (visualizerVisibilityButton != nullptr) visualizerVisibilityButton->setVisible(false);
-
         globalViewport.setVisible(false);
         filterViewport.setVisible(false);
         if (addFilterButton != nullptr) addFilterButton->setVisible(false);
@@ -375,10 +382,6 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (speDspSlopeControl != nullptr) speDspSlopeControl->setVisible(false);
         if (speMakeupControl != nullptr) speMakeupControl->setVisible(false);
         if (speDeltaButton != nullptr) speDeltaButton->setVisible(false);
-        if (speThresholdControl != nullptr) speThresholdControl->setVisible(false);
-        if (speStereoAdaptiveControl != nullptr) speStereoAdaptiveControl->setVisible(false);
-        if (speStereoAdaptiveOffsetControl != nullptr) speStereoAdaptiveOffsetControl->setVisible(false);
-        if (speStereoBypassButton != nullptr) speStereoBypassButton->setVisible(false);
         if (speBypassButton != nullptr) speBypassButton->setVisible(false);
         if (speBypassWithGainButton != nullptr) speBypassWithGainButton->setVisible(false);
         if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->setVisible(false);
@@ -387,7 +390,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->setVisible(false);
         if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->setVisible(false);
         if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->setVisible(false);
-        if (speDualMonoBypassButton != nullptr) speDualMonoBypassButton->setVisible(false);
+        if (speDualMonoLinkButton != nullptr) speDualMonoLinkButton->setVisible(false);
         if (speAnalyserFftSizeControl != nullptr) speAnalyserFftSizeControl->setVisible(false);
         if (speAnalyserOverlapControl != nullptr) speAnalyserOverlapControl->setVisible(false);
         if (speAnalyserLeftControl != nullptr) speAnalyserLeftControl->setVisible(false);
@@ -418,17 +421,11 @@ void VxAudioProcessorEditor::updateSectionStates()
         }
 
         if (filtersHeader != nullptr)
-        {
-            filtersHeader->setVisible(true);
-            filtersHeader->setButtonText("STEREO");
-            filtersHeader->setToggleState(filtersExpanded, juce::dontSendNotification);
-        }
+            filtersHeader->setVisible(false);
 
         if (presetsSection != nullptr)
         {
-            presetsSection->header->setVisible(true);
-            presetsSection->header->setButtonText("DUAL-MONO");
-            presetsSection->header->setToggleState(presetsExpanded, juce::dontSendNotification);
+            presetsSection->header->setVisible(false);
             presetsSection->presetCombo.setVisible(false);
             presetsSection->adButton->setVisible(false);
             presetsSection->saveButton->setVisible(false);
@@ -444,15 +441,8 @@ void VxAudioProcessorEditor::updateSectionStates()
             visualizerHeader->setToggleState(visualizerExpanded, juce::dontSendNotification);
         }
 
-        if (speAnalyserVisibilityButton != nullptr)
-        {
-            speAnalyserVisibilityButton->setVisible(visualizerExpanded);
-            speAnalyserVisibilityButton->setToggleState(visualizerVisible, juce::dontSendNotification);
-            speAnalyserVisibilityButton->setButtonText(visualizerVisible ? "HIDE" : "SHOW");
-        }
-
         if (speAnalyserComponent != nullptr)
-            speAnalyserComponent->setVisible(eqeModuleExpanded && visualizerVisible);
+            speAnalyserComponent->setVisible(true);
 
         if (visualizerRangeLowControl != nullptr) visualizerRangeLowControl->setVisible(false);
         if (visualizerRangeHighControl != nullptr) visualizerRangeHighControl->setVisible(false);
@@ -462,10 +452,8 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (visualizerShowRightButton != nullptr) visualizerShowRightButton->setVisible(false);
         if (visualizerShowMidButton != nullptr) visualizerShowMidButton->setVisible(false);
         if (visualizerShowSideButton != nullptr) visualizerShowSideButton->setVisible(false);
-        if (visualizerVisibilityButton != nullptr) visualizerVisibilityButton->setVisible(false);
-
         globalViewport.setVisible(globalExpanded);
-        filterViewport.setVisible(visualizerExpanded);
+        filterViewport.setVisible(speMainExpanded || visualizerExpanded);
         if (addFilterButton != nullptr)
             addFilterButton->setVisible(false);
         if (clearFiltersButton != nullptr)
@@ -485,6 +473,13 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (speInputGainLControl != nullptr) speInputGainLControl->setVisible(globalExpanded);
         if (speInputGainRControl != nullptr) speInputGainRControl->setVisible(globalExpanded);
         if (speWideControl != nullptr) speWideControl->setVisible(globalExpanded);
+        if (speDualMonoLinkButton != nullptr) speDualMonoLinkButton->setVisible(speMainExpanded);
+        if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->setVisible(speMainExpanded);
+        if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->setVisible(speMainExpanded);
+        if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->setVisible(speMainExpanded);
+        if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->setVisible(speMainExpanded);
+        if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->setVisible(speMainExpanded);
+        if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->setVisible(speMainExpanded);
         if (speAttackControl != nullptr) speAttackControl->setVisible(speMainExpanded);
         if (speReleaseControl != nullptr) speReleaseControl->setVisible(speMainExpanded);
         if (speKneeControl != nullptr) speKneeControl->setVisible(speMainExpanded);
@@ -495,17 +490,6 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (speBypassButton != nullptr) speBypassButton->setVisible(globalExpanded);
         if (speBypassWithGainButton != nullptr) speBypassWithGainButton->setVisible(globalExpanded);
         if (speDeltaButton != nullptr) speDeltaButton->setVisible(globalExpanded);
-        if (speThresholdControl != nullptr) speThresholdControl->setVisible(filtersExpanded);
-        if (speStereoAdaptiveControl != nullptr) speStereoAdaptiveControl->setVisible(filtersExpanded);
-        if (speStereoAdaptiveOffsetControl != nullptr) speStereoAdaptiveOffsetControl->setVisible(filtersExpanded);
-        if (speStereoBypassButton != nullptr) speStereoBypassButton->setVisible(filtersExpanded);
-        if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->setVisible(presetsExpanded);
-        if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->setVisible(presetsExpanded);
-        if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->setVisible(presetsExpanded);
-        if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->setVisible(presetsExpanded);
-        if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->setVisible(presetsExpanded);
-        if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->setVisible(presetsExpanded);
-        if (speDualMonoBypassButton != nullptr) speDualMonoBypassButton->setVisible(presetsExpanded);
         if (speAnalyserFftSizeControl != nullptr) speAnalyserFftSizeControl->setVisible(visualizerExpanded);
         if (speAnalyserOverlapControl != nullptr) speAnalyserOverlapControl->setVisible(visualizerExpanded);
         if (speAnalyserLeftControl != nullptr) speAnalyserLeftControl->setVisible(visualizerExpanded);
@@ -522,7 +506,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (filtersSectionFrame != nullptr)
             filtersSectionFrame->setVisible(filtersExpanded);
         if (presetsSectionFrame != nullptr)
-            presetsSectionFrame->setVisible(presetsExpanded);
+            presetsSectionFrame->setVisible(false);
         if (visualizerSectionFrame != nullptr)
             visualizerSectionFrame->setVisible(visualizerExpanded);
 
@@ -560,10 +544,6 @@ void VxAudioProcessorEditor::updateSectionStates()
     if (speDspSlopeControl != nullptr) speDspSlopeControl->setVisible(false);
     if (speMakeupControl != nullptr) speMakeupControl->setVisible(false);
     if (speDeltaButton != nullptr) speDeltaButton->setVisible(false);
-    if (speThresholdControl != nullptr) speThresholdControl->setVisible(false);
-    if (speStereoAdaptiveControl != nullptr) speStereoAdaptiveControl->setVisible(false);
-    if (speStereoAdaptiveOffsetControl != nullptr) speStereoAdaptiveOffsetControl->setVisible(false);
-    if (speStereoBypassButton != nullptr) speStereoBypassButton->setVisible(false);
     if (speBypassButton != nullptr) speBypassButton->setVisible(false);
     if (speBypassWithGainButton != nullptr) speBypassWithGainButton->setVisible(false);
     if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->setVisible(false);
@@ -572,7 +552,7 @@ void VxAudioProcessorEditor::updateSectionStates()
     if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->setVisible(false);
     if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->setVisible(false);
     if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->setVisible(false);
-    if (speDualMonoBypassButton != nullptr) speDualMonoBypassButton->setVisible(false);
+    if (speDualMonoLinkButton != nullptr) speDualMonoLinkButton->setVisible(false);
     if (speAnalyserFftSizeControl != nullptr) speAnalyserFftSizeControl->setVisible(false);
     if (speAnalyserOverlapControl != nullptr) speAnalyserOverlapControl->setVisible(false);
     if (speAnalyserLeftControl != nullptr) speAnalyserLeftControl->setVisible(false);
@@ -581,7 +561,6 @@ void VxAudioProcessorEditor::updateSectionStates()
     if (speAnalyserRangeHighControl != nullptr) speAnalyserRangeHighControl->setVisible(false);
     if (speAnalyserSlopeControl != nullptr) speAnalyserSlopeControl->setVisible(false);
     if (speAnalyserTimeControl != nullptr) speAnalyserTimeControl->setVisible(false);
-    if (speAnalyserVisibilityButton != nullptr) speAnalyserVisibilityButton->setVisible(false);
     if (speAnalyserComponent != nullptr) speAnalyserComponent->setVisible(false);
 
     if (globalHeader != nullptr)
@@ -597,7 +576,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         presetsSection->header->setVisible(true);
 
     if (visualizerHeader != nullptr)
-        visualizerHeader->setVisible(true);
+        visualizerHeader->setVisible(false);
 
     if (globalHeader != nullptr)
         globalHeader->setButtonText("MISC");
@@ -609,12 +588,6 @@ void VxAudioProcessorEditor::updateSectionStates()
     {
         filtersHeader->setButtonText(juce::String::formatted("FILTERS (%d)", activeBellCount));
         filtersHeader->setToggleState(filtersExpanded, juce::dontSendNotification);
-    }
-
-    if (visualizerHeader != nullptr)
-    {
-        visualizerHeader->setButtonText("VISUALIZER");
-        visualizerHeader->setToggleState(visualizerExpanded, juce::dontSendNotification);
     }
 
     if (clearFiltersButton != nullptr)
@@ -656,7 +629,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         sortDuoButton->setAlpha(canSortFilters ? 1.0f : 0.45f);
     }
 
-    filterViewport.setVisible(filtersExpanded);
+    filterViewport.setVisible(filtersExpanded || presetsExpanded);
 
     if (presetsSection != nullptr)
     {
@@ -671,38 +644,28 @@ void VxAudioProcessorEditor::updateSectionStates()
     }
 
     if (visualizerRangeLowControl != nullptr)
-        visualizerRangeLowControl->setVisible(visualizerExpanded);
+        visualizerRangeLowControl->setVisible(false);
 
     if (visualizerRangeHighControl != nullptr)
-        visualizerRangeHighControl->setVisible(visualizerExpanded);
+        visualizerRangeHighControl->setVisible(false);
 
     if (visualizerCursorButton != nullptr)
-        visualizerCursorButton->setVisible(visualizerExpanded);
+        visualizerCursorButton->setVisible(false);
 
     if (visualizerShowStereoButton != nullptr)
-        visualizerShowStereoButton->setVisible(visualizerExpanded);
+        visualizerShowStereoButton->setVisible(false);
 
     if (visualizerShowLeftButton != nullptr)
-        visualizerShowLeftButton->setVisible(visualizerExpanded);
+        visualizerShowLeftButton->setVisible(false);
 
     if (visualizerShowRightButton != nullptr)
-        visualizerShowRightButton->setVisible(visualizerExpanded);
+        visualizerShowRightButton->setVisible(false);
 
     if (visualizerShowMidButton != nullptr)
-        visualizerShowMidButton->setVisible(visualizerExpanded);
+        visualizerShowMidButton->setVisible(false);
 
     if (visualizerShowSideButton != nullptr)
-        visualizerShowSideButton->setVisible(visualizerExpanded);
-
-    if (visualizerVisibilityButton != nullptr)
-    {
-        visualizerVisibilityButton->setVisible(visualizerExpanded);
-        visualizerVisibilityButton->setToggleState(visualizerVisible, juce::dontSendNotification);
-        visualizerVisibilityButton->setButtonText(visualizerVisible ? "HIDE" : "SHOW");
-    }
-
-    if (visualizerCursorButton != nullptr)
-        visualizerCursorButton->setButtonText(visualizerCursorEnabled ? "CURSOR-OFF" : "CURSOR-ON");
+        visualizerShowSideButton->setVisible(false);
 
     if (globalSectionFrame != nullptr)
         globalSectionFrame->setVisible(globalExpanded);
@@ -717,10 +680,10 @@ void VxAudioProcessorEditor::updateSectionStates()
         presetsSectionFrame->setVisible(presetsExpanded);
 
     if (visualizerSectionFrame != nullptr)
-        visualizerSectionFrame->setVisible(visualizerExpanded);
+        visualizerSectionFrame->setVisible(false);
 
     if (visualizerComponent != nullptr)
-        visualizerComponent->setVisible(eqeModuleExpanded && visualizerVisible);
+        visualizerComponent->setVisible(false);
 
     for (int bellIndex = 0; bellIndex < VxAudioProcessor::maxBellFilterCount; ++bellIndex)
     {

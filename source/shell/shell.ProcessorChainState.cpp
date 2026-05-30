@@ -539,8 +539,7 @@ int VxAudioProcessor::createMxeModuleInstance()
     if (instanceIndex < 0)
         return -1;
 
-    auto moduleProcessor = std::make_unique<MxeAudioProcessor>();
-    connectMxeProcessor(*moduleProcessor);
+    auto moduleProcessor = std::make_unique<MxeAudioProcessor>(*this);
 
     if (currentSampleRate > 0.0 && lastProcessedBlockSize > 0)
         moduleProcessor->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
@@ -656,8 +655,7 @@ void VxAudioProcessor::restoreModuleChainFromStateText(const juce::String& text)
     speModuleProcessors.resize(1);
     speModuleProcessors[0] = std::make_unique<SpeModuleProcessor>(*this);
     mxeModuleProcessors.resize(1);
-    mxeModuleProcessors[0] = std::make_unique<MxeAudioProcessor>();
-    connectMxeProcessor(*mxeModuleProcessors[0]);
+    mxeModuleProcessors[0] = std::make_unique<MxeAudioProcessor>(*this);
     tseModuleProcessors.resize(1);
     tseModuleProcessors[0] = std::make_unique<TseModuleProcessor>(*this);
 
@@ -718,8 +716,7 @@ void VxAudioProcessor::restoreModuleChainFromStateText(const juce::String& text)
             while (static_cast<int>(mxeModuleProcessors.size()) <= slot.instanceIndex
                    && static_cast<int>(mxeModuleProcessors.size()) < maxModuleInstanceCount)
             {
-                auto moduleProcessor = std::make_unique<MxeAudioProcessor>();
-                connectMxeProcessor(*moduleProcessor);
+                auto moduleProcessor = std::make_unique<MxeAudioProcessor>(*this);
 
                 if (currentSampleRate > 0.0 && lastProcessedBlockSize > 0)
                     moduleProcessor->prepareToPlay(currentSampleRate, lastProcessedBlockSize);

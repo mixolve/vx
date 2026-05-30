@@ -9,6 +9,13 @@
 
 namespace mxe::editor
 {
+namespace parameter_focus
+{
+juce::Slider* getFocusedValueSlider() noexcept;
+void clearFocus() noexcept;
+void clearFocusIfNotShowing() noexcept;
+}
+
 class ValueBoxComponent;
 
 class BoxTextButton final : public juce::TextButton, private juce::Timer
@@ -18,6 +25,7 @@ public:
 
     void setTextJustification(juce::Justification justification);
     void setTextColour(juce::Colour colour);
+    void setAlwaysAccentOutline(bool shouldAlwaysAccent);
     void setLongPressAction(std::function<void()> action, int delayMs = 500, juce::String confirmationText = "RESET?");
     void paintButton(juce::Graphics& graphics, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
     void mouseDown(const juce::MouseEvent& event) override;
@@ -37,6 +45,7 @@ private:
     int longPressDelayMs = 500;
     bool longPressEligible = false;
     bool longPressArmed = false;
+    bool alwaysAccentOutline = false;
     juce::String longPressOriginalText;
     juce::String longPressConfirmationText { "RESET?" };
 

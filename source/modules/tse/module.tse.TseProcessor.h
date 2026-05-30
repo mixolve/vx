@@ -2,6 +2,7 @@
 
 #include <JuceHeader.h>
 #include "../../shared/shared.TransientSplit.h"
+#include "../../shared/shared.InternalParameterHost.h"
 
 #include <atomic>
 #include <vector>
@@ -103,6 +104,7 @@ private:
     static float makeReleaseCoefficient(float timeMs, double sampleRate) noexcept;
 
     juce::AudioProcessor& ownerProcessor;
+    InternalParameterHost internalParameterHost;
     juce::AudioProcessorValueTreeState parameters;
 
     std::atomic<float>* transOnParam = nullptr;

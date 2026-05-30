@@ -78,7 +78,7 @@ void VxAudioProcessorEditor::setupShellControls()
 
     wideControl = std::make_unique<ParameterControl>(valueTreeState,
                                                      VxAudioProcessor::paramGlobalWideId,
-                                                     "WIDE",
+                                                     "IN-WIDE",
                                                      0);
     wideControl->setTitleLongPressAction([this]
     {
@@ -177,6 +177,24 @@ void VxAudioProcessorEditor::setupShellControls()
     };
     addAndMakeVisible(*redoButton);
 
+    for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotButtons.size()); ++slotIndex)
+    {
+        auto slotButton = std::make_unique<BoxTextButton>(uiGrey500);
+        slotButton->setTextJustification(juce::Justification::centred);
+        slotButton->setButtonText("SLOT-" + VxAudioProcessor::getHostSlotLetterLabel(slotIndex));
+        slotButton->onClick = [this]
+        {
+            clearKeyboardFocus(*this);
+        };
+        slotButton->setLongPressAction([this, slotIndex]
+        {
+            clearHostSlot(slotIndex);
+            clearKeyboardFocus(*this);
+        }, 500, "CLEAR?");
+        shellGlobalHostContent.addAndMakeVisible(*slotButton);
+        hostSlotButtons[static_cast<size_t>(slotIndex)] = std::move(slotButton);
+    }
+
     sortPlaceButton = std::make_unique<BoxTextButton>(uiGrey500);
     sortPlaceButton->setButtonText("SORT.PLACE");
     sortPlaceButton->setTextJustification(juce::Justification::centred);
@@ -226,4 +244,107 @@ void VxAudioProcessorEditor::setupShellControls()
         clearKeyboardFocus(*this);
     };
     addAndMakeVisible(*visualizerHeader);
+}
+
+void VxAudioProcessorEditor::clearHostSlot(const int slotIndex)
+{
+    if (! juce::isPositiveAndBelow(slotIndex, static_cast<int>(hostSlotAssignments.size())))
+        return;
+
+    auto& assignment = hostSlotAssignments[static_cast<size_t>(slotIndex)];
+    assignment.parameterId.clear();
+    assignment.parameterName.clear();
+
+    if (auto* slotParameter = valueTreeState.getParameter(VxAudioProcessor::getHostSlotParameterId(slotIndex));
+        slotParameter != nullptr)
+    {
+        slotParameter->beginChangeGesture();
+        slotParameter->setValueNotifyingHost(0.0f);
+        slotParameter->endChangeGesture();
+    }
+
+    refreshHostSlotButtons();
+    storeEditorStateToValueTree();
+}
+
+void VxAudioProcessorEditor::refreshHostSlotButtons()
+{
+    for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
+    {
+        auto* slotButton = hostSlotButtons[static_cast<size_t>(slotIndex)].get();
+
+        if (slotButton == nullptr)
+            continue;
+
+        const auto& assignment = hostSlotAssignments[static_cast<size_t>(slotIndex)];
+
+        if (assignment.parameterId.isEmpty())
+            slotButton->setButtonText("SLOT-" + VxAudioProcessor::getHostSlotLetterLabel(slotIndex));
+        else
+            slotButton->setButtonText(assignment.parameterName.isNotEmpty() ? assignment.parameterName
+                                                                             : assignment.parameterId);
+    }
+}
+
+bool VxAudioProcessorEditor::handleHostSlotAssignRequest(const juce::String& parameterId,
+                                                         const juce::String& parameterName,
+                                                         const float normalizedValue)
+{
+    const auto trimmedParameterId = parameterId.trim();
+
+    if (trimmedParameterId.isEmpty())
+        return false;
+
+    auto targetSlot = -1;
+
+    for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
+    {
+        if (hostSlotAssignments[static_cast<size_t>(slotIndex)].parameterId == trimmedParameterId)
+        {
+            targetSlot = slotIndex;
+            break;
+        }
+    }
+
+    if (targetSlot < 0)
+    {
+        for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
+        {
+            if (hostSlotAssignments[static_cast<size_t>(slotIndex)].parameterId.isEmpty())
+            {
+                targetSlot = slotIndex;
+                break;
+            }
+        }
+    }
+
+    if (targetSlot < 0)
+        return false;
+
+    auto& assignment = hostSlotAssignments[static_cast<size_t>(targetSlot)];
+    assignment.parameterId = trimmedParameterId;
+    assignment.parameterName = parameterName.trim();
+
+    if (assignment.parameterName.isEmpty())
+        assignment.parameterName = trimmedParameterId;
+
+    if (auto* slotParameter = valueTreeState.getParameter(VxAudioProcessor::getHostSlotParameterId(targetSlot));
+        slotParameter != nullptr)
+    {
+        const auto clampedValue = juce::jlimit(0.0f, 1.0f, normalizedValue);
+        slotParameter->beginChangeGesture();
+        slotParameter->setValueNotifyingHost(clampedValue);
+        slotParameter->endChangeGesture();
+
+        syncHostSlotAssignmentValue(targetSlot, clampedValue);
+    }
+
+    refreshHostSlotButtons();
+    storeEditorStateToValueTree();
+    if (shellGlobalExpanded)
+    {
+        updateSectionStates();
+        resized();
+    }
+    return true;
 }

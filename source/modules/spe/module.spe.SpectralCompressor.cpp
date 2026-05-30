@@ -29,15 +29,18 @@ void SpeModuleProcessor::SpectralCompressor::prepare(double newSampleRate, int n
     reconfigure(configuredChannels, 0, 0);
 }
 
-void SpeModuleProcessor::SpectralCompressor::copyReductionScope(std::array<float, analyserScopeSize>& destination) const
+void SpeModuleProcessor::SpectralCompressor::copyReductionScope(std::array<float, analyserScopeSize>& leftDestination,
+                                                                std::array<float, analyserScopeSize>& rightDestination) const
 {
     const auto activeIndex = activeReductionScopeBuffer.load(std::memory_order_acquire);
-    destination = reductionScopeBuffers[static_cast<size_t>(activeIndex)];
+    leftDestination = reductionScopeBuffers[static_cast<size_t>(activeIndex)][0];
+    rightDestination = reductionScopeBuffers[static_cast<size_t>(activeIndex)][1];
 }
 
-float SpeModuleProcessor::SpectralCompressor::getPublishedStereoThresholdDb() const noexcept
+float SpeModuleProcessor::SpectralCompressor::getPublishedDualMonoThresholdDb(const int channel) const noexcept
 {
-    return publishedStereoThresholdDb.load(std::memory_order_acquire);
+    const auto channelIndex = juce::jlimit(0, maxChannels - 1, channel);
+    return publishedDualMonoThresholdDb[static_cast<size_t>(channelIndex)].load(std::memory_order_acquire);
 }
 
 void SpeModuleProcessor::SpectralCompressor::processBuffer(juce::AudioBuffer<float>& buffer,
@@ -124,20 +127,28 @@ void SpeModuleProcessor::SpectralCompressor::processFrame(int channelsToUse,
                                                             static_cast<float>(hopSize) / static_cast<float>(sampleRate));
     const auto releaseCoefficient = calculateTimeCoefficient(settings.releaseMs,
                                                              static_cast<float>(hopSize) / static_cast<float>(sampleRate));
-    const auto adaptiveAttackCoefficient = calculateTimeCoefficient(stereoAdaptiveAttackMs,
+    const auto adaptiveAttackCoefficient = calculateTimeCoefficient(adaptiveAttackMs,
                                                                     static_cast<float>(hopSize) / static_cast<float>(sampleRate));
-    const auto adaptiveReleaseCoefficient = calculateTimeCoefficient(stereoAdaptiveReleaseMs,
+    const auto adaptiveReleaseCoefficient = calculateTimeCoefficient(adaptiveReleaseMs,
                                                                      static_cast<float>(hopSize) / static_cast<float>(sampleRate));
-    const auto adaptiveAmount = juce::jlimit(0.0f, 1.0f, settings.stereoAdaptiveAmount * 0.01f);
-    const auto adaptiveThresholdDb = stereoAdaptiveReferenceDb + settings.stereoAdaptiveOffsetDb;
-    const auto effectiveBaseStereoThresholdDb = juce::jmap(adaptiveAmount,
-                                                           settings.thresholdDb,
-                                                           adaptiveThresholdDb);
     const auto makeupGain = juce::Decibels::decibelsToGain(settings.makeupDb);
     const auto& window = windowTables[static_cast<size_t>(fftIndex)];
     auto& fft = *ffts[static_cast<size_t>(fftIndex)];
-    auto accumulatedStereoDetectorPower = 0.0;
     std::array<double, maxChannels> accumulatedDualMonoDetectorPower {};
+    std::array<float, maxChannels> publishedThresholdDb { settings.leftThresholdDb, settings.rightThresholdDb };
+
+    for (auto channel = 0; channel < channelsToUse; ++channel)
+    {
+        const auto channelThresholdDb = channel == 0 ? settings.leftThresholdDb : settings.rightThresholdDb;
+        const auto channelAdaptiveAmount = channel == 0 ? settings.leftAdaptiveAmount : settings.rightAdaptiveAmount;
+        const auto channelAdaptiveOffsetDb = channel == 0 ? settings.leftAdaptiveOffsetDb : settings.rightAdaptiveOffsetDb;
+        const auto dualMonoAdaptiveAmount = juce::jlimit(0.0f, 1.0f, channelAdaptiveAmount * 0.01f);
+        const auto adaptiveChannelThresholdDb = dualMonoAdaptiveReferenceDb[static_cast<size_t>(channel)]
+                                              + channelAdaptiveOffsetDb;
+        publishedThresholdDb[static_cast<size_t>(channel)] = juce::jmap(dualMonoAdaptiveAmount,
+                                                                        channelThresholdDb,
+                                                                        adaptiveChannelThresholdDb);
+    }
 
     for (auto channel = 0; channel < channelsToUse; ++channel)
     {
@@ -168,30 +179,13 @@ void SpeModuleProcessor::SpectralCompressor::processFrame(int channelsToUse,
                                              (static_cast<float>(bin) * static_cast<float>(sampleRate))
                                                  / static_cast<float>(fftSize));
         const auto octavesAboveMin = std::log2(binFrequency / analyserMinFrequency);
-        const auto stereoThresholdDb = effectiveBaseStereoThresholdDb
-                                     - (settings.slopeDbPerOct * juce::jmax(0.0f, octavesAboveMin));
 
         for (auto channel = 0; channel < channelsToUse; ++channel)
         {
             auto& smoothedDualMonoReduction = dualMonoSmoothedReductionDb[static_cast<size_t>(channel)][static_cast<size_t>(bin)];
 
-            if (settings.dualMonoBypass)
-            {
-                smoothedDualMonoReduction = 0.0f;
-                dualMonoReductionDb[static_cast<size_t>(channel)] = 0.0f;
-                dualMonoGain[static_cast<size_t>(channel)] = 1.0f;
-                continue;
-            }
-
-            const auto channelThresholdDb = channel == 0 ? settings.leftThresholdDb : settings.rightThresholdDb;
-            const auto channelAdaptiveAmount = channel == 0 ? settings.leftAdaptiveAmount : settings.rightAdaptiveAmount;
-            const auto channelAdaptiveOffsetDb = channel == 0 ? settings.leftAdaptiveOffsetDb : settings.rightAdaptiveOffsetDb;
-            const auto dualMonoAdaptiveAmount = juce::jlimit(0.0f, 1.0f, channelAdaptiveAmount * 0.01f);
-            const auto adaptiveChannelThresholdDb = dualMonoAdaptiveReferenceDb[static_cast<size_t>(channel)]
-                                                  + channelAdaptiveOffsetDb;
-            const auto effectiveChannelThresholdDb = juce::jmap(dualMonoAdaptiveAmount,
-                                                                channelThresholdDb,
-                                                                adaptiveChannelThresholdDb);
+            const auto effectiveChannelThresholdDb = publishedThresholdDb[static_cast<size_t>(channel)]
+                                                 - (settings.slopeDbPerOct * juce::jmax(0.0f, octavesAboveMin));
             const auto channelLevelDb = juce::Decibels::gainToDecibels(channelMagnitudes[static_cast<size_t>(channel)], -120.0f);
             const auto desiredDualMonoReductionDb = calculateReductionDb(channelLevelDb,
                                                                          effectiveChannelThresholdDb,
@@ -206,41 +200,9 @@ void SpeModuleProcessor::SpectralCompressor::processFrame(int channelsToUse,
                                                                             * static_cast<double>(channelMagnitudes[static_cast<size_t>(channel)]);
         }
 
-        auto stereoDetectorMagnitude = 0.0f;
-
-        for (auto channel = 0; channel < channelsToUse; ++channel)
-            stereoDetectorMagnitude = juce::jmax(stereoDetectorMagnitude,
-                                                 channelMagnitudes[static_cast<size_t>(channel)] * dualMonoGain[static_cast<size_t>(channel)]);
-
-        accumulatedStereoDetectorPower += static_cast<double>(stereoDetectorMagnitude) * static_cast<double>(stereoDetectorMagnitude);
-
-        auto& smoothedStereoReduction = stereoSmoothedReductionDb[static_cast<size_t>(bin)];
-
-        if (settings.stereoBypass)
-        {
-            smoothedStereoReduction = 0.0f;
-        }
-        else
-        {
-            const auto stereoLevelDb = juce::Decibels::gainToDecibels(stereoDetectorMagnitude, -120.0f);
-            const auto desiredStereoReductionDb = calculateReductionDb(stereoLevelDb,
-                                                                       stereoThresholdDb,
-                                                                       settings.ratio,
-                                                                       settings.kneeDb);
-            const auto stereoCoefficient = desiredStereoReductionDb > smoothedStereoReduction ? attackCoefficient : releaseCoefficient;
-            smoothedStereoReduction = (stereoCoefficient * smoothedStereoReduction)
-                                    + ((1.0f - stereoCoefficient) * desiredStereoReductionDb);
-        }
-
         for (auto channel = 0; channel < channelsToUse; ++channel)
         {
-            const auto totalReductionDb = dualMonoReductionDb[static_cast<size_t>(channel)] + smoothedStereoReduction;
-            combinedReductionDb[static_cast<size_t>(bin)] = channel == 0
-                ? totalReductionDb
-                : juce::jmax(combinedReductionDb[static_cast<size_t>(bin)], totalReductionDb);
-            const auto gain = makeupGain
-                            * dualMonoGain[static_cast<size_t>(channel)]
-                            * juce::Decibels::decibelsToGain(-smoothedStereoReduction);
+            const auto gain = makeupGain * dualMonoGain[static_cast<size_t>(channel)];
             auto& frequencyData = channelStates[static_cast<size_t>(channel)].frequencyData;
             frequencyData[static_cast<size_t>(bin)] *= gain;
 
@@ -250,13 +212,6 @@ void SpeModuleProcessor::SpectralCompressor::processFrame(int channelsToUse,
     }
 
     const auto processedBinCount = juce::jmax(1, (fftSize / 2) + 1);
-    const auto stereoDetectorRms = std::sqrt(accumulatedStereoDetectorPower / static_cast<double>(processedBinCount));
-    const auto desiredAdaptiveReferenceDb = juce::Decibels::gainToDecibels(static_cast<float>(stereoDetectorRms), analyserMinDecibels);
-    const auto adaptiveCoefficient = desiredAdaptiveReferenceDb > stereoAdaptiveReferenceDb
-        ? adaptiveAttackCoefficient
-        : adaptiveReleaseCoefficient;
-    stereoAdaptiveReferenceDb = (adaptiveCoefficient * stereoAdaptiveReferenceDb)
-                              + ((1.0f - adaptiveCoefficient) * desiredAdaptiveReferenceDb);
 
     for (auto channel = 0; channel < channelsToUse; ++channel)
     {
@@ -270,9 +225,9 @@ void SpeModuleProcessor::SpectralCompressor::processFrame(int channelsToUse,
         dualMonoAdaptiveReferenceDb[static_cast<size_t>(channel)]
             = (dualMonoAdaptiveCoefficient * dualMonoAdaptiveReferenceDb[static_cast<size_t>(channel)])
             + ((1.0f - dualMonoAdaptiveCoefficient) * desiredDualMonoAdaptiveReferenceDb);
+        publishedDualMonoThresholdDb[static_cast<size_t>(channel)].store(publishedThresholdDb[static_cast<size_t>(channel)],
+                                          std::memory_order_release);
     }
-
-    publishedStereoThresholdDb.store(effectiveBaseStereoThresholdDb, std::memory_order_release);
 
     for (auto channel = 0; channel < channelsToUse; ++channel)
     {
@@ -307,9 +262,13 @@ void SpeModuleProcessor::SpectralCompressor::processFrame(int channelsToUse,
         const auto lowerBin = juce::jlimit(0, fftSize / 2, static_cast<int>(std::floor(fractionalBin)));
         const auto upperBin = juce::jlimit(0, fftSize / 2, lowerBin + 1);
         const auto interpolation = fractionalBin - static_cast<float>(lowerBin);
-        reductionScope[i] = juce::jmap(interpolation,
-                                       combinedReductionDb[static_cast<size_t>(lowerBin)],
-                                       combinedReductionDb[static_cast<size_t>(upperBin)]);
+
+        for (auto channel = 0; channel < maxChannels; ++channel)
+        {
+            reductionScope[static_cast<size_t>(channel)][i] = juce::jmap(interpolation,
+                                                                         dualMonoSmoothedReductionDb[static_cast<size_t>(channel)][static_cast<size_t>(lowerBin)],
+                                                                         dualMonoSmoothedReductionDb[static_cast<size_t>(channel)][static_cast<size_t>(upperBin)]);
+        }
     }
 
     activeReductionScopeBuffer.store(writeIndex, std::memory_order_release);
@@ -347,17 +306,16 @@ void SpeModuleProcessor::SpectralCompressor::reconfigure(int channelsToUse, int 
     currentFftSize = fftSize;
     currentHopSize = hopSize;
     hopFill = 0;
-    stereoAdaptiveReferenceDb = 0.0f;
     dualMonoAdaptiveReferenceDb.fill(0.0f);
-    std::fill(stereoSmoothedReductionDb.begin(), stereoSmoothedReductionDb.end(), 0.0f);
-    std::fill(combinedReductionDb.begin(), combinedReductionDb.end(), 0.0f);
     for (auto& channelReduction : dualMonoSmoothedReductionDb)
         std::fill(channelReduction.begin(), channelReduction.end(), 0.0f);
     activeReductionScopeBuffer.store(0, std::memory_order_relaxed);
-    publishedStereoThresholdDb.store(12.0f, std::memory_order_relaxed);
+    for (auto& publishedThreshold : publishedDualMonoThresholdDb)
+        publishedThreshold.store(0.0f, std::memory_order_relaxed);
 
     for (auto& reductionScope : reductionScopeBuffers)
-        std::fill(reductionScope.begin(), reductionScope.end(), 0.0f);
+        for (auto& channelReductionScope : reductionScope)
+            std::fill(channelReductionScope.begin(), channelReductionScope.end(), 0.0f);
 
     for (auto channel = 0; channel < maxChannels; ++channel)
     {

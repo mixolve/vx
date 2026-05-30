@@ -4,6 +4,7 @@
 
 #include <JuceHeader.h>
 
+#include <array>
 #include <vector>
 
 namespace mxe::dsp
@@ -28,28 +29,21 @@ public:
         float wide = 100.0f;
         float outGn = 0.0f;
         float thLU = 0.0f;
-        float mkLU = 0.0f;
+        float tensLU = 0.0f;
+        float relLU = 0.0f;
+        float outLU = 0.0f;
         float thLD = 0.0f;
-        float mkLD = 0.0f;
+        float tensLD = 0.0f;
+        float relLD = 0.0f;
+        float outLD = 0.0f;
         float thRU = 0.0f;
-        float mkRU = 0.0f;
+        float tensRU = 0.0f;
+        float relRU = 0.0f;
+        float outRU = 0.0f;
         float thRD = 0.0f;
-        float mkRD = 0.0f;
-        bool hwBypass = true;
-        float LLThResh = 0.0f;
-        float LLTension = 0.0f;
-        float LLRelease = 0.0f;
-        float LLmk = 0.0f;
-        float RRThResh = 0.0f;
-        float RRTension = 0.0f;
-        float RRRelease = 0.0f;
-        float RRmk = 0.0f;
-        bool DMbypass = true;
-        float FFThResh = 0.0f;
-        float FFTension = 0.0f;
-        float FFRelease = 0.0f;
-        float FFmk = 0.0f;
-        bool FFbypass = true;
+        float tensRD = 0.0f;
+        float relRD = 0.0f;
+        float outRD = 0.0f;
         float moRph = 0.0f;
         float peakHoldHz = 100.0f;
         float TensionFlooR = -96.0f;
@@ -68,6 +62,8 @@ public:
 private:
     struct DerivedParameters
     {
+        static constexpr size_t numBranches = 4;
+
         double inGain = 1.0;
         double inRightGain = 1.0;
         double inLeftGain = 1.0;
@@ -76,29 +72,10 @@ private:
         double autoInLeftGain = 1.0;
         double wideAmount = 1.0;
         double outGain = 1.0;
-        double thLU = 1.0;
-        double mkLU = 1.0;
-        double thLD = 1.0;
-        double mkLD = 1.0;
-        double thRU = 1.0;
-        double mkRU = 1.0;
-        double thRD = 1.0;
-        double mkRD = 1.0;
-        bool hwBypass = true;
-        double llThresh = 1.0;
-        double llTension = 0.0;
-        double llReleaseCoeff = 0.0;
-        double llMakeup = 1.0;
-        double rrThresh = 1.0;
-        double rrTension = 0.0;
-        double rrReleaseCoeff = 0.0;
-        double rrMakeup = 1.0;
-        bool dmBypass = true;
-        double ffThresh = 1.0;
-        double ffTension = 0.0;
-        double ffReleaseCoeff = 0.0;
-        double ffMakeup = 1.0;
-        bool ffBypass = true;
+        std::array<double, numBranches> thresholds { 1.0, 1.0, 1.0, 1.0 };
+        std::array<double, numBranches> tensions { 0.0, 0.0, 0.0, 0.0 };
+        std::array<double, numBranches> releaseCoeffs { 0.0, 0.0, 0.0, 0.0 };
+        std::array<double, numBranches> branchOutGains { 1.0, 1.0, 1.0, 1.0 };
         double morph = 0.0;
         double clipKneeDb = 0.0;
         double tensionFloor = 0.0;
@@ -123,43 +100,29 @@ private:
     Parameters parameters;
     DerivedParameters derived;
 
+    enum BranchIndex : size_t
+    {
+        branchLu = 0,
+        branchLd,
+        branchRu,
+        branchRd,
+        branchCount
+    };
+
     double currentSampleRate = 44100.0;
     int maxBuf = 1;
-    int maxTotalBuf = 2;
 
-    int holdLL = 0;
-    int holdRR = 0;
-    int holdFF = 0;
-    int holdBaseLL = 0;
-    int holdBaseRR = 0;
-    int holdBaseFF = 0;
-    double envLL = 0.0;
-    double envRR = 0.0;
-    double envFF = 0.0;
-    double envBaseLL = 0.0;
-    double envBaseRR = 0.0;
-    double envBaseFF = 0.0;
-    double baseGainStateLL = 1.0;
-    double baseGainStateRR = 1.0;
-    double baseGainStateFF = 1.0;
-    double gainReductionStateLL = 1.0;
-    double gainReductionStateRR = 1.0;
-    double gainReductionStateFF = 1.0;
+    std::array<int, branchCount> holdPeak { 0, 0, 0, 0 };
+    std::array<int, branchCount> holdBase { 0, 0, 0, 0 };
+    std::array<double, branchCount> envPeak { 0.0, 0.0, 0.0, 0.0 };
+    std::array<double, branchCount> envBase { 0.0, 0.0, 0.0, 0.0 };
+    std::array<double, branchCount> baseGainState { 1.0, 1.0, 1.0, 1.0 };
+    std::array<double, branchCount> gainReductionState { 1.0, 1.0, 1.0, 1.0 };
     int bufPos = 0;
     int bufPosDry = 0;
 
-    std::vector<double> dmBaseL;
-    std::vector<double> dmBaseR;
-    std::vector<double> dmDryL;
-    std::vector<double> dmDryR;
-    std::vector<double> dmGainL;
-    std::vector<double> dmGainR;
-    std::vector<double> ffBaseL;
-    std::vector<double> ffBaseR;
-    std::vector<double> ffDryL;
-    std::vector<double> ffDryR;
-    std::vector<double> ffBaseGain;
-    std::vector<double> ffGain;
+    std::array<std::vector<double>, branchCount> dmBase;
+    std::array<std::vector<double>, branchCount> dmGain;
     std::vector<double> dryL;
     std::vector<double> dryR;
 };

@@ -3,9 +3,9 @@
 ValueBoxComponent::ValueBoxComponent(juce::Slider& sliderToControl)
     : slider(sliderToControl)
 {
-    setMouseCursor(juce::MouseCursor::IBeamCursor);
     setWantsKeyboardFocus(false);
     setMouseClickGrabsKeyboardFocus(false);
+    updateMouseCursor();
 }
 
 ValueBoxComponent::~ValueBoxComponent()
@@ -74,14 +74,19 @@ void ValueBoxComponent::setCustomPromptAction(std::function<void()> action)
 
 void ValueBoxComponent::updateMouseCursor()
 {
+    if (customPromptAction != nullptr)
+    {
+        setMouseCursor(juce::MouseCursor::PointingHandCursor);
+        return;
+    }
+
     if (interactionEnabled)
     {
         setMouseCursor(juce::MouseCursor::IBeamCursor);
         return;
     }
 
-    setMouseCursor(customPromptAction != nullptr ? juce::MouseCursor::PointingHandCursor
-                                                 : juce::MouseCursor::NormalCursor);
+    setMouseCursor(juce::MouseCursor::NormalCursor);
 }
 
 void ValueBoxComponent::paint(juce::Graphics& g)
@@ -208,6 +213,7 @@ void ValueBoxComponent::showEditor()
         const auto editorText = editorTextProvider != nullptr ? editorTextProvider()
                                                               : slider.getTextFromValue(slider.getValue());
         auto safeThis = juce::Component::SafePointer<ValueBoxComponent>(this);
+        const auto anchorBounds = owner->getLocalArea(this, getLocalBounds());
 
         setPromptActive(true);
         pressHighlight = false;
@@ -222,6 +228,7 @@ void ValueBoxComponent::showEditor()
                                   safeThis->applyEnteredText(enteredText);
                                   return true;
                               },
+                              anchorBounds,
                               [safeThis]
                               {
                                   if (safeThis != nullptr)

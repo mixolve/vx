@@ -347,7 +347,12 @@ void BoxTextButton::mouseUp(const juce::MouseEvent& event)
             return;
 
         if (contains(event.getPosition()))
+        {
+            if (onClickWithModifiers)
+                onClickWithModifiers(event.mods);
+
             triggerClick();
+        }
 
         return;
     }

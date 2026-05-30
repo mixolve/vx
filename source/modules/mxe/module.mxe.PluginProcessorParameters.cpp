@@ -29,11 +29,8 @@ using mxe::parameters::ParameterSlot;
 void MxeAudioProcessor::cacheParameterPointers()
 {
     rawActiveSplitCountParameter = valueTreeState.getRawParameterValue(makeActiveSplitCountParameterId());
-    jassert(rawActiveSplitCountParameter != nullptr);
     rawModuleBypassParameter = valueTreeState.getRawParameterValue(makeModuleBypassParameterId());
-    jassert(rawModuleBypassParameter != nullptr);
     rawModuleBypassWithGainParameter = valueTreeState.getRawParameterValue(makeModuleBypassWithGainParameterId());
-    jassert(rawModuleBypassWithGainParameter != nullptr);
 
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
     {
@@ -44,7 +41,6 @@ void MxeAudioProcessor::cacheParameterPointers()
     for (size_t parameterIndex = 0; parameterIndex < numFullbandAutomationSlots; ++parameterIndex)
     {
         rawFullbandParameters[parameterIndex] = valueTreeState.getRawParameterValue(makeFullbandParameterId(fullbandAutomationSpecs[parameterIndex].suffix));
-        jassert(rawFullbandParameters[parameterIndex] != nullptr);
     }
 
     for (size_t parameterIndex = 0; parameterIndex < numFullbandVisibleSlots; ++parameterIndex)
@@ -96,34 +92,26 @@ mxe::dsp::DspCore::Parameters MxeAudioProcessor::readBandParameters(const size_t
     parameters.autoInLeft = loadFloat(ParameterSlot::autoInLeft);
     parameters.wide = loadFloat(ParameterSlot::wide);
     parameters.outGn = loadFloat(ParameterSlot::outGn);
-    parameters.thLU = loadFloat(ParameterSlot::thLU);
-    parameters.mkLU = loadFloat(ParameterSlot::mkLU);
-    parameters.thLD = loadFloat(ParameterSlot::thLD);
-    parameters.mkLD = loadFloat(ParameterSlot::mkLD);
-    parameters.thRU = loadFloat(ParameterSlot::thRU);
-    parameters.mkRU = loadFloat(ParameterSlot::mkRU);
-    parameters.thRD = loadFloat(ParameterSlot::thRD);
-    parameters.mkRD = loadFloat(ParameterSlot::mkRD);
-    parameters.hwBypass = loadBool(ParameterSlot::hwBypass);
-    parameters.LLThResh = loadFloat(ParameterSlot::LLThResh);
-    parameters.LLTension = loadFloat(ParameterSlot::LLTension);
-    parameters.LLRelease = loadFloat(ParameterSlot::LLRelease);
-    parameters.LLmk = loadFloat(ParameterSlot::LLmk);
-    parameters.RRThResh = loadFloat(ParameterSlot::RRThResh);
-    parameters.RRTension = loadFloat(ParameterSlot::RRTension);
-    parameters.RRRelease = loadFloat(ParameterSlot::RRRelease);
-    parameters.RRmk = loadFloat(ParameterSlot::RRmk);
-    parameters.DMbypass = loadBool(ParameterSlot::DMbypass);
-
-    parameters.FFThResh = loadFloat(ParameterSlot::FFThResh);
-    parameters.FFTension = loadFloat(ParameterSlot::FFTension);
-    parameters.FFRelease = loadFloat(ParameterSlot::FFRelease);
-    parameters.FFmk = loadFloat(ParameterSlot::FFmk);
-    parameters.FFbypass = loadBool(ParameterSlot::FFbypass);
     parameters.moRph = loadFloat(ParameterSlot::moRph);
     parameters.peakHoldHz = loadFloat(ParameterSlot::peakHoldHz);
     parameters.TensionFlooR = loadFloat(ParameterSlot::TensionFlooR);
     parameters.TensionHysT = loadFloat(ParameterSlot::TensionHysT);
+    parameters.thLU = loadFloat(ParameterSlot::thLU);
+    parameters.tensLU = loadFloat(ParameterSlot::tensLU);
+    parameters.relLU = loadFloat(ParameterSlot::relLU);
+    parameters.outLU = loadFloat(ParameterSlot::outLU);
+    parameters.thLD = loadFloat(ParameterSlot::thLD);
+    parameters.tensLD = loadFloat(ParameterSlot::tensLD);
+    parameters.relLD = loadFloat(ParameterSlot::relLD);
+    parameters.outLD = loadFloat(ParameterSlot::outLD);
+    parameters.thRU = loadFloat(ParameterSlot::thRU);
+    parameters.tensRU = loadFloat(ParameterSlot::tensRU);
+    parameters.relRU = loadFloat(ParameterSlot::relRU);
+    parameters.outRU = loadFloat(ParameterSlot::outRU);
+    parameters.thRD = loadFloat(ParameterSlot::thRD);
+    parameters.tensRD = loadFloat(ParameterSlot::tensRD);
+    parameters.relRD = loadFloat(ParameterSlot::relRD);
+    parameters.outRD = loadFloat(ParameterSlot::outRD);
     parameters.delTa = loadBool(ParameterSlot::delTa);
 
     if (hasExternalParameterConnection())
@@ -146,7 +134,13 @@ mxe::dsp::MultibandProcessor::FullbandParameters MxeAudioProcessor::readFullband
         if (const auto* value = rawFullbandParameters[static_cast<size_t>(slot)])
             return value->load();
 
-        jassertfalse;
+        if (slot == FullbandAutomationSlot::inGn)
+            return 0.0f;
+        if (slot == FullbandAutomationSlot::inRight)
+            return 0.0f;
+        if (slot == FullbandAutomationSlot::inLeft)
+            return 0.0f;
+
         return 0.0f;
     };
 
@@ -155,7 +149,13 @@ mxe::dsp::MultibandProcessor::FullbandParameters MxeAudioProcessor::readFullband
         if (const auto* value = rawFullbandVisibleParameters[static_cast<size_t>(slot)])
             return value->load();
 
-        jassertfalse;
+        if (slot == FullbandVisibleSlot::inGn)
+            return 0.0f;
+        if (slot == FullbandVisibleSlot::outGn)
+            return 0.0f;
+        if (slot == FullbandVisibleSlot::wide)
+            return 100.0f;
+
         return 0.0f;
     };
 
@@ -237,8 +237,8 @@ bool MxeAudioProcessor::isModuleBypassWithGainEnabled() const noexcept
 
 void MxeAudioProcessor::applyFullbandOutGain(juce::AudioBuffer<float>& buffer) const noexcept
 {
-    const auto outGain = juce::Decibels::decibelsToGain(juce::jlimit(-24.0f,
-                                                                     24.0f,
+    const auto outGain = juce::Decibels::decibelsToGain(juce::jlimit(-48.0f,
+                                                                     48.0f,
                                                                      currentFullbandParameters.outGn));
 
     if (std::abs(outGain - 1.0f) <= 1.0e-6f)
@@ -264,18 +264,8 @@ bool MxeAudioProcessor::loadExternalBool(std::atomic<float>* value, const bool d
 
 bool MxeAudioProcessor::syncParameters(const bool force)
 {
-    if (! hasExternalParameterConnection())
-    {
-        if (! force && ! parametersDirty.exchange(false, std::memory_order_acq_rel))
-            return false;
-
-        if (force)
-            parametersDirty.store(false, std::memory_order_relaxed);
-    }
-    else
-    {
-        parametersDirty.store(false, std::memory_order_relaxed);
-    }
+    juce::ignoreUnused(force);
+    parametersDirty.store(false, std::memory_order_relaxed);
 
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
         currentBandParameters[bandIndex] = readBandParameters(bandIndex);

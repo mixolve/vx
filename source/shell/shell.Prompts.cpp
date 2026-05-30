@@ -429,9 +429,11 @@ public:
 
     FloatingTextPrompt(juce::String currentText,
                        CommitCallback commitCallback,
+                     juce::Rectangle<int> anchorBoundsIn,
                        DismissCallback dismissCallback,
                        CloseCallback closeCallback)
         : onCommit(std::move(commitCallback)),
+            anchorBounds(anchorBoundsIn),
           onDismiss(std::move(dismissCallback)),
           onClose(std::move(closeCallback))
     {
@@ -472,6 +474,21 @@ public:
 
     void resized() override
     {
+        auto promptBounds = anchorBounds;
+
+        if (! promptBounds.isEmpty())
+        {
+            promptBounds = promptBounds.getIntersection(getLocalBounds());
+
+            if (! promptBounds.isEmpty())
+            {
+                const auto minimumHeight = juce::jmin(promptEditorHeight,
+                                                      juce::jmax(rowHeight, promptBounds.getHeight()));
+                textEditor.setBounds(promptBounds.withHeight(minimumHeight));
+                return;
+            }
+        }
+
         if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
         {
             const auto globalHeaderBounds = owner->getGlobalHeaderBounds();
@@ -560,6 +577,7 @@ private:
 
     CopyPasteTextEditor textEditor;
     CommitCallback onCommit;
+    juce::Rectangle<int> anchorBounds;
     DismissCallback onDismiss;
     CloseCallback onClose;
     bool closePending = false;
@@ -905,13 +923,18 @@ private:
 
 void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
                                              std::function<bool(const juce::String&)> onCommit,
+                                             juce::Rectangle<int> anchorBounds,
                                              std::function<void()> onClose,
                                              std::function<void()> onDismiss)
 {
     dismissTextPrompt();
 
+    const auto preservedGlobalScrollY = globalViewport.getViewPositionY();
+    const auto preservedFilterScrollY = filterViewport.getViewPositionY();
+
     auto* prompt = new FloatingTextPrompt(currentText,
                                           std::move(onCommit),
+                                          anchorBounds,
                                           std::move(onDismiss),
                                           [this, closeCallback = std::move(onClose)]
                                           {
@@ -924,6 +947,19 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
     textPromptOverlay.reset(prompt);
     addAndMakeVisible(*textPromptOverlay);
     resized();
+
+    if (globalViewport.isVisible())
+    {
+        const auto maxOffset = juce::jmax(0, getActiveGlobalContentHeight() - globalViewport.getHeight());
+        globalViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedGlobalScrollY));
+    }
+
+    if (filterViewport.isVisible())
+    {
+        const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+        filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedFilterScrollY));
+    }
+
     prompt->grabEditorFocus();
     prompt->toFront(true);
 

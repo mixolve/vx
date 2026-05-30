@@ -72,7 +72,7 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
 
     eqeWideControl = std::make_unique<ParameterControl>(initialEqeState,
                                                          EqeModuleProcessor::paramWideId,
-                                                         "WIDE",
+                                                         "IN-WIDE",
                                                          0);
     eqeWideControl->setTitleLongPressAction([this]
     {

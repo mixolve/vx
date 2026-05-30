@@ -66,18 +66,16 @@ juce::Rectangle<int> VxAudioProcessorEditor::buildShellGlobalFrameBounds() const
 {
     juce::Rectangle<int> moduleFrameBounds;
     includeComponentBounds(moduleFrameBounds, shellGlobalHeader.get());
-    includeComponentBounds(moduleFrameBounds, shellGlobalMiscHeader.get());
-    includeComponentBounds(moduleFrameBounds, clipControl.get());
-    includeComponentBounds(moduleFrameBounds, outGainControl.get());
-    includeComponentBounds(moduleFrameBounds, globalInGainLrControl.get());
-    includeComponentBounds(moduleFrameBounds, gainLControl.get());
-    includeComponentBounds(moduleFrameBounds, gainRControl.get());
-    includeComponentBounds(moduleFrameBounds, wideControl.get());
-    includeComponentBounds(moduleFrameBounds, globalBypassButton.get());
-    includeComponentBounds(moduleFrameBounds, globalBypassOutGainOnlyButton.get());
-    includeComponentBounds(moduleFrameBounds, undoButton.get());
-    includeComponentBounds(moduleFrameBounds, redoButton.get());
-    includeComponentBounds(moduleFrameBounds, moduleAddButton.get());
+
+    if (shellGlobalSectionFrame != nullptr
+        && shellGlobalSectionFrame->isVisible()
+        && ! shellGlobalSectionFrame->getBounds().isEmpty())
+    {
+        auto shellGlobalSectionRawBounds = shellGlobalSectionFrame->getBounds();
+        shellGlobalSectionRawBounds = shellGlobalSectionRawBounds.reduced(internalFrameInsetX, internalFrameInsetY);
+        includeBounds(moduleFrameBounds, shellGlobalSectionRawBounds);
+    }
+
     return moduleFrameBounds;
 }
 

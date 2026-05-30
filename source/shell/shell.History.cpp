@@ -6,8 +6,60 @@
 #include "../modules/spe/module.spe.SpeProcessor.h"
 #include "../modules/tse/module.tse.TseProcessor.h"
 
-void VxAudioProcessorEditor::parameterChanged(const juce::String&, float)
+void VxAudioProcessorEditor::syncHostSlotAssignmentValue(const int slotIndex, const float normalizedValue)
 {
+    if (! juce::isPositiveAndBelow(slotIndex, static_cast<int>(hostSlotAssignments.size())))
+        return;
+
+    const auto& assignment = hostSlotAssignments[static_cast<size_t>(slotIndex)];
+
+    if (assignment.parameterId.isEmpty())
+        return;
+
+    if (auto* assignedParameter = valueTreeState.getParameter(assignment.parameterId);
+        assignedParameter != nullptr)
+    {
+        assignedParameter->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, normalizedValue));
+    }
+}
+
+void VxAudioProcessorEditor::parameterChanged(const juce::String& parameterID, float newValue)
+{
+    if (! suppressHostSlotAutomationSync)
+    {
+        juce::ScopedValueSetter<bool> scopedSyncGuard(suppressHostSlotAutomationSync, true);
+
+        for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
+        {
+            const auto slotParameterId = VxAudioProcessor::getHostSlotParameterId(slotIndex);
+
+            if (parameterID == slotParameterId)
+            {
+                syncHostSlotAssignmentValue(slotIndex, newValue);
+                scheduleHistorySnapshot();
+                return;
+            }
+        }
+
+        for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
+        {
+            const auto& assignment = hostSlotAssignments[static_cast<size_t>(slotIndex)];
+
+            if (assignment.parameterId != parameterID)
+                continue;
+
+            auto* assignedParameter = valueTreeState.getParameter(parameterID);
+            auto* slotParameter = valueTreeState.getParameter(VxAudioProcessor::getHostSlotParameterId(slotIndex));
+
+            if (assignedParameter == nullptr || slotParameter == nullptr)
+                continue;
+
+            const auto normalizedSourceValue = juce::jlimit(0.0f, 1.0f, assignedParameter->convertTo0to1(newValue));
+            slotParameter->setValueNotifyingHost(normalizedSourceValue);
+            break;
+        }
+    }
+
     scheduleHistorySnapshot();
 }
 
@@ -25,6 +77,10 @@ void VxAudioProcessorEditor::registerParameterListeners()
     valueTreeState.addParameterListener(VxAudioProcessor::paramOutGainId, this);
     valueTreeState.addParameterListener(VxAudioProcessor::paramGlobalBypassId, this);
     valueTreeState.addParameterListener(VxAudioProcessor::paramGlobalBypassOutGainOnlyId, this);
+
+    for (int slotIndex = 0; slotIndex < VxAudioProcessor::hostAutomationSlotCount; ++slotIndex)
+        valueTreeState.addParameterListener(VxAudioProcessor::getHostSlotParameterId(slotIndex), this);
+
     refreshModuleStateListeners();
 }
 
@@ -57,6 +113,10 @@ void VxAudioProcessorEditor::unregisterParameterListeners()
     valueTreeState.removeParameterListener(VxAudioProcessor::paramOutGainId, this);
     valueTreeState.removeParameterListener(VxAudioProcessor::paramGlobalBypassId, this);
     valueTreeState.removeParameterListener(VxAudioProcessor::paramGlobalBypassOutGainOnlyId, this);
+
+    for (int slotIndex = 0; slotIndex < VxAudioProcessor::hostAutomationSlotCount; ++slotIndex)
+        valueTreeState.removeParameterListener(VxAudioProcessor::getHostSlotParameterId(slotIndex), this);
+
     clearModuleStateListeners();
 }
 
@@ -94,14 +154,6 @@ void VxAudioProcessorEditor::refreshModuleStateListeners()
                     auto& moduleValueTreeState = processor->getValueTreeState();
                     moduleState = moduleValueTreeState.state;
                     registerObservedModuleParameterListeners(moduleValueTreeState);
-
-                    auto analyserState = processor->getAnalyserState();
-
-                    if (analyserState.isValid())
-                    {
-                        analyserState.addListener(this);
-                        observedModuleStates.push_back(analyserState);
-                    }
                 }
                 break;
 
@@ -163,10 +215,9 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
             section->detach();
 
     speDeltaAttachment.reset();
-    speStereoBypassAttachment.reset();
     speBypassAttachment.reset();
     speBypassWithGainAttachment.reset();
-    speDualMonoBypassAttachment.reset();
+    speDualMonoLinkAttachment.reset();
 
     if (speInputGainControl != nullptr) speInputGainControl->detach();
     if (speInputGainLControl != nullptr) speInputGainLControl->detach();
@@ -179,9 +230,6 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
     if (speDspFftSizeControl != nullptr) speDspFftSizeControl->detach();
     if (speDspSlopeControl != nullptr) speDspSlopeControl->detach();
     if (speMakeupControl != nullptr) speMakeupControl->detach();
-    if (speThresholdControl != nullptr) speThresholdControl->detach();
-    if (speStereoAdaptiveControl != nullptr) speStereoAdaptiveControl->detach();
-    if (speStereoAdaptiveOffsetControl != nullptr) speStereoAdaptiveOffsetControl->detach();
     if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->detach();
     if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->detach();
     if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->detach();
@@ -258,6 +306,7 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
     {
         bool shellGlobal = false;
         bool shellGlobalMisc = true;
+        bool shellGlobalHost = false;
         bool global = false;
         bool speMain = false;
         bool filters = false;
@@ -272,6 +321,7 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
     {
         shellGlobalExpanded,
         shellGlobalMiscExpanded,
+        shellGlobalHostExpanded,
         globalExpanded,
         speMainExpanded,
         filtersExpanded,
@@ -294,6 +344,11 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
 
     shellGlobalExpanded = preservedUiState.shellGlobal;
     shellGlobalMiscExpanded = preservedUiState.shellGlobalMisc;
+    shellGlobalHostExpanded = preservedUiState.shellGlobalHost;
+
+    if (shellGlobalMiscExpanded && shellGlobalHostExpanded)
+        shellGlobalMiscExpanded = false;
+
     globalExpanded = preservedUiState.global;
     speMainExpanded = preservedUiState.speMain;
     filtersExpanded = preservedUiState.filters;

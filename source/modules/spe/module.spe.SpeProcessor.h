@@ -8,8 +8,9 @@
 #include <utility>
 
 #include "module.spe.SpeShared.h"
+#include "../../shared/shared.InternalParameterHost.h"
 
-class SpeModuleProcessor final
+class SpeModuleProcessor final : private juce::AudioProcessorValueTreeState::Listener
 {
 public:
     static constexpr auto analyserScopeSize = spe::analyserScopeSize;
@@ -18,20 +19,15 @@ public:
 
     struct CompressorSettings
     {
-        int fftSize = 8192;
+        int fftSize = 4096;
         int overlapFactor = 32;
-        float thresholdDb = 12.0f;
-        float stereoAdaptiveAmount = 0.0f;
-        float stereoAdaptiveOffsetDb = 0.0f;
-        float leftThresholdDb = 12.0f;
-        float rightThresholdDb = 12.0f;
+        float leftThresholdDb = 0.0f;
+        float rightThresholdDb = 0.0f;
         float leftAdaptiveAmount = 0.0f;
         float rightAdaptiveAmount = 0.0f;
         float leftAdaptiveOffsetDb = 0.0f;
         float rightAdaptiveOffsetDb = 0.0f;
-        bool stereoBypass = false;
-        bool dualMonoBypass = false;
-        float slopeDbPerOct = 4.0f;
+        float slopeDbPerOct = 4.5f;
         float attackMs = 0.0f;
         float releaseMs = 0.0f;
         float kneeDb = 0.0f;
@@ -47,15 +43,13 @@ public:
     inline static constexpr auto paramRangeHighId = "spe_range_high";
     inline static constexpr auto paramSlopeId = "spe_slope";
     inline static constexpr auto paramTimeId = "spe_time";
-    inline static constexpr auto paramThresholdId = "spe_threshold";
-    inline static constexpr auto paramStereoAdaptiveId = "spe_stereo_adaptive";
-    inline static constexpr auto paramStereoAdaptiveOffsetId = "spe_stereo_adaptive_offset";
     inline static constexpr auto paramDualMonoLeftThresholdId = "spe_dual_mono_left_threshold";
     inline static constexpr auto paramDualMonoRightThresholdId = "spe_dual_mono_right_threshold";
     inline static constexpr auto paramDualMonoLeftAdaptiveId = "spe_dual_mono_left_adaptive";
     inline static constexpr auto paramDualMonoRightAdaptiveId = "spe_dual_mono_right_adaptive";
     inline static constexpr auto paramDualMonoLeftAdaptiveOffsetId = "spe_dual_mono_left_adaptive_offset";
     inline static constexpr auto paramDualMonoRightAdaptiveOffsetId = "spe_dual_mono_right_adaptive_offset";
+    inline static constexpr auto paramDualMonoLinkId = "spe_dual_mono_link_lr";
     inline static constexpr auto paramInputGainLrId = "spe_input_gain";
     inline static constexpr auto paramInputGainLId = "spe_input_gain_l";
     inline static constexpr auto paramInputGainRId = "spe_input_gain_r";
@@ -65,16 +59,14 @@ public:
     inline static constexpr auto paramKneeId = "spe_knee";
     inline static constexpr auto paramRatioId = "spe_ratio";
     inline static constexpr auto paramMakeupId = "spe_makeup";
-    inline static constexpr auto paramBypassId = "spe_bypass";
     inline static constexpr auto paramMiscBypassId = "spe_misc_bypass";
     inline static constexpr auto paramMiscBypassWithGainId = "spe_misc_bypass_wt_gain";
-    inline static constexpr auto paramDualMonoBypassId = "spe_dual_mono_bypass";
     inline static constexpr auto paramDeltaId = "spe_delta";
     inline static constexpr auto paramDspFftSizeId = "spe_dsp_fft_size";
     inline static constexpr auto paramDspSlopeId = "spe_dsp_slope";
 
     explicit SpeModuleProcessor(juce::AudioProcessor& ownerProcessor);
-    ~SpeModuleProcessor();
+    ~SpeModuleProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock);
     void releaseResources();
@@ -86,12 +78,13 @@ public:
     void setStateFromXmlString(const juce::String& stateXmlString);
 
     void copyAnalyserData(std::array<float, analyserScopeSize>& destination, double& currentSampleRate) const;
-    void copyGainReductionData(std::array<float, analyserScopeSize>& destination) const;
+    void copyGainReductionData(std::array<float, analyserScopeSize>& leftDestination,
+                               std::array<float, analyserScopeSize>& rightDestination) const;
     DisplaySettings getDisplaySettings() const noexcept;
     AnalysisSettings getAnalysisSettings() const noexcept;
     int getLatencySamples() const noexcept;
     bool refreshLatencyState() noexcept;
-    juce::ValueTree getAnalyserState() const noexcept;
+    juce::ValueTree getAnalyserState() const;
     float getAnalyserParameterValue(const juce::String& parameterId) const noexcept;
     void setAnalyserParameterValue(const juce::String& parameterId, float value);
 
@@ -100,9 +93,9 @@ public:
 
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    void parameterChanged(const juce::String& parameterID, float newValue) override;
 
     CompressorSettings getCompressorSettings() const noexcept;
-    bool isStereoBypassEnabled() const noexcept;
     bool isModuleBypassEnabled() const noexcept;
     bool isModuleBypassWithGainEnabled() const noexcept;
     bool isDeltaEnabled() const noexcept;
@@ -117,11 +110,13 @@ private:
     int getSelectedDspFftSize() const noexcept;
     int getSelectedOverlapFactor() const noexcept;
     float getSelectedAveragingTimeMs() const noexcept;
+    juce::ValueTree createAnalyserStateSnapshot() const;
 
     void resetAnalyserState();
     void applyAnalyserState(juce::ValueTree state);
 
     juce::AudioProcessor& ownerProcessor;
+    InternalParameterHost internalParameterHost;
 
     class PostAnalyser
     {
@@ -169,8 +164,9 @@ private:
 
         void prepare(double newSampleRate, int numChannels);
         void processBuffer(juce::AudioBuffer<float>& buffer, int numInputChannels, const CompressorSettings& settings);
-        void copyReductionScope(std::array<float, analyserScopeSize>& destination) const;
-        float getPublishedStereoThresholdDb() const noexcept;
+        void copyReductionScope(std::array<float, analyserScopeSize>& leftDestination,
+                    std::array<float, analyserScopeSize>& rightDestination) const;
+        float getPublishedDualMonoThresholdDb(int channel) const noexcept;
 
     private:
         struct ChannelState
@@ -203,14 +199,11 @@ private:
         std::array<std::array<float, maxFftSize>, 5> windowTables {};
         std::array<ChannelState, maxChannels> channelStates {};
         std::array<std::array<float, maxFftSize>, maxChannels> hopBuffers {};
-        std::array<float, (maxFftSize / 2) + 1> stereoSmoothedReductionDb {};
         std::array<std::array<float, (maxFftSize / 2) + 1>, maxChannels> dualMonoSmoothedReductionDb {};
-        std::array<float, (maxFftSize / 2) + 1> combinedReductionDb {};
-        std::array<std::array<float, analyserScopeSize>, 2> reductionScopeBuffers {};
+        std::array<std::array<std::array<float, analyserScopeSize>, maxChannels>, 2> reductionScopeBuffers {};
         std::atomic<int> activeReductionScopeBuffer { 0 };
-        std::atomic<float> publishedStereoThresholdDb { 12.0f };
+        std::array<std::atomic<float>, maxChannels> publishedDualMonoThresholdDb { 0.0f, 0.0f };
         double sampleRate = 44100.0;
-        float stereoAdaptiveReferenceDb = 0.0f;
         std::array<float, maxChannels> dualMonoAdaptiveReferenceDb {};
         int configuredChannels = 0;
         int currentFftSize = 0;
@@ -220,23 +213,21 @@ private:
 
     juce::AudioProcessorValueTreeState parameters;
     juce::ValueTree analyserState { "spe_analyser_state" };
-    std::atomic<float> analyserFftSizeValue { 3.0f };
+    std::atomic<float> analyserFftSizeValue { 2.0f };
     std::atomic<float> analyserOverlapValue { 4.0f };
     std::atomic<float> analyserLeftValue { 21.0f };
     std::atomic<float> analyserRightValue { 20000.0f };
     std::atomic<float> analyserRangeLowValue { -60.0f };
     std::atomic<float> analyserRangeHighValue { 10.0f };
-    std::atomic<float> analyserSlopeValue { 4.0f };
+    std::atomic<float> analyserSlopeValue { 4.5f };
     std::atomic<float> analyserTimeValue { 50.0f };
-    std::atomic<float>* thresholdParam = nullptr;
-    std::atomic<float>* stereoAdaptiveParam = nullptr;
-    std::atomic<float>* stereoAdaptiveOffsetParam = nullptr;
     std::atomic<float>* dualMonoLeftThresholdParam = nullptr;
     std::atomic<float>* dualMonoRightThresholdParam = nullptr;
     std::atomic<float>* dualMonoLeftAdaptiveParam = nullptr;
     std::atomic<float>* dualMonoRightAdaptiveParam = nullptr;
     std::atomic<float>* dualMonoLeftAdaptiveOffsetParam = nullptr;
     std::atomic<float>* dualMonoRightAdaptiveOffsetParam = nullptr;
+    std::atomic<float>* dualMonoLinkParam = nullptr;
     std::atomic<float>* inputGainLrParam = nullptr;
     std::atomic<float>* inputGainLParam = nullptr;
     std::atomic<float>* inputGainRParam = nullptr;
@@ -246,13 +237,12 @@ private:
     std::atomic<float>* kneeParam = nullptr;
     std::atomic<float>* ratioParam = nullptr;
     std::atomic<float>* makeupParam = nullptr;
-    std::atomic<float>* bypassParam = nullptr;
     std::atomic<float>* miscBypassParam = nullptr;
     std::atomic<float>* miscBypassWithGainParam = nullptr;
-    std::atomic<float>* dualMonoBypassParam = nullptr;
     std::atomic<float>* deltaParam = nullptr;
     std::atomic<float>* dspFftSizeParam = nullptr;
     std::atomic<float>* dspSlopeParam = nullptr;
+    std::atomic<bool> linkedDualMonoPropagationInProgress { false };
     SpectralCompressor spectralCompressor;
     static constexpr int deltaDelayBufferSize = SpectralCompressor::maxFftSize + 1;
     std::array<std::array<float, deltaDelayBufferSize>, SpectralCompressor::maxChannels> deltaDelayBuffers {};

@@ -24,52 +24,13 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (speDspFftSizeControl != nullptr) speDspFftSizeControl->rebind(speState);
         if (speDspSlopeControl != nullptr) speDspSlopeControl->rebind(speState);
         if (speMakeupControl != nullptr) speMakeupControl->rebind(speState);
-        if (speThresholdControl != nullptr) speThresholdControl->rebind(speState);
-        if (speStereoAdaptiveControl != nullptr) speStereoAdaptiveControl->rebind(speState);
-        if (speStereoAdaptiveOffsetControl != nullptr) speStereoAdaptiveOffsetControl->rebind(speState);
         if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->rebind(speState);
         if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->rebind(speState);
         if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->rebind(speState);
         if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->rebind(speState);
         if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->rebind(speState);
         if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->rebind(speState);
-        if (speAnalyserFftSizeControl != nullptr)
-        {
-            static constexpr std::array<const char*, 5> fftSizeLabels { "1024", "2048", "4096", "8192", "16384" };
-            const auto fftIndex = juce::jlimit(0,
-                                               static_cast<int>(fftSizeLabels.size()) - 1,
-                                               juce::roundToInt(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramFftSizeId)));
-            speAnalyserFftSizeControl->setValue(static_cast<double>(fftIndex), false);
-            speAnalyserFftSizeControl->setOverrideText(fftSizeLabels[static_cast<size_t>(fftIndex)]);
-        }
-
-        if (speAnalyserOverlapControl != nullptr)
-        {
-            static constexpr std::array<const char*, 5> overlapLabels { "2x", "4x", "8x", "16x", "32x" };
-            const auto overlapIndex = juce::jlimit(0,
-                                                   static_cast<int>(overlapLabels.size()) - 1,
-                                                   juce::roundToInt(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramOverlapId)));
-            speAnalyserOverlapControl->setValue(static_cast<double>(overlapIndex), false);
-            speAnalyserOverlapControl->setOverrideText(overlapLabels[static_cast<size_t>(overlapIndex)]);
-        }
-
-        if (speAnalyserLeftControl != nullptr)
-            speAnalyserLeftControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramLeftId), false);
-
-        if (speAnalyserRightControl != nullptr)
-            speAnalyserRightControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRightId), false);
-
-        if (speAnalyserRangeLowControl != nullptr)
-            speAnalyserRangeLowControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRangeLowId), false);
-
-        if (speAnalyserRangeHighControl != nullptr)
-            speAnalyserRangeHighControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRangeHighId), false);
-
-        if (speAnalyserSlopeControl != nullptr)
-            speAnalyserSlopeControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramSlopeId), false);
-
-        if (speAnalyserTimeControl != nullptr)
-            speAnalyserTimeControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramTimeId), false);
+        refreshSpeAnalyserControls(speProcessor);
     };
 
     auto rebindSpeAttachments = [this] (juce::AudioProcessorValueTreeState& speState)
@@ -78,10 +39,6 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
             speDeltaAttachment = std::make_unique<ButtonAttachment>(speState,
                                                                     SpeModuleProcessor::paramDeltaId,
                                                                     *speDeltaButton);
-        if (speStereoBypassButton != nullptr)
-            speStereoBypassAttachment = std::make_unique<ButtonAttachment>(speState,
-                                                                           SpeModuleProcessor::paramBypassId,
-                                                                           *speStereoBypassButton);
         if (speBypassButton != nullptr)
             speBypassAttachment = std::make_unique<ButtonAttachment>(speState,
                                                                      SpeModuleProcessor::paramMiscBypassId,
@@ -90,10 +47,10 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
             speBypassWithGainAttachment = std::make_unique<ButtonAttachment>(speState,
                                                                             SpeModuleProcessor::paramMiscBypassWithGainId,
                                                                             *speBypassWithGainButton);
-        if (speDualMonoBypassButton != nullptr)
-            speDualMonoBypassAttachment = std::make_unique<ButtonAttachment>(speState,
-                                                                             SpeModuleProcessor::paramDualMonoBypassId,
-                                                                             *speDualMonoBypassButton);
+        if (speDualMonoLinkButton != nullptr)
+            speDualMonoLinkAttachment = std::make_unique<ButtonAttachment>(speState,
+                                                                           SpeModuleProcessor::paramDualMonoLinkId,
+                                                                           *speDualMonoLinkButton);
     };
 
     auto rebuildSpeAnalyser = [this] (SpeModuleProcessor& speProcessor)
@@ -101,7 +58,7 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         shell_setup_support::removeOwnedChild(*this, speAnalyserComponent);
         speAnalyserComponent = shell_setup_support::createSpeAnalyserComponent(speProcessor);
         addAndMakeVisible(*speAnalyserComponent);
-        speAnalyserComponent->setVisible(eqeModuleExpanded && speModuleLoaded && visualizerVisible);
+        speAnalyserComponent->setVisible(eqeModuleExpanded && speModuleLoaded);
     };
 
     auto rebindEqeEditorSections = [this]
@@ -181,6 +138,7 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
                                                                        {
                                                                            showTextPrompt(currentText,
                                                                                           std::move(onCommit),
+                                                                                          {},
                                                                                           std::move(onClose),
                                                                                           std::move(onDismiss));
                                                                        },

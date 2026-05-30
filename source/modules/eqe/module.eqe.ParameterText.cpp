@@ -4,7 +4,7 @@ namespace
 {
 juce::String makeEqeFilterName(const int filterIndex, const juce::String& parameterName)
 {
-    return "EQE - FILTER " + juce::String(filterIndex + 1) + " - " + parameterName;
+    return "FILTER " + juce::String(filterIndex + 1) + " - " + parameterName;
 }
 }
 

@@ -62,7 +62,6 @@ void VxAudioProcessorEditor::loadEqeModule()
     filtersExpanded = false;
     presetsExpanded = false;
     visualizerExpanded = false;
-    visualizerVisible = false;
     expandedBellIndex = -1;
 
     rebindActiveModuleEditors();
@@ -91,7 +90,6 @@ void VxAudioProcessorEditor::loadMxeModule()
     filtersExpanded = false;
     presetsExpanded = false;
     visualizerExpanded = false;
-    visualizerVisible = false;
     expandedBellIndex = -1;
 
     rebindActiveModuleEditors();
@@ -120,7 +118,6 @@ void VxAudioProcessorEditor::loadTseModule()
     filtersExpanded = false;
     presetsExpanded = false;
     visualizerExpanded = false;
-    visualizerVisible = false;
     expandedBellIndex = -1;
 
     rebindActiveModuleEditors();
@@ -282,7 +279,32 @@ void VxAudioProcessorEditor::openShellGlobalMiscSection()
     if (! shellGlobalExpanded)
         return;
 
-    shellGlobalMiscExpanded = ! shellGlobalMiscExpanded;
+    if (shellGlobalMiscExpanded && ! shellGlobalHostExpanded)
+        shellGlobalMiscExpanded = false;
+    else
+    {
+        shellGlobalMiscExpanded = true;
+        shellGlobalHostExpanded = false;
+    }
+
+    storeEditorStateToValueTree();
+    updateSectionStates();
+    resized();
+}
+
+void VxAudioProcessorEditor::openShellGlobalHostSection()
+{
+    if (! shellGlobalExpanded)
+        return;
+
+    if (shellGlobalHostExpanded && ! shellGlobalMiscExpanded)
+        shellGlobalHostExpanded = false;
+    else
+    {
+        shellGlobalHostExpanded = true;
+        shellGlobalMiscExpanded = false;
+    }
+
     storeEditorStateToValueTree();
     updateSectionStates();
     resized();
@@ -337,6 +359,9 @@ void VxAudioProcessorEditor::openSpeMainSection()
     visualizerExpanded = false;
     expandedBellIndex = -1;
 
+    if (speMainExpanded)
+        filterViewport.setViewPosition(0, 0);
+
     storeEditorStateToValueTree();
     updateSectionStates();
     resized();
@@ -377,11 +402,7 @@ void VxAudioProcessorEditor::closeActiveModule()
     presetsExpanded = false;
     visualizerExpanded = false;
 
-    if (visualizerVisible)
-    {
-        visualizerVisible = false;
-        updateEditorWidthForVisualizerVisibility();
-    }
+    updateEditorWidthForVisualizerVisibility();
     expandedBellIndex = -1;
 
     const auto closingInstanceIndex = audioProcessor.getActiveModuleInstanceIndex();

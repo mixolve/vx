@@ -42,6 +42,17 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
         return;
     }
 
+    if (bypassWithGain)
+    {
+        const auto outGainDb = outGainParam != nullptr ? outGainParam->load(std::memory_order_relaxed) : 0.0f;
+
+        if (std::abs(outGainDb) > 1.0e-6f)
+            buffer.applyGain(juce::Decibels::decibelsToGain(outGainDb));
+
+        resetTtssSplitState();
+        return;
+    }
+
     const auto processChannels = juce::jmin(buffer.getNumChannels(), preparedNumChannels);
 
     if (processChannels > 0)
@@ -77,17 +88,6 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
 
         if (processChannels > 1 && std::abs(effectiveGainRDb) > 1.0e-6f)
             buffer.applyGain(1, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveGainRDb));
-    }
-
-    if (bypassWithGain)
-    {
-        const auto outGainDb = outGainParam != nullptr ? outGainParam->load(std::memory_order_relaxed) : 0.0f;
-
-        if (std::abs(outGainDb) > 1.0e-6f)
-            buffer.applyGain(juce::Decibels::decibelsToGain(outGainDb));
-
-        resetTtssSplitState();
-        return;
     }
 
     if (eqeFiltersDirty.exchange(false, std::memory_order_acq_rel))

@@ -12,22 +12,29 @@ juce::ValueTree buildCombinedSpeState(juce::AudioProcessorValueTreeState& parame
     state.appendChild(analyserState.createCopy(), nullptr);
     return state;
 }
+
+constexpr std::array<const char*, 6> dualMonoLinkedParameterIds {
+    SpeModuleProcessor::paramDualMonoLeftThresholdId,
+    SpeModuleProcessor::paramDualMonoRightThresholdId,
+    SpeModuleProcessor::paramDualMonoLeftAdaptiveId,
+    SpeModuleProcessor::paramDualMonoRightAdaptiveId,
+    SpeModuleProcessor::paramDualMonoLeftAdaptiveOffsetId,
+    SpeModuleProcessor::paramDualMonoRightAdaptiveOffsetId
+};
 }
 
 SpeModuleProcessor::SpeModuleProcessor(juce::AudioProcessor& owner)
     : ownerProcessor(owner),
-      parameters(ownerProcessor, nullptr, "spe_state", createParameterLayout())
+    parameters(internalParameterHost, nullptr, "spe_state", createParameterLayout())
 {
     resetAnalyserState();
-    thresholdParam = parameters.getRawParameterValue(paramThresholdId);
-    stereoAdaptiveParam = parameters.getRawParameterValue(paramStereoAdaptiveId);
-    stereoAdaptiveOffsetParam = parameters.getRawParameterValue(paramStereoAdaptiveOffsetId);
     dualMonoLeftThresholdParam = parameters.getRawParameterValue(paramDualMonoLeftThresholdId);
     dualMonoRightThresholdParam = parameters.getRawParameterValue(paramDualMonoRightThresholdId);
     dualMonoLeftAdaptiveParam = parameters.getRawParameterValue(paramDualMonoLeftAdaptiveId);
     dualMonoRightAdaptiveParam = parameters.getRawParameterValue(paramDualMonoRightAdaptiveId);
     dualMonoLeftAdaptiveOffsetParam = parameters.getRawParameterValue(paramDualMonoLeftAdaptiveOffsetId);
     dualMonoRightAdaptiveOffsetParam = parameters.getRawParameterValue(paramDualMonoRightAdaptiveOffsetId);
+    dualMonoLinkParam = parameters.getRawParameterValue(paramDualMonoLinkId);
     inputGainLrParam = parameters.getRawParameterValue(paramInputGainLrId);
     inputGainLParam = parameters.getRawParameterValue(paramInputGainLId);
     inputGainRParam = parameters.getRawParameterValue(paramInputGainRId);
@@ -37,16 +44,21 @@ SpeModuleProcessor::SpeModuleProcessor(juce::AudioProcessor& owner)
     kneeParam = parameters.getRawParameterValue(paramKneeId);
     ratioParam = parameters.getRawParameterValue(paramRatioId);
     makeupParam = parameters.getRawParameterValue(paramMakeupId);
-    bypassParam = parameters.getRawParameterValue(paramBypassId);
     miscBypassParam = parameters.getRawParameterValue(paramMiscBypassId);
     miscBypassWithGainParam = parameters.getRawParameterValue(paramMiscBypassWithGainId);
-    dualMonoBypassParam = parameters.getRawParameterValue(paramDualMonoBypassId);
     deltaParam = parameters.getRawParameterValue(paramDeltaId);
     dspFftSizeParam = parameters.getRawParameterValue(paramDspFftSizeId);
     dspSlopeParam = parameters.getRawParameterValue(paramDspSlopeId);
+
+    for (const auto* parameterId : dualMonoLinkedParameterIds)
+        parameters.addParameterListener(parameterId, this);
 }
 
-SpeModuleProcessor::~SpeModuleProcessor() = default;
+SpeModuleProcessor::~SpeModuleProcessor()
+{
+    for (const auto* parameterId : dualMonoLinkedParameterIds)
+        parameters.removeParameterListener(parameterId, this);
+}
 
 void SpeModuleProcessor::prepareToPlay(double sampleRate, int)
 {
@@ -100,6 +112,18 @@ void SpeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
         return;
     }
 
+    if (moduleBypassWithGain)
+    {
+        applyMakeupGain(buffer, channelsToUse);
+
+        outputAnalyser.pushBuffer(buffer,
+                                  channelsToUse,
+                                  analysisSettings.fftSize,
+                                  analysisSettings.overlapFactor,
+                                  analysisSettings.averagingTimeMs);
+        return;
+    }
+
     const auto wideAmount = wideParam != nullptr
         ? juce::jlimit(0.0f, 4.0f, wideParam->load(std::memory_order_relaxed) / 100.0f)
         : 1.0f;
@@ -119,9 +143,9 @@ void SpeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
         }
     }
 
-    const auto gainLrDb = juce::jlimit(-24.0f, 24.0f, inputGainLrParam != nullptr ? inputGainLrParam->load(std::memory_order_relaxed) : 0.0f);
-    const auto gainLDb = juce::jlimit(-24.0f, 24.0f, inputGainLParam != nullptr ? inputGainLParam->load(std::memory_order_relaxed) : 0.0f);
-    const auto gainRDb = juce::jlimit(-24.0f, 24.0f, inputGainRParam != nullptr ? inputGainRParam->load(std::memory_order_relaxed) : 0.0f);
+    const auto gainLrDb = juce::jlimit(-48.0f, 48.0f, inputGainLrParam != nullptr ? inputGainLrParam->load(std::memory_order_relaxed) : 0.0f);
+    const auto gainLDb = juce::jlimit(-48.0f, 48.0f, inputGainLParam != nullptr ? inputGainLParam->load(std::memory_order_relaxed) : 0.0f);
+    const auto gainRDb = juce::jlimit(-48.0f, 48.0f, inputGainRParam != nullptr ? inputGainRParam->load(std::memory_order_relaxed) : 0.0f);
     const auto effectiveGainLDb = gainLDb + gainLrDb;
     const auto effectiveGainRDb = gainRDb + gainLrDb;
     const auto applyInputGain = std::abs(effectiveGainLDb) > 1.0e-6f || std::abs(effectiveGainRDb) > 1.0e-6f;
@@ -142,18 +166,6 @@ void SpeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
             if (channelsToUse > 1)
                 deltaDryBuffer.applyGain(1, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveGainRDb));
         }
-    }
-
-    if (moduleBypassWithGain)
-    {
-        applyMakeupGain(buffer, channelsToUse);
-
-        outputAnalyser.pushBuffer(buffer,
-                                  channelsToUse,
-                                  analysisSettings.fftSize,
-                                  analysisSettings.overlapFactor,
-                                  analysisSettings.averagingTimeMs);
-        return;
     }
 
     if (deltaEnabled)
@@ -177,9 +189,57 @@ void SpeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
                               analysisSettings.averagingTimeMs);
 }
 
+void SpeModuleProcessor::parameterChanged(const juce::String& parameterID, float)
+{
+    if (linkedDualMonoPropagationInProgress.exchange(true, std::memory_order_acq_rel))
+        return;
+
+    const auto linkActive = dualMonoLinkParam != nullptr
+        && dualMonoLinkParam->load(std::memory_order_relaxed) >= 0.5f;
+
+    const auto mirrorParameter = [this] (const char* sourceParameterId, const char* targetParameterId)
+    {
+        const auto* source = parameters.getRawParameterValue(sourceParameterId);
+
+        if (source == nullptr)
+            return;
+
+        auto* target = parameters.getParameter(targetParameterId);
+
+        if (target == nullptr)
+            return;
+
+        const auto targetValue = source->load(std::memory_order_relaxed);
+        const auto normalizedValue = target->convertTo0to1(targetValue);
+
+        if (std::abs(target->getValue() - normalizedValue) <= 1.0e-6f)
+            return;
+
+        target->setValueNotifyingHost(normalizedValue);
+    };
+
+    if (linkActive)
+    {
+        if (parameterID == paramDualMonoLeftThresholdId)
+            mirrorParameter(paramDualMonoLeftThresholdId, paramDualMonoRightThresholdId);
+        else if (parameterID == paramDualMonoRightThresholdId)
+            mirrorParameter(paramDualMonoRightThresholdId, paramDualMonoLeftThresholdId);
+        else if (parameterID == paramDualMonoLeftAdaptiveId)
+            mirrorParameter(paramDualMonoLeftAdaptiveId, paramDualMonoRightAdaptiveId);
+        else if (parameterID == paramDualMonoRightAdaptiveId)
+            mirrorParameter(paramDualMonoRightAdaptiveId, paramDualMonoLeftAdaptiveId);
+        else if (parameterID == paramDualMonoLeftAdaptiveOffsetId)
+            mirrorParameter(paramDualMonoLeftAdaptiveOffsetId, paramDualMonoRightAdaptiveOffsetId);
+        else if (parameterID == paramDualMonoRightAdaptiveOffsetId)
+            mirrorParameter(paramDualMonoRightAdaptiveOffsetId, paramDualMonoLeftAdaptiveOffsetId);
+    }
+
+    linkedDualMonoPropagationInProgress.store(false, std::memory_order_release);
+}
+
 void SpeModuleProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    auto state = buildCombinedSpeState(parameters, analyserState);
+    auto state = buildCombinedSpeState(parameters, createAnalyserStateSnapshot());
 
     if (auto stateXml = state.createXml())
         juce::AudioProcessor::copyXmlToBinary(*stateXml, destData);
@@ -204,7 +264,8 @@ void SpeModuleProcessor::setStateInformation(const void* data, int sizeInBytes)
 
 juce::String SpeModuleProcessor::getStateXmlString() const
 {
-    auto state = buildCombinedSpeState(const_cast<juce::AudioProcessorValueTreeState&>(parameters), analyserState);
+    auto state = buildCombinedSpeState(const_cast<juce::AudioProcessorValueTreeState&>(parameters),
+                                       createAnalyserStateSnapshot());
 
     if (auto stateXml = state.createXml())
         return stateXml->toString();
@@ -253,9 +314,10 @@ void SpeModuleProcessor::copyAnalyserData(std::array<float, analyserScopeSize>& 
     outputAnalyser.copyScope(destination, currentSampleRate);
 }
 
-void SpeModuleProcessor::copyGainReductionData(std::array<float, analyserScopeSize>& destination) const
+void SpeModuleProcessor::copyGainReductionData(std::array<float, analyserScopeSize>& leftDestination,
+                                               std::array<float, analyserScopeSize>& rightDestination) const
 {
-    spectralCompressor.copyReductionScope(destination);
+    spectralCompressor.copyReductionScope(leftDestination, rightDestination);
 }
 
 void SpeModuleProcessor::resetDeltaDelay() noexcept
@@ -327,9 +389,23 @@ const juce::AudioProcessorValueTreeState& SpeModuleProcessor::getValueTreeState(
     return parameters;
 }
 
-juce::ValueTree SpeModuleProcessor::getAnalyserState() const noexcept
+juce::ValueTree SpeModuleProcessor::getAnalyserState() const
 {
-    return analyserState;
+    return createAnalyserStateSnapshot();
+}
+
+juce::ValueTree SpeModuleProcessor::createAnalyserStateSnapshot() const
+{
+    auto state = juce::ValueTree(analyserState.getType());
+    state.setProperty(paramFftSizeId, analyserFftSizeValue.load(std::memory_order_relaxed), nullptr);
+    state.setProperty(paramOverlapId, analyserOverlapValue.load(std::memory_order_relaxed), nullptr);
+    state.setProperty(paramLeftId, analyserLeftValue.load(std::memory_order_relaxed), nullptr);
+    state.setProperty(paramRightId, analyserRightValue.load(std::memory_order_relaxed), nullptr);
+    state.setProperty(paramRangeLowId, analyserRangeLowValue.load(std::memory_order_relaxed), nullptr);
+    state.setProperty(paramRangeHighId, analyserRangeHighValue.load(std::memory_order_relaxed), nullptr);
+    state.setProperty(paramSlopeId, analyserSlopeValue.load(std::memory_order_relaxed), nullptr);
+    state.setProperty(paramTimeId, analyserTimeValue.load(std::memory_order_relaxed), nullptr);
+    return state;
 }
 
 float SpeModuleProcessor::getAnalyserParameterValue(const juce::String& parameterId) const noexcept
@@ -363,16 +439,10 @@ float SpeModuleProcessor::getAnalyserParameterValue(const juce::String& paramete
 
 void SpeModuleProcessor::setAnalyserParameterValue(const juce::String& parameterId, float value)
 {
-    auto setProperty = [this] (const char* id, const float propertyValue)
-    {
-        analyserState.setProperty(id, propertyValue, nullptr);
-    };
-
     if (parameterId == paramFftSizeId)
     {
         const auto clamped = static_cast<float>(juce::jlimit(0, 4, juce::roundToInt(value)));
         analyserFftSizeValue.store(clamped, std::memory_order_relaxed);
-        setProperty(paramFftSizeId, clamped);
         return;
     }
 
@@ -380,7 +450,6 @@ void SpeModuleProcessor::setAnalyserParameterValue(const juce::String& parameter
     {
         const auto clamped = static_cast<float>(juce::jlimit(0, 4, juce::roundToInt(value)));
         analyserOverlapValue.store(clamped, std::memory_order_relaxed);
-        setProperty(paramOverlapId, clamped);
         return;
     }
 
@@ -404,8 +473,6 @@ void SpeModuleProcessor::setAnalyserParameterValue(const juce::String& parameter
 
         analyserLeftValue.store(left, std::memory_order_relaxed);
         analyserRightValue.store(right, std::memory_order_relaxed);
-        setProperty(paramLeftId, left);
-        setProperty(paramRightId, right);
         return;
     }
 
@@ -429,8 +496,6 @@ void SpeModuleProcessor::setAnalyserParameterValue(const juce::String& parameter
 
         analyserRangeLowValue.store(low, std::memory_order_relaxed);
         analyserRangeHighValue.store(high, std::memory_order_relaxed);
-        setProperty(paramRangeLowId, low);
-        setProperty(paramRangeHighId, high);
         return;
     }
 
@@ -438,7 +503,6 @@ void SpeModuleProcessor::setAnalyserParameterValue(const juce::String& parameter
     {
         const auto clamped = juce::jlimit(0.0f, 6.0f, value);
         analyserSlopeValue.store(clamped, std::memory_order_relaxed);
-        setProperty(paramSlopeId, clamped);
         return;
     }
 
@@ -446,19 +510,18 @@ void SpeModuleProcessor::setAnalyserParameterValue(const juce::String& parameter
     {
         const auto clamped = juce::jlimit(0.0f, 1000.0f, value);
         analyserTimeValue.store(clamped, std::memory_order_relaxed);
-        setProperty(paramTimeId, clamped);
     }
 }
 
 void SpeModuleProcessor::resetAnalyserState()
 {
-    setAnalyserParameterValue(paramFftSizeId, 3.0f);
+    setAnalyserParameterValue(paramFftSizeId, 2.0f);
     setAnalyserParameterValue(paramOverlapId, 4.0f);
     setAnalyserParameterValue(paramLeftId, 21.0f);
     setAnalyserParameterValue(paramRightId, 20000.0f);
     setAnalyserParameterValue(paramRangeLowId, -60.0f);
     setAnalyserParameterValue(paramRangeHighId, 10.0f);
-    setAnalyserParameterValue(paramSlopeId, 4.0f);
+    setAnalyserParameterValue(paramSlopeId, 4.5f);
     setAnalyserParameterValue(paramTimeId, 50.0f);
 }
 
@@ -470,12 +533,12 @@ void SpeModuleProcessor::applyAnalyserState(juce::ValueTree state)
         return;
     }
 
-    setAnalyserParameterValue(paramFftSizeId, static_cast<float>(state.getProperty(paramFftSizeId, 3.0f)));
+    setAnalyserParameterValue(paramFftSizeId, static_cast<float>(state.getProperty(paramFftSizeId, 2.0f)));
     setAnalyserParameterValue(paramOverlapId, static_cast<float>(state.getProperty(paramOverlapId, 4.0f)));
     setAnalyserParameterValue(paramLeftId, static_cast<float>(state.getProperty(paramLeftId, 21.0f)));
     setAnalyserParameterValue(paramRightId, static_cast<float>(state.getProperty(paramRightId, 20000.0f)));
     setAnalyserParameterValue(paramRangeLowId, static_cast<float>(state.getProperty(paramRangeLowId, -60.0f)));
     setAnalyserParameterValue(paramRangeHighId, static_cast<float>(state.getProperty(paramRangeHighId, 10.0f)));
-    setAnalyserParameterValue(paramSlopeId, static_cast<float>(state.getProperty(paramSlopeId, 4.0f)));
+    setAnalyserParameterValue(paramSlopeId, static_cast<float>(state.getProperty(paramSlopeId, 4.5f)));
     setAnalyserParameterValue(paramTimeId, static_cast<float>(state.getProperty(paramTimeId, 50.0f)));
 }

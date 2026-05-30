@@ -126,6 +126,7 @@ public:
     void mouseExit(const juce::MouseEvent&) override;
 
     std::function<void()> onPressed;
+    std::function<void(const juce::ModifierKeys&)> onClickWithModifiers;
     std::function<void(const juce::MouseEvent&)> onDragBegin;
     std::function<void(const juce::MouseEvent&)> onDragMove;
     std::function<void(const juce::MouseEvent&)> onDragFinish;

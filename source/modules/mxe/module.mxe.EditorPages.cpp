@@ -15,7 +15,7 @@ inline constexpr auto bandMiscControls = std::to_array<ControlSpec>({
     { "inGn", "IN-GAIN-LR" },
     { "inLeft", "IN-GAIN-L" },
     { "inRight", "IN-GAIN-R" },
-    { "wide", "WIDE" },
+    { "wide", "IN-WIDE" },
     { "outGn", "OUT-GAIN" },
 });
 
@@ -24,6 +24,25 @@ inline constexpr auto bandMainControls = std::to_array<ControlSpec>({
     { "peakHoldHz", "PEAK-HOLD" },
     { "TensionFlooR", "TEN-FLOOR" },
     { "TensionHysT", "TEN-HYST" },
+    { "linkUpDn", "LINK-UPDN (DUAL-MONO)", true, false },
+    { "linkLr", "LINK-LR (STEREO)", true, false },
+    { "linkOpp", "LINK-OPP", true, false },
+    { "thLU", "L.UP.THR" },
+    { "tensLU", "L.UP.TENS" },
+    { "relLU", "L.UP.REL" },
+    { "outLU", "L.UP.OUT" },
+    { "thLD", "L.DN.THR" },
+    { "tensLD", "L.DN.TENS" },
+    { "relLD", "L.DN.REL" },
+    { "outLD", "L.DN.OUT" },
+    { "thRU", "R.UP.THR" },
+    { "tensRU", "R.UP.TENS" },
+    { "relRU", "R.UP.REL" },
+    { "outRU", "R.UP.OUT" },
+    { "thRD", "R.DN.THR" },
+    { "tensRD", "R.DN.TENS" },
+    { "relRD", "R.DN.REL" },
+    { "outRD", "R.DN.OUT" },
 });
 
 inline constexpr auto fullbandMiscControls = std::to_array<ControlSpec>({
@@ -32,7 +51,7 @@ inline constexpr auto fullbandMiscControls = std::to_array<ControlSpec>({
     { "inGnVisible", "IN-GAIN-LR" },
     { "autoInLeft", "IN-GAIN-L" },
     { "autoInRight", "IN-GAIN-R" },
-    { "wideVisible", "WIDE" },
+    { "wideVisible", "IN-WIDE" },
     { "outGnVisible", "OUT-GAIN" },
 });
 
@@ -87,48 +106,33 @@ BandPageComponent::BandPageComponent(juce::AudioProcessorValueTreeState& state,
             {}, {}, {},
             valueTreeState,
             mxe::editor::uiState::makeBandSectionExpandedStateKey(bandIndex, 0)),
+      
       main(state,
-           parameterIdProvider,
+               [parameterIdProvider] (const char* suffix)
+               {
+                   const auto suffixString = juce::String(suffix);
+
+                   // These controls are shared globally in DSP and read from band 0.
+                   if (suffixString == "moRph"
+                       || suffixString == "peakHoldHz"
+                       || suffixString == "TensionFlooR"
+                       || suffixString == "TensionHysT")
+                   {
+                       return mxe::parameters::makeBandParameterId(0, suffix);
+                   }
+
+                   return parameterIdProvider(suffix);
+               },
            bandMainSection,
            accent,
            [this] { refreshLayout(); },
            [this] (bool expanded) { handleSectionExpanded(1, expanded); },
-            {}, {}, {}, {}, {}, {}, {},
-            valueTreeState,
-            mxe::editor::uiState::makeBandSectionExpandedStateKey(bandIndex, 1)),
-      halfWave(state,
-                parameterIdProvider,
-                halfWaveSection,
-                accent,
-                [this] { refreshLayout(); },
-                [this] (bool expanded) { handleSectionExpanded(2, expanded); },
-                {}, {}, {}, {}, {}, {}, {},
-                valueTreeState,
-                mxe::editor::uiState::makeBandSectionExpandedStateKey(bandIndex, 2)),
-      dm(state,
-         parameterIdProvider,
-         dmSection,
-         accent,
-         [this] { refreshLayout(); },
-         [this] (bool expanded) { handleSectionExpanded(3, expanded); },
          {}, {}, {}, {}, {}, {}, {},
          valueTreeState,
-         mxe::editor::uiState::makeBandSectionExpandedStateKey(bandIndex, 3)),
-      ff(state,
-         parameterIdProvider,
-         ffSection,
-         accent,
-         [this] { refreshLayout(); },
-         [this] (bool expanded) { handleSectionExpanded(4, expanded); },
-         {}, {}, {}, {}, {}, {}, {},
-         valueTreeState,
-         mxe::editor::uiState::makeBandSectionExpandedStateKey(bandIndex, 4))
+            mxe::editor::uiState::makeBandSectionExpandedStateKey(bandIndex, 1))
 {
     addAndMakeVisible(misc);
     addAndMakeVisible(main);
-    addAndMakeVisible(halfWave);
-    addAndMakeVisible(dm);
-    addAndMakeVisible(ff);
 }
 
 void BandPageComponent::refreshExternalState()
@@ -141,13 +145,7 @@ int BandPageComponent::getPreferredHeight() const
 {
     return misc.getPreferredHeight()
         + sectionComponentGap
-        + main.getPreferredHeight()
-        + sectionComponentGap
-        + halfWave.getPreferredHeight()
-        + sectionComponentGap
-        + dm.getPreferredHeight()
-        + sectionComponentGap
-        + ff.getPreferredHeight();
+    + main.getPreferredHeight();
 }
 
 void BandPageComponent::resized()
@@ -159,15 +157,6 @@ void BandPageComponent::resized()
     bounds.removeFromTop(sectionComponentGap);
     sectionBounds = bounds.removeFromTop(main.getPreferredHeight());
     main.setBounds(sectionBounds);
-    bounds.removeFromTop(sectionComponentGap);
-    sectionBounds = bounds.removeFromTop(halfWave.getPreferredHeight());
-    halfWave.setBounds(sectionBounds);
-    bounds.removeFromTop(sectionComponentGap);
-    sectionBounds = bounds.removeFromTop(dm.getPreferredHeight());
-    dm.setBounds(sectionBounds);
-    bounds.removeFromTop(sectionComponentGap);
-    sectionBounds = bounds.removeFromTop(ff.getPreferredHeight());
-    ff.setBounds(sectionBounds);
 }
 
 void BandPageComponent::handleSectionExpanded(const int sectionIndex, const bool expanded)
@@ -180,15 +169,6 @@ void BandPageComponent::handleSectionExpanded(const int sectionIndex, const bool
 
     if (sectionIndex != 1)
         main.setExpanded(false);
-
-    if (sectionIndex != 2)
-        halfWave.setExpanded(false);
-
-    if (sectionIndex != 3)
-        dm.setExpanded(false);
-
-    if (sectionIndex != 4)
-        ff.setExpanded(false);
 
     resized();
 }

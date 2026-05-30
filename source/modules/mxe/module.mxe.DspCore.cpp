@@ -122,7 +122,6 @@ int DspCore::getMaximumLatencySamples(const double sampleRate) noexcept
 {
     const auto safeSampleRate = std::max(1.0, sampleRate);
     const auto maxBufferSize = std::max(1, static_cast<int>(std::ceil(safeSampleRate * maxLookaheadMs * 0.001)) + 2);
-    const auto maxTotalBufferSize = std::max(2, maxBufferSize * 2);
-    return std::max(0, maxTotalBufferSize - 2);
+    return std::max(0, maxBufferSize - 2);
 }
 } // namespace mxe::dsp

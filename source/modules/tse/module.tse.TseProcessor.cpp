@@ -9,6 +9,40 @@
 
 namespace
 {
+struct ParameterOrderEntry
+{
+    const char* key;
+    const char* label;
+};
+
+inline constexpr auto tseMiscOrder = std::to_array<ParameterOrderEntry>({
+    { "bypass", "BYPASS" },
+    { "bypass_wt_gain", "BYPASS.WT-GAIN" },
+    { "in_gain_lr", "IN-GAIN-LR" },
+    { "in_gain_l", "IN-GAIN-L" },
+    { "in_gain_r", "IN-GAIN-R" },
+    { "in_wide", "IN-WIDE" },
+    { "out_gain", "OUT-GAIN" },
+});
+
+inline constexpr auto tseMainOrder = std::to_array<ParameterOrderEntry>({
+    { "trans_on", "TRANS.ON/OFF" },
+    { "sus_on", "SUS.ON/OFF" },
+    { "trans_gain", "TRANS.GAIN" },
+    { "sus_gain", "SUS.GAIN" },
+    { "hold", "HOLD" },
+    { "hold_mode", "HOLD MODE" },
+    { "hold_sync", "HOLD SYNC" },
+    { "release", "RELEASE" },
+    { "release_mode", "RELEASE MODE" },
+    { "release_sync", "RELEASE SYNC" },
+    { "rel_curve", "REL-CURVE" },
+    { "sens_lvl", "SENS.LVL" },
+    { "sens_knee", "SENS.KNEE" },
+    { "sens_retr", "SENS.RETR" },
+    { "lookahead", "LOOKAHEAD" },
+});
+
 juce::String formatDecibelValue(const float value)
 {
     return juce::String::formatted("%.1f dB", static_cast<double>(value));
@@ -71,7 +105,7 @@ float getHostSyncMilliseconds(const int choiceIndex, const double bpm) noexcept
 
 TseModuleProcessor::TseModuleProcessor(juce::AudioProcessor& owner)
     : ownerProcessor(owner),
-    parameters(ownerProcessor, nullptr, "tse_state", createParameterLayout())
+    parameters(internalParameterHost, nullptr, "tse_state", createParameterLayout())
 {
     transOnParam = parameters.getRawParameterValue(paramTransOnId);
     transGainParam = parameters.getRawParameterValue(paramTransGainId);
@@ -145,6 +179,16 @@ void TseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
     if (settings.bypassed)
         return;
 
+    if (settings.bypassedWithGain)
+    {
+        const auto outputGain = juce::Decibels::decibelsToGain(settings.outGainDb);
+
+        if (std::abs(outputGain - 1.0f) > 1.0e-6f)
+            buffer.applyGain(outputGain);
+
+        return;
+    }
+
     const auto wideAmount = juce::jlimit(0.0f,
                                          4.0f,
                                          getParameterValue(wideParam, 100.0f) / 100.0f);
@@ -174,16 +218,6 @@ void TseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
 
     if (channelsToUse > 1 && std::abs(effectiveInGainRDb) > 1.0e-6f)
         buffer.applyGain(1, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveInGainRDb));
-
-    if (settings.bypassedWithGain)
-    {
-        const auto outputGain = juce::Decibels::decibelsToGain(settings.outGainDb);
-
-        if (std::abs(outputGain - 1.0f) > 1.0e-6f)
-            buffer.applyGain(outputGain);
-
-        return;
-    }
 
     for (auto sampleIndex = 0; sampleIndex < buffer.getNumSamples(); ++sampleIndex)
     {
@@ -284,7 +318,7 @@ TransientSplitSettings TseModuleProcessor::getSplitSettings() const noexcept
         releaseHostSync ? getHostSyncMilliseconds(releaseSyncIndex, hostBpm)
                         : juce::jlimit(1.0f, 500.0f, getParameterValue(releaseParam, 10.0f)),
         juce::jlimit(-100.0f, 100.0f, getParameterValue(releaseCurveParam, 0.0f)),
-        juce::jlimit(-80.0f, 0.0f, getParameterValue(thresholdParam, -42.0f)),
+        juce::jlimit(-48.0f, 0.0f, getParameterValue(thresholdParam, -48.0f)),
         juce::jlimit(0.0f, 24.0f, getParameterValue(kneeParam, 0.0f)),
         juce::jlimit(0.0f, 250.0f, getParameterValue(retriggerParam, 100.0f)),
         juce::jlimit(0.0f, 20.0f, getParameterValue(lookaheadParam, 1.0f))
@@ -297,214 +331,312 @@ juce::AudioProcessorValueTreeState::ParameterLayout TseModuleProcessor::createPa
     const juce::StringArray timeModeChoices { "M", "T" };
     const auto makeTseName = [] (const juce::String& tabName, const juce::String& parameterName)
     {
-        return "TSE - " + tabName + " - " + parameterName;
+        return tabName + " - " + parameterName;
     };
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID { paramBypassId, 1 },
-        makeTseName("MISC", "BYPASS"),
-        false,
-        juce::AudioParameterBoolAttributes().withAutomatable(true)));
+    for (const auto& entry : tseMiscOrder)
+    {
+        const auto key = juce::String(entry.key);
+        const auto name = makeTseName("MISC", entry.label);
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID { paramBypassWithGainId, 1 },
-        makeTseName("MISC", "BYPASS.WT-GAIN"),
-        false,
-        juce::AudioParameterBoolAttributes().withAutomatable(true)));
+        if (key == "bypass")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
+                juce::ParameterID { paramBypassId, 1 },
+                name,
+                false,
+                juce::AudioParameterBoolAttributes()));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramMiscInGainLrId, 1 },
-        makeTseName("MISC", "IN-GAIN-LR"),
-        juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "bypass_wt_gain")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
+                juce::ParameterID { paramBypassWithGainId, 1 },
+                name,
+                false,
+                juce::AudioParameterBoolAttributes()));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramMiscInGainLId, 1 },
-        makeTseName("MISC", "IN-GAIN-L"),
-        juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "in_gain_lr")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramMiscInGainLrId, 1 },
+                name,
+                juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramMiscInGainRId, 1 },
-        makeTseName("MISC", "IN-GAIN-R"),
-        juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "in_gain_l")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramMiscInGainLId, 1 },
+                name,
+                juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramMiscWideId, 1 },
-        makeTseName("MISC", "WIDE"),
-        juce::NormalisableRange<float> { 0.0f, 400.0f, 0.1f },
-        100.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return juce::String::formatted("%.0f", static_cast<double>(value));
-            })));
+        if (key == "in_gain_r")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramMiscInGainRId, 1 },
+                name,
+                juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramMiscOutGainId, 1 },
-        makeTseName("MISC", "OUT-GAIN"),
-        juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "in_wide")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramMiscWideId, 1 },
+                name,
+                juce::NormalisableRange<float> { 0.0f, 400.0f, 0.1f },
+                100.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return juce::String::formatted("%.0f", static_cast<double>(value));
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID { paramTransOnId, 1 },
-        makeTseName("STEREO", "TRANS.ON/OFF"),
-        true,
-        juce::AudioParameterBoolAttributes().withAutomatable(true)));
+        if (key == "out_gain")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramMiscOutGainId, 1 },
+                name,
+                juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+        }
+    }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
-        juce::ParameterID { paramSusOnId, 1 },
-        makeTseName("STEREO", "SUS.ON/OFF"),
-        true,
-        juce::AudioParameterBoolAttributes().withAutomatable(true)));
+    for (const auto& entry : tseMainOrder)
+    {
+        const auto key = juce::String(entry.key);
+        const auto name = makeTseName("MAIN", entry.label);
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramTransGainId, 1 },
-        makeTseName("STEREO", "TRANS.GAIN"),
-        juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "trans_on")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
+                juce::ParameterID { paramTransOnId, 1 },
+                name,
+                true,
+                juce::AudioParameterBoolAttributes()));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramSusGainId, 1 },
-        makeTseName("STEREO", "SUS.GAIN"),
-        juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "sus_on")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
+                juce::ParameterID { paramSusOnId, 1 },
+                name,
+                true,
+                juce::AudioParameterBoolAttributes()));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramTimeHoldId, 1 },
-        makeTseName("STEREO", "HOLD"),
-        juce::NormalisableRange<float> { 0.0f, 200.0f, 1.0f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatTimeValue(value);
-            })));
+        if (key == "trans_gain")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramTransGainId, 1 },
+                name,
+                juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID { paramTimeHoldModeId, 1 },
-        makeTseName("STEREO", "HOLD MODE"),
-        timeModeChoices,
-        0,
-        juce::AudioParameterChoiceAttributes().withAutomatable(true)));
+        if (key == "sus_gain")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramSusGainId, 1 },
+                name,
+                juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID { paramTimeHoldSyncId, 1 },
-        makeTseName("STEREO", "HOLD SYNC"),
-        getHostSyncChoices(),
-        getDefaultHostSyncChoiceIndex(),
-        juce::AudioParameterChoiceAttributes().withAutomatable(true)));
+        if (key == "hold")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramTimeHoldId, 1 },
+                name,
+                juce::NormalisableRange<float> { 0.0f, 200.0f, 1.0f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatTimeValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramTimeReleaseId, 1 },
-        makeTseName("STEREO", "RELEASE"),
-        juce::NormalisableRange<float> { 1.0f, 500.0f, 1.0f },
-        10.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatTimeValue(value);
-            })));
+        if (key == "hold_mode")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
+                juce::ParameterID { paramTimeHoldModeId, 1 },
+                name,
+                timeModeChoices,
+                0,
+                juce::AudioParameterChoiceAttributes()));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID { paramTimeReleaseModeId, 1 },
-        makeTseName("STEREO", "RELEASE MODE"),
-        timeModeChoices,
-        0,
-        juce::AudioParameterChoiceAttributes().withAutomatable(true)));
+        if (key == "hold_sync")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
+                juce::ParameterID { paramTimeHoldSyncId, 1 },
+                name,
+                getHostSyncChoices(),
+                getDefaultHostSyncChoiceIndex(),
+                juce::AudioParameterChoiceAttributes()));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
-        juce::ParameterID { paramTimeReleaseSyncId, 1 },
-        makeTseName("STEREO", "RELEASE SYNC"),
-        getHostSyncChoices(),
-        getDefaultHostSyncChoiceIndex(),
-        juce::AudioParameterChoiceAttributes().withAutomatable(true)));
+        if (key == "release")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramTimeReleaseId, 1 },
+                name,
+                juce::NormalisableRange<float> { 1.0f, 500.0f, 1.0f },
+                10.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatTimeValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramTimeReleaseCurveId, 1 },
-        makeTseName("STEREO", "REL-CURVE"),
-        juce::NormalisableRange<float> { -100.0f, 100.0f, 1.0f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatCurveValue(value);
-            })));
+        if (key == "release_mode")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
+                juce::ParameterID { paramTimeReleaseModeId, 1 },
+                name,
+                timeModeChoices,
+                0,
+                juce::AudioParameterChoiceAttributes()));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramSensLevelId, 1 },
-        makeTseName("STEREO", "SENS.LVL"),
-        juce::NormalisableRange<float> { -80.0f, 0.0f, 0.1f },
-        -42.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "release_sync")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
+                juce::ParameterID { paramTimeReleaseSyncId, 1 },
+                name,
+                getHostSyncChoices(),
+                getDefaultHostSyncChoiceIndex(),
+                juce::AudioParameterChoiceAttributes()));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramSensKneeId, 1 },
-        makeTseName("STEREO", "SENS.KNEE"),
-        juce::NormalisableRange<float> { 0.0f, 24.0f, 0.1f },
-        0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatDecibelValue(value);
-            })));
+        if (key == "rel_curve")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramTimeReleaseCurveId, 1 },
+                name,
+                juce::NormalisableRange<float> { -100.0f, 100.0f, 1.0f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatCurveValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramSensRetriggerId, 1 },
-        makeTseName("STEREO", "SENS.RETR"),
-        juce::NormalisableRange<float> { 0.0f, 250.0f, 1.0f },
-        100.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatTimeValue(value);
-            })));
+        if (key == "sens_lvl")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramSensLevelId, 1 },
+                name,
+                juce::NormalisableRange<float> { -48.0f, 0.0f, 0.1f },
+                -48.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+            continue;
+        }
 
-    parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-        juce::ParameterID { paramMiscLookaheadId, 1 },
-        makeTseName("STEREO", "LOOKAHEAD"),
-        juce::NormalisableRange<float> { 0.0f, 20.0f, 0.01f },
-        1.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable(true).withStringFromValueFunction(
-            [] (float value, int)
-            {
-                return formatLookaheadValue(value);
-            })));
+        if (key == "sens_knee")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramSensKneeId, 1 },
+                name,
+                juce::NormalisableRange<float> { 0.0f, 24.0f, 0.1f },
+                0.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatDecibelValue(value);
+                    })));
+            continue;
+        }
+
+        if (key == "sens_retr")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramSensRetriggerId, 1 },
+                name,
+                juce::NormalisableRange<float> { 0.0f, 250.0f, 1.0f },
+                100.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatTimeValue(value);
+                    })));
+            continue;
+        }
+
+        if (key == "lookahead")
+        {
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID { paramMiscLookaheadId, 1 },
+                name,
+                juce::NormalisableRange<float> { 0.0f, 20.0f, 0.01f },
+                1.0f,
+                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
+                    [] (float value, int)
+                    {
+                        return formatLookaheadValue(value);
+                    })));
+        }
+    }
 
     return { parameterLayout.begin(), parameterLayout.end() };
 }

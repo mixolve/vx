@@ -6,15 +6,14 @@
 
 namespace
 {
-const std::array<juce::Identifier, 15>& editorWindowAndVisualizerStateProperties()
+const std::array<juce::Identifier, 13>& editorWindowAndVisualizerStateProperties()
 {
-    static const std::array<juce::Identifier, 15> properties
+    static const std::array<juce::Identifier, 13> properties
     {
         VxAudioProcessor::editorWidthStateKey,
         VxAudioProcessor::editorHeightStateKey,
         "editor_eqe_module_expanded",
         "editor_visualizer_expanded",
-        "editor_visualizer_visible",
         "editor_visualizer_range_low",
         "editor_visualizer_range_high",
         "editor_visualizer_cursor_enabled",
@@ -23,8 +22,7 @@ const std::array<juce::Identifier, 15>& editorWindowAndVisualizerStateProperties
         "editor_visualizer_show_right",
         "editor_visualizer_show_mid",
         "editor_visualizer_show_side",
-        "editor_last_collapsed_width",
-        "editor_last_visualizer_width"
+        "editor_last_collapsed_width"
     };
 
     return properties;
