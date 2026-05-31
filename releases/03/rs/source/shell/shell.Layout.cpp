@@ -13,9 +13,43 @@ juce::Rectangle<int> VxAudioProcessorEditor::getGlobalHeaderBounds() const noexc
                                     : juce::Rectangle<int>();
 }
 
-juce::Rectangle<int> VxAudioProcessorEditor::getMainPanelBounds() const noexcept
+juce::Rectangle<int> VxAudioProcessorEditor::getInfoPromptAnchorBounds() const noexcept
 {
-    return getLocalBounds();
+    if (shellGlobalHeader != nullptr
+        && shellGlobalHeader->isVisible()
+        && ! shellGlobalHeader->getBounds().isEmpty())
+        return shellGlobalHeader->getBounds();
+
+    if (footerTab != nullptr && ! footerTab->getBounds().isEmpty())
+        return footerTab->getBounds();
+
+    return {};
+}
+
+juce::Rectangle<int> VxAudioProcessorEditor::getInfoPromptVisibleBounds() const noexcept
+{
+    auto visibleBounds = getLocalBounds();
+
+    if (shellGlobalHeader != nullptr
+        && shellGlobalHeader->isVisible()
+        && ! shellGlobalHeader->getBounds().isEmpty())
+    {
+        visibleBounds.setTop(shellGlobalHeader->getY());
+    }
+    else if (eqeModuleFrame != nullptr
+             && eqeModuleFrame->isVisible()
+             && ! eqeModuleFrame->getBounds().isEmpty())
+    {
+        visibleBounds.setTop(eqeModuleFrame->getY() + moduleFrameInsetY);
+    }
+
+    if (footerTab != nullptr && ! footerTab->getBounds().isEmpty())
+        visibleBounds.setBottom(juce::jmax(visibleBounds.getY(), footerTab->getBottom()));
+
+    if (visibleBounds.getHeight() <= 0)
+        return getLocalBounds();
+
+    return visibleBounds;
 }
 
 int VxAudioProcessorEditor::getFilterContentHeight() const
@@ -149,7 +183,7 @@ int VxAudioProcessorEditor::getShellGlobalContentHeight() const
     return miscExpandedHeight;
 }
 
-void VxAudioProcessorEditor::updateVisualizerPanelBounds(juce::Rectangle<int>& bounds)
+void VxAudioProcessorEditor::updateVisualizerPanelBounds()
 {
     lastCollapsedEditorWidth = juce::jmax(minimumEditorWidth, getWidth());
 
@@ -211,10 +245,6 @@ void VxAudioProcessorEditor::layoutShellGlobalSection(juce::Rectangle<int>& boun
         if (! shellGlobalContentBounds.isEmpty())
             shellGlobalContentBounds.removeFromBottom(verticalGap);
 
-        auto shellGlobalFrameContentBounds = shellGlobalContentBounds;
-        shellGlobalFrameContentBounds.removeFromLeft(editorInsetX);
-        shellGlobalFrameContentBounds.removeFromRight(editorInsetX);
-
         auto placeShellGlobalControl = [&shellGlobalContentBounds, editorInsetX] (auto& control)
         {
             auto controlBounds = shellGlobalContentBounds.removeFromTop(control.getPreferredHeight());
@@ -241,7 +271,6 @@ void VxAudioProcessorEditor::layoutShellGlobalSection(juce::Rectangle<int>& boun
         {
             includeComponentBounds(shellMiscFrameBounds, shellGlobalMiscHeader.get());
             includeComponentBounds(shellMiscFrameBounds, shellGlobalHostHeader.get());
-            includeBounds(shellMiscFrameBounds, shellGlobalFrameContentBounds);
 
             placeSectionFrame(shellGlobalSectionFrame.get(), shellGlobalExpanded, shellMiscFrameBounds);
 
@@ -253,16 +282,18 @@ void VxAudioProcessorEditor::layoutShellGlobalSection(juce::Rectangle<int>& boun
 
         if (shellGlobalHostExpanded)
         {
-            auto hostViewportBounds = shellGlobalContentBounds;
-            hostViewportBounds.removeFromLeft(editorInsetX);
-            hostViewportBounds.removeFromRight(editorInsetX);
-            shellGlobalHostViewport.setVisible(true);
-            shellGlobalHostViewport.setBounds(hostViewportBounds);
-
             const auto slotCount = static_cast<int>(hostSlotButtons.size());
             const auto hostContentHeight = slotCount > 0
                 ? (slotCount * rowHeight) + ((slotCount - 1) * verticalGap)
                 : 0;
+
+            auto hostViewportBounds = shellGlobalContentBounds;
+            hostViewportBounds.removeFromLeft(editorInsetX);
+            hostViewportBounds.removeFromRight(editorInsetX);
+            hostViewportBounds.setHeight(juce::jmin(hostViewportBounds.getHeight(), hostContentHeight));
+            shellGlobalHostViewport.setVisible(true);
+            shellGlobalHostViewport.setBounds(hostViewportBounds);
+
             shellGlobalHostContent.setSize(hostViewportBounds.getWidth(),
                                            juce::jmax(hostViewportBounds.getHeight(), hostContentHeight));
 
@@ -299,7 +330,6 @@ void VxAudioProcessorEditor::layoutShellGlobalSection(juce::Rectangle<int>& boun
 
         includeComponentBounds(shellMiscFrameBounds, shellGlobalMiscHeader.get());
         includeComponentBounds(shellMiscFrameBounds, shellGlobalHostHeader.get());
-        includeBounds(shellMiscFrameBounds, shellGlobalFrameContentBounds);
         includeComponentBounds(shellMiscFrameBounds, moduleAddButton.get());
         includeComponentBounds(shellMiscFrameBounds, clipControl.get());
         includeComponentBounds(shellMiscFrameBounds, globalBypassButton.get());
@@ -451,7 +481,7 @@ void VxAudioProcessorEditor::resized()
 
     auto bounds = getLocalBounds();
 
-    updateVisualizerPanelBounds(bounds);
+    updateVisualizerPanelBounds();
 
     const auto editorInsetX = getEditorInsetX(bounds.getWidth());
     const auto totalHeight = bounds.getHeight();

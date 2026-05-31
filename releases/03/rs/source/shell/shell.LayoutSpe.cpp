@@ -4,6 +4,12 @@
 
 void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bounds, const int editorInsetX)
 {
+    auto moduleViewportBounds = bounds;
+    if (! moduleViewportBounds.isEmpty())
+        moduleViewportBounds.removeFromBottom(addFilterToFooterGap);
+    moduleViewportBounds.removeFromLeft(editorInsetX);
+    moduleViewportBounds.removeFromRight(editorInsetX);
+
     auto placeSpeHeader = [&bounds, editorInsetX] (BoxTextButton& header)
     {
         auto headerBounds = bounds.removeFromTop(rowHeight);
@@ -223,6 +229,7 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
     if (! shellGlobalExpanded)
     {
         includeModuleTabRowBounds(moduleFrameBounds);
+        includeBounds(moduleFrameBounds, moduleViewportBounds);
 
         includeComponentBounds(moduleFrameBounds, speAnalyserComponent.get());
 

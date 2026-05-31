@@ -82,8 +82,8 @@ public:
                           std::function<void()> onClose = {},
                           std::function<void()> onDismiss = {});
     juce::Rectangle<int> getGlobalHeaderBounds() const noexcept;
-    juce::Rectangle<int> getMainPanelBounds() const noexcept;
-
+    juce::Rectangle<int> getInfoPromptAnchorBounds() const noexcept;
+    juce::Rectangle<int> getInfoPromptVisibleBounds() const noexcept;
 private:
     void dismissTextPrompt();
     void timerCallback() override;
@@ -141,7 +141,7 @@ private:
     int getSpeAnalyserContentHeight() const;
     int getSpeSectionContentHeight() const;
     int getActiveBellCount() const noexcept;
-    void updateVisualizerPanelBounds(juce::Rectangle<int>& bounds);
+    void updateVisualizerPanelBounds();
     void layoutShellGlobalSection(juce::Rectangle<int>& bounds, int editorInsetX);
     void layoutFooter(juce::Rectangle<int>& bounds, int editorInsetX);
     void layoutModuleTabRows(juce::Rectangle<int>& bounds, int editorInsetX);

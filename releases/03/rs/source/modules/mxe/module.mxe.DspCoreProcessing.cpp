@@ -26,19 +26,6 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
     const auto posR = std::max(inR, 0.0);
     const auto negR = std::min(inR, 0.0);
 
-    const auto morphHalfWave = [this] (const double value, const double threshold)
-    {
-        if (threshold <= epsilon)
-            return 0.0;
-
-        const auto normalisedValue = value / threshold;
-        
-        if (derived.morph >= 1.0 - epsilon)
-            return threshold * clamp1(normalisedValue);
-
-        return threshold * satShape(normalisedValue, derived.clipKneeDb);
-    };
-
     // Feed detector/release from pre-clip half-waves; clipped path is only for output blend.
     std::array<double, branchCount> branchDetectorInput {
         posL,

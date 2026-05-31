@@ -1,8 +1,6 @@
 #include "shell.EditorBellSection.h"
 #include "shell.Constants.h"
 #include "shell.EditorPresetSections.h"
-#include "../modules/mxe/module.mxe.ModuleComponent.h"
-#include "module.tse.Component.h"
 
 void VxAudioProcessorEditor::includeBounds(juce::Rectangle<int>& sectionBounds,
                                            const juce::Rectangle<int>& boundsToInclude) const
@@ -67,12 +65,27 @@ juce::Rectangle<int> VxAudioProcessorEditor::buildShellGlobalFrameBounds() const
     juce::Rectangle<int> moduleFrameBounds;
     includeComponentBounds(moduleFrameBounds, shellGlobalHeader.get());
 
+    if (shellGlobalHeader != nullptr
+        && ! shellGlobalHeader->getBounds().isEmpty()
+        && footerTab != nullptr
+        && ! footerTab->getBounds().isEmpty())
+    {
+        auto shellGlobalViewportBounds = shellGlobalHeader->getBounds();
+        const auto fullViewportBottom = footerTab->getY() - addFilterToFooterGap - moduleFrameInsetY;
+
+        if (fullViewportBottom > shellGlobalViewportBounds.getBottom())
+            shellGlobalViewportBounds.setBottom(fullViewportBottom);
+
+        includeBounds(moduleFrameBounds, shellGlobalViewportBounds);
+    }
+
     if (shellGlobalSectionFrame != nullptr
         && shellGlobalSectionFrame->isVisible()
         && ! shellGlobalSectionFrame->getBounds().isEmpty())
     {
         auto shellGlobalSectionRawBounds = shellGlobalSectionFrame->getBounds();
-        shellGlobalSectionRawBounds = shellGlobalSectionRawBounds.reduced(internalFrameInsetX, internalFrameInsetY);
+        shellGlobalSectionRawBounds.removeFromLeft(internalFrameInsetX);
+        shellGlobalSectionRawBounds.removeFromRight(internalFrameInsetX);
         includeBounds(moduleFrameBounds, shellGlobalSectionRawBounds);
     }
 
@@ -94,7 +107,7 @@ void VxAudioProcessorEditor::includeModuleTabRowBounds(juce::Rectangle<int>& sec
 
 void VxAudioProcessorEditor::layoutNoModuleState(juce::Rectangle<int>&)
 {
-    placeModuleFrame(eqeModuleFrame.get(), shellGlobalExpanded, buildShellGlobalFrameBounds());
+    layoutCollapsedModuleState();
 }
 
 void VxAudioProcessorEditor::layoutCollapsedModuleState()
@@ -126,16 +139,11 @@ void VxAudioProcessorEditor::layoutModuleEditorContent(juce::Rectangle<int>& bou
     {
         includeModuleTabRowBounds(moduleFrameBounds);
 
-        if (auto* mxeComponent = dynamic_cast<MxeModuleComponent*>(mxeModuleEditor.get());
-            mxeComponent != nullptr && mxeModuleLoaded)
-            includeBounds(moduleFrameBounds, mxeComponent->getContentBounds().translated(mxeComponent->getX(), mxeComponent->getY()));
-        else if (auto* tseComponent = dynamic_cast<TseModuleComponent*>(tseModuleEditor.get());
-                 tseComponent != nullptr && tseModuleLoaded)
-            includeBounds(moduleFrameBounds, tseComponent->getContentBounds().translated(tseComponent->getX(), tseComponent->getY()));
-        else if (mxeModuleLoaded)
-            includeComponentBounds(moduleFrameBounds, mxeModuleEditor.get());
-        else
-            includeComponentBounds(moduleFrameBounds, tseModuleEditor.get());
+        auto moduleViewportBounds = contentBounds;
+        const auto editorInsetX = getEditorInsetX(getWidth());
+        moduleViewportBounds.removeFromLeft(editorInsetX);
+        moduleViewportBounds.removeFromRight(editorInsetX);
+        includeBounds(moduleFrameBounds, moduleViewportBounds);
     }
 
     placeModuleFrame(eqeModuleFrame.get(), true, moduleFrameBounds);

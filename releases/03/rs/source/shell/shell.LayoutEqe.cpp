@@ -4,11 +4,17 @@
 
 void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bounds, const int editorInsetX)
 {
+    auto moduleViewportBounds = bounds;
+    if (! moduleViewportBounds.isEmpty())
+        moduleViewportBounds.removeFromBottom(addFilterToFooterGap);
+    moduleViewportBounds.removeFromLeft(editorInsetX);
+    moduleViewportBounds.removeFromRight(editorInsetX);
+
     if (! bounds.isEmpty())
         bounds.removeFromBottom(addFilterToFooterGap);
 
     if (! bounds.isEmpty())
-        bounds.removeFromBottom(addFilterToPresetsGap);
+        bounds.removeFromBottom(moduleFrameInsetY);
 
     auto presetsBounds = bounds.removeFromBottom(juce::jmin(bounds.getHeight(),
                                                             rowHeight + (presetsExpanded ? verticalGap + presetsSection->getPresetRowPreferredHeight() : 0)));
@@ -278,6 +284,7 @@ void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bound
     if (! shellGlobalExpanded && eqeModuleExpanded)
     {
         includeModuleTabRowBounds(moduleFrameBounds);
+        includeBounds(moduleFrameBounds, moduleViewportBounds);
 
         includeComponentBounds(moduleFrameBounds, globalHeader.get());
         includeComponentBounds(moduleFrameBounds, filtersHeader.get());

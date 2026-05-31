@@ -14,6 +14,19 @@ public:
     {
     }
 
+#if JUCE_IOS
+    void mouseDown(const juce::MouseEvent&) override
+    {
+        touchDragStartValue = getValue();
+    }
+
+    void mouseDrag(const juce::MouseEvent& event) override
+    {
+        const auto height = juce::jmax(1, getHeight());
+        const auto delta = -static_cast<double>(event.getDistanceFromDragStartY()) / static_cast<double>(height);
+        setValue(juce::jlimit(0.0, 1.0, touchDragStartValue + delta), juce::sendNotificationSync);
+    }
+#else
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override
     {
         auto scaledWheel = wheel;
@@ -22,6 +35,12 @@ public:
         scaledWheel.deltaY *= scale;
         juce::Slider::mouseWheelMove(event, scaledWheel);
     }
+#endif
+
+private:
+#if JUCE_IOS
+    double touchDragStartValue = 0.0;
+#endif
 };
 }
 
@@ -59,12 +78,16 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     focusedParameterControl->setSliderStyle(juce::Slider::LinearBarVertical);
     focusedParameterControl->setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     focusedParameterControl->setSliderSnapsToMousePosition(false);
+#if JUCE_IOS
+    focusedParameterControl->setVelocityBasedMode(false);
+#else
     focusedParameterControl->setVelocityBasedMode(true);
     focusedParameterControl->setMouseDragSensitivity(focusedParameterDragSensitivity);
     focusedParameterControl->setVelocityModeParameters(static_cast<double>(juce::jmax(1, focusedParameterDragSensitivity)),
                                                        1,
                                                        0.0,
                                                        false);
+#endif
     focusedParameterControl->setScrollWheelEnabled(true);
     focusedParameterControl->setColour(juce::Slider::backgroundColourId, uiGrey800);
     focusedParameterControl->setColour(juce::Slider::trackColourId, uiGrey500);
