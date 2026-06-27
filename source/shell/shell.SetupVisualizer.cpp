@@ -9,25 +9,6 @@
 
 namespace
 {
-class SectionFrameComponent final : public juce::Component
-{
-public:
-    explicit SectionFrameComponent(const juce::Colour outline)
-        : outlineColour(outline)
-    {
-        setInterceptsMouseClicks(false, false);
-    }
-
-    void paint(juce::Graphics& g) override
-    {
-        g.setColour(outlineColour);
-        g.drawRect(getLocalBounds(), frameLineThickness);
-    }
-
-private:
-    juce::Colour outlineColour;
-};
-
 constexpr auto visualizerMinFrequency = 20.0f;
 constexpr auto visualizerMarkerDiameter = 20.0f;
 constexpr auto visualizerMarkerGap = uiGapFloat;
@@ -721,11 +702,6 @@ namespace shell_setup_support
 juce::String getMixolveInfoMarkdown()
 {
     return juce::String::fromUTF8(BinaryData::about_md, BinaryData::about_mdSize);
-}
-
-std::unique_ptr<juce::Component> createSectionFrameComponent(const juce::Colour outline)
-{
-    return std::make_unique<SectionFrameComponent>(outline);
 }
 
 std::unique_ptr<juce::Component> createEqResponseVisualizerComponent(VxAudioProcessor& processor,

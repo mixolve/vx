@@ -487,17 +487,6 @@ public:
             }
         }
 
-        if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
-        {
-            const auto globalHeaderBounds = owner->getGlobalHeaderBounds();
-
-            if (! globalHeaderBounds.isEmpty())
-            {
-                textEditor.setBounds(globalHeaderBounds);
-                return;
-            }
-        }
-
         const auto visibleBounds = getVisibleBounds();
         const auto editorInsetX = getEditorInsetX(getWidth());
         const auto editorInsetTop = juce::roundToInt(static_cast<float>(juce::jmax(0, visibleBounds.getHeight())) * editorInsetTopRatio);
@@ -874,11 +863,11 @@ public:
         if (anchorBounds.isEmpty())
             anchorBounds = panelVisibleBounds;
 
-        const auto desiredWidth = juce::jmax(1, juce::jmin(anchorBounds.getWidth(), panelVisibleBounds.getWidth()));
+        const auto desiredWidth = juce::jmax(1, panelVisibleBounds.getWidth());
         const auto desiredHeight = juce::jmax(1, panelVisibleBounds.getHeight());
 
         panelBounds = juce::Rectangle<int>(desiredWidth, desiredHeight);
-        panelBounds.setX(anchorBounds.getX());
+        panelBounds.setX(panelVisibleBounds.getX());
         panelBounds.setY(panelVisibleBounds.getY());
         panelBounds = panelBounds.constrainedWithin(panelVisibleBounds);
 
@@ -980,7 +969,6 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
 {
     dismissTextPrompt();
 
-    const auto preservedGlobalScrollY = globalViewport.getViewPositionY();
     const auto preservedFilterScrollY = filterViewport.getViewPositionY();
 
     auto* prompt = new FloatingTextPrompt(currentText,
@@ -998,12 +986,6 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
     textPromptOverlay.reset(prompt);
     addAndMakeVisible(*textPromptOverlay);
     resized();
-
-    if (globalViewport.isVisible())
-    {
-        const auto maxOffset = juce::jmax(0, getActiveGlobalContentHeight() - globalViewport.getHeight());
-        globalViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedGlobalScrollY));
-    }
 
     if (filterViewport.isVisible())
     {

@@ -9,10 +9,6 @@ VxAudioProcessorEditor::BellSection::BellSection(juce::AudioProcessorValueTreeSt
                                                   EqeModuleProcessor::getFilterTypeParamId(bandIndexIn),
                                                   "TYPE",
                                                   std::vector<int> { 0, 1, 2, 3, 4, 5 })),
-      ttssControl(std::make_unique<ChoiceControl>(state,
-                                                  EqeModuleProcessor::getFilterTtssParamId(bandIndexIn),
-                                                  "TTSS",
-                                                  std::vector<int> { 0, 1, 2 })),
       lrmsControl(std::make_unique<ChoiceControl>(state,
                                                   EqeModuleProcessor::getFilterLrmsParamId(bandIndexIn),
                                                   "PLACE",
@@ -91,9 +87,6 @@ void VxAudioProcessorEditor::BellSection::detach() noexcept
     if (typeControl != nullptr)
         typeControl->detach();
 
-    if (ttssControl != nullptr)
-        ttssControl->detach();
-
     if (lrmsControl != nullptr)
         lrmsControl->detach();
 
@@ -121,7 +114,6 @@ void VxAudioProcessorEditor::BellSection::detach() noexcept
 void VxAudioProcessorEditor::BellSection::rebind(juce::AudioProcessorValueTreeState& state)
 {
     typeControl->rebind(state);
-    ttssControl->rebind(state);
     lrmsControl->rebind(state);
     slopeControl->rebind(state);
     frequencyControl->rebind(state);

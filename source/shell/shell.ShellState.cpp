@@ -6,11 +6,10 @@
 
 namespace
 {
-const std::array<juce::Identifier, 13> editorWindowAndVisualizerStateProperties
+const std::array<juce::Identifier, 12> editorWindowAndVisualizerStateProperties
 {
     VxAudioProcessor::editorWidthStateKey,
     VxAudioProcessor::editorHeightStateKey,
-    "editor_eqe_module_expanded",
     "editor_visualizer_expanded",
     "editor_visualizer_range_low",
     "editor_visualizer_range_high",

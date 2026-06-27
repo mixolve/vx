@@ -1,4 +1,4 @@
-#include "shell.EditorStyle.h"
+#include "shell.UiStyle.h"
 #include "shell.Editor.h"
 
 #include <cmath>

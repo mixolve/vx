@@ -1,124 +1,31 @@
 #include "shell.EditorBellSection.h"
-#include "shell.Constants.h"
+#include "shell.UiConstants.h"
 #include "shell.EditorPresetSections.h"
 
-void VxAudioProcessorEditor::includeBounds(juce::Rectangle<int>& sectionBounds,
-                                           const juce::Rectangle<int>& boundsToInclude) const
+void VxAudioProcessorEditor::layoutNoModuleState(juce::Rectangle<int>& bounds)
 {
-    if (boundsToInclude.isEmpty())
+    if (moduleAddButton == nullptr || ! moduleAddButton->isVisible())
         return;
 
-    sectionBounds = sectionBounds.isEmpty() ? boundsToInclude
-                                           : sectionBounds.getUnion(boundsToInclude);
-}
-
-void VxAudioProcessorEditor::includeComponentBounds(juce::Rectangle<int>& sectionBounds,
-                                                    const juce::Component* component) const
-{
-    if (component == nullptr || ! component->isVisible() || component->getBounds().isEmpty())
-        return;
-
-    includeBounds(sectionBounds, component->getBounds());
-}
-
-namespace
-{
-void placeFrameWithInsets(juce::Component* frame,
-                          const bool shouldShow,
-                          juce::Rectangle<int> sectionBounds,
-                          const juce::Rectangle<int>& editorBounds,
-                          const int insetX,
-                          const int insetY)
-{
-    if (frame == nullptr)
-        return;
-
-    frame->setVisible(shouldShow && ! sectionBounds.isEmpty());
-
-    if (! frame->isVisible())
-    {
-        frame->setBounds({});
-        return;
-    }
-
-    frame->setBounds(sectionBounds.expanded(insetX, insetY).getIntersection(editorBounds));
-    frame->toFront(false);
-}
-}
-
-void VxAudioProcessorEditor::placeSectionFrame(juce::Component* frame,
-                                               const bool shouldShow,
-                                               juce::Rectangle<int> sectionBounds) const
-{
-    placeFrameWithInsets(frame, shouldShow, sectionBounds, getLocalBounds(), internalFrameInsetX, internalFrameInsetY);
-}
-
-void VxAudioProcessorEditor::placeModuleFrame(juce::Component* frame,
-                                              const bool shouldShow,
-                                              juce::Rectangle<int> sectionBounds) const
-{
-    placeFrameWithInsets(frame, shouldShow, sectionBounds, getLocalBounds(), moduleFrameInsetX, moduleFrameInsetY);
-}
-
-juce::Rectangle<int> VxAudioProcessorEditor::buildShellGlobalFrameBounds() const
-{
-    juce::Rectangle<int> moduleFrameBounds;
-    includeComponentBounds(moduleFrameBounds, shellGlobalHeader.get());
-
-    if (shellGlobalHeader != nullptr
-        && ! shellGlobalHeader->getBounds().isEmpty()
-        && footerTab != nullptr
-        && ! footerTab->getBounds().isEmpty())
-    {
-        auto shellGlobalViewportBounds = shellGlobalHeader->getBounds();
-        const auto fullViewportBottom = footerTab->getY() - addFilterToFooterGap - moduleFrameInsetY;
-
-        if (fullViewportBottom > shellGlobalViewportBounds.getBottom())
-            shellGlobalViewportBounds.setBottom(fullViewportBottom);
-
-        includeBounds(moduleFrameBounds, shellGlobalViewportBounds);
-    }
-
-    if (shellGlobalSectionFrame != nullptr
-        && shellGlobalSectionFrame->isVisible()
-        && ! shellGlobalSectionFrame->getBounds().isEmpty())
-    {
-        auto shellGlobalSectionRawBounds = shellGlobalSectionFrame->getBounds();
-        shellGlobalSectionRawBounds.removeFromLeft(internalFrameInsetX);
-        shellGlobalSectionRawBounds.removeFromRight(internalFrameInsetX);
-        includeBounds(moduleFrameBounds, shellGlobalSectionRawBounds);
-    }
-
-    return moduleFrameBounds;
-}
-
-void VxAudioProcessorEditor::includeModuleTabRowBounds(juce::Rectangle<int>& sectionBounds) const
-{
-    for (const auto& row : moduleTabRows)
-    {
-        if (row == nullptr)
-            continue;
-
-        includeComponentBounds(sectionBounds, row->moveUpButton.get());
-        includeComponentBounds(sectionBounds, row->tabButton.get());
-        includeComponentBounds(sectionBounds, row->moveDownButton.get());
-    }
-}
-
-void VxAudioProcessorEditor::layoutNoModuleState(juce::Rectangle<int>&)
-{
-    layoutCollapsedModuleState();
-}
-
-void VxAudioProcessorEditor::layoutCollapsedModuleState()
-{
-    placeModuleFrame(eqeModuleFrame.get(), shellGlobalExpanded, buildShellGlobalFrameBounds());
+    const auto footerWidth = footerTab != nullptr && ! footerTab->getBounds().isEmpty()
+        ? footerTab->getWidth()
+        : bounds.getWidth();
+    const auto buttonWidth = juce::jmin(bounds.getWidth(), footerWidth);
+    auto buttonBounds = juce::Rectangle<int>(buttonWidth, rowHeight);
+    buttonBounds.setCentre(bounds.getCentre());
+    moduleAddButton->setBounds(buttonBounds);
 }
 
 void VxAudioProcessorEditor::layoutModuleEditorContent(juce::Rectangle<int>& bounds)
 {
     auto contentBounds = bounds;
     contentBounds.removeFromBottom(addFilterToFooterGap);
+
+    if (mieModuleEditor != nullptr)
+    {
+        mieModuleEditor->setBounds(contentBounds);
+        mieModuleEditor->setVisible(mieModuleLoaded);
+    }
 
     if (mxeModuleEditor != nullptr)
     {
@@ -132,19 +39,4 @@ void VxAudioProcessorEditor::layoutModuleEditorContent(juce::Rectangle<int>& bou
         tseModuleEditor->setVisible(tseModuleLoaded);
     }
 
-    auto moduleFrameBounds = shellGlobalExpanded ? buildShellGlobalFrameBounds()
-                                                 : juce::Rectangle<int>();
-
-    if (! shellGlobalExpanded)
-    {
-        includeModuleTabRowBounds(moduleFrameBounds);
-
-        auto moduleViewportBounds = contentBounds;
-        const auto editorInsetX = getEditorInsetX(getWidth());
-        moduleViewportBounds.removeFromLeft(editorInsetX);
-        moduleViewportBounds.removeFromRight(editorInsetX);
-        includeBounds(moduleFrameBounds, moduleViewportBounds);
-    }
-
-    placeModuleFrame(eqeModuleFrame.get(), true, moduleFrameBounds);
 }

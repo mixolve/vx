@@ -26,7 +26,6 @@ std::unique_ptr<BoxTextButton> makeSectionButton(const juce::String& text, const
 }
 
 VxAudioProcessorEditor::PresetsSection::PresetsSection()
-    : header(std::make_unique<BoxTextButton>(uiAccent))
 {
     configurePresetCombo(presetCombo);
 
@@ -56,9 +55,6 @@ VxAudioProcessorEditor::PresetsSection::PresetsSection()
     };
 
     presetCombo.onReselectedCurrentItem = handlePresetSelection;
-
-    header->setButtonText("PRESETS");
-    header->setClickingTogglesState(true);
 }
 
 void VxAudioProcessorEditor::PresetsSection::beginRename()

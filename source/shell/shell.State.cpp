@@ -4,14 +4,7 @@
 namespace
 {
 constexpr auto editorBellDisplayOrderStateKey = "editor_bell_display_order";
-constexpr auto editorEqeModuleExpandedStateKey = "editor_eqe_module_expanded";
-constexpr auto editorShellGlobalExpandedStateKey = "editor_shell_global_expanded";
-constexpr auto editorShellGlobalMiscExpandedStateKey = "editor_shell_global_misc_expanded";
 constexpr auto editorShellGlobalHostExpandedStateKey = "editor_shell_global_host_expanded";
-constexpr auto editorGlobalExpandedStateKey = "editor_global_expanded";
-constexpr auto editorSpeMainExpandedStateKey = "editor_spe_main_expanded";
-constexpr auto editorFiltersExpandedStateKey = "editor_filters_expanded";
-constexpr auto editorPresetsExpandedStateKey = "editor_presets_expanded";
 constexpr auto editorVisualizerExpandedStateKey = "editor_visualizer_expanded";
 constexpr auto editorVisualizerRangeLowStateKey = "editor_visualizer_range_low";
 constexpr auto editorVisualizerRangeHighStateKey = "editor_visualizer_range_high";
@@ -22,7 +15,6 @@ constexpr auto editorVisualizerShowRightStateKey = "editor_visualizer_show_right
 constexpr auto editorVisualizerShowMidStateKey = "editor_visualizer_show_mid";
 constexpr auto editorVisualizerShowSideStateKey = "editor_visualizer_show_side";
 constexpr auto editorLastCollapsedWidthStateKey = "editor_last_collapsed_width";
-constexpr auto editorExpandedBellIndexStateKey = "editor_expanded_bell_index";
 
 juce::Point<int> clampEditorSize(const int width, const int height) noexcept
 {
@@ -116,57 +108,21 @@ const EqeModuleProcessor* VxAudioProcessorEditor::getActiveEqeProcessor() const 
 }
 
 
-void VxAudioProcessorEditor::openFiltersSection()
-{
-    if (! eqeModuleLoaded && ! speModuleLoaded && ! mxeModuleLoaded && ! tseModuleLoaded)
-        return;
-
-    const auto clickedExpanded = filtersExpanded
-        && ! globalExpanded
-        && ! speMainExpanded
-        && ! presetsExpanded
-        && ! visualizerExpanded
-        ;
-    filtersExpanded = ! clickedExpanded;
-    globalExpanded = false;
-    speMainExpanded = false;
-    presetsExpanded = false;
-    visualizerExpanded = false;
-
-    if (filtersExpanded)
-        filterViewport.setViewPosition(0, 0);
-
-    if (! filtersExpanded)
-        expandedBellIndex = -1;
-
-    storeEditorStateToValueTree();
-    updateSectionStates();
-    resized();
-}
-
 void VxAudioProcessorEditor::openVisualizerSection()
 {
     if (! speModuleLoaded)
         return;
 
-    const auto clickedExpanded = visualizerExpanded
-        && ! globalExpanded
-        && ! speMainExpanded
-        && ! filtersExpanded
-        && ! presetsExpanded;
+    const auto preservedFilterScrollY = filterViewport.getViewPositionY();
+    const auto clickedExpanded = visualizerExpanded;
     visualizerExpanded = ! clickedExpanded;
-    globalExpanded = false;
-    speMainExpanded = false;
-    filtersExpanded = false;
-    presetsExpanded = false;
-    expandedBellIndex = -1;
-
-    if (visualizerExpanded)
-        filterViewport.setViewPosition(0, 0);
 
     storeEditorStateToValueTree();
     updateSectionStates();
     resized();
+
+    const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+    filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedFilterScrollY));
 }
 
 void VxAudioProcessorEditor::clearAllFilters()
@@ -185,12 +141,7 @@ void VxAudioProcessorEditor::clearAllFilters()
         resetBellSectionStoredValues(bellIndex);
     }
 
-    globalExpanded = true;
-    speMainExpanded = false;
-    filtersExpanded = false;
-    presetsExpanded = false;
     visualizerExpanded = false;
-    expandedBellIndex = -1;
 
     storeEditorStateToValueTree();
     updateSectionStates();
@@ -232,37 +183,26 @@ void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
     const auto activeModule = audioProcessor.getActiveModule();
     eqeModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::eqe;
     speModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::spe;
+    mieModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::mie;
     mxeModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::mxe;
     tseModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::tse;
 
-    if (! eqeModuleLoaded && ! speModuleLoaded && ! mxeModuleLoaded && ! tseModuleLoaded)
+    if (! eqeModuleLoaded && ! speModuleLoaded && ! mieModuleLoaded && ! mxeModuleLoaded && ! tseModuleLoaded)
     {
         if (audioProcessor.isEqeModuleLoaded())
             eqeModuleLoaded = true;
         else if (audioProcessor.isSpeModuleLoaded())
             speModuleLoaded = true;
+        else if (audioProcessor.isMieModuleLoaded())
+            mieModuleLoaded = true;
         else if (audioProcessor.isMxeModuleLoaded())
             mxeModuleLoaded = true;
         else if (audioProcessor.isTseModuleLoaded())
             tseModuleLoaded = true;
     }
 
-    eqeModuleExpanded = (eqeModuleLoaded || speModuleLoaded || mxeModuleLoaded || tseModuleLoaded)
-        && static_cast<bool>(state.getProperty(editorEqeModuleExpandedStateKey, true));
-    shellGlobalExpanded = static_cast<bool>(state.getProperty(editorShellGlobalExpandedStateKey, false));
-    shellGlobalMiscExpanded = static_cast<bool>(state.getProperty(editorShellGlobalMiscExpandedStateKey, true));
     shellGlobalHostExpanded = static_cast<bool>(state.getProperty(editorShellGlobalHostExpandedStateKey, false));
 
-    if (shellGlobalMiscExpanded && shellGlobalHostExpanded)
-        shellGlobalMiscExpanded = false;
-
-    if (shellGlobalExpanded)
-        eqeModuleExpanded = false;
-
-    globalExpanded = state.getProperty(editorGlobalExpandedStateKey, false);
-    speMainExpanded = state.getProperty(editorSpeMainExpandedStateKey, false);
-    filtersExpanded = state.getProperty(editorFiltersExpandedStateKey, false);
-    presetsExpanded = state.getProperty(editorPresetsExpandedStateKey, false);
     visualizerExpanded = state.getProperty(editorVisualizerExpandedStateKey, false);
     visualizerCursorEnabled = state.getProperty(editorVisualizerCursorEnabledStateKey, true);
     visualizerShowStereo = state.getProperty(editorVisualizerShowStereoStateKey, true);
@@ -270,21 +210,9 @@ void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
     visualizerShowRight = state.getProperty(editorVisualizerShowRightStateKey, true);
     visualizerShowMid = state.getProperty(editorVisualizerShowMidStateKey, true);
     visualizerShowSide = state.getProperty(editorVisualizerShowSideStateKey, true);
-    expandedBellIndex = static_cast<int>(state.getProperty(editorExpandedBellIndexStateKey, -1));
-
-    if (! eqeModuleExpanded)
-    {
-        globalExpanded = false;
-        speMainExpanded = false;
-        filtersExpanded = false;
-        presetsExpanded = false;
-        visualizerExpanded = false;
-        expandedBellIndex = -1;
-    }
 
     if (! speModuleLoaded)
     {
-        speMainExpanded = false;
         visualizerExpanded = false;
     }
 
@@ -294,37 +222,10 @@ void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
     lastCollapsedEditorWidth = clampCollapsedEditorWidth(static_cast<int>(state.getProperty(editorLastCollapsedWidthStateKey,
                                                                                             minimumEditorWidth)));
 
-    if (globalExpanded)
+    if (eqeModuleLoaded)
     {
-        speMainExpanded = false;
-        filtersExpanded = false;
-        presetsExpanded = false;
         visualizerExpanded = false;
     }
-    else if (speMainExpanded)
-    {
-        filtersExpanded = false;
-        presetsExpanded = false;
-        visualizerExpanded = false;
-    }
-    else if (filtersExpanded)
-    {
-        presetsExpanded = false;
-        visualizerExpanded = false;
-    }
-    else if (presetsExpanded)
-    {
-        filtersExpanded = false;
-        visualizerExpanded = false;
-    }
-    else if (visualizerExpanded)
-    {
-        filtersExpanded = false;
-        presetsExpanded = false;
-    }
-
-    if (! filtersExpanded || ! juce::isPositiveAndBelow(expandedBellIndex, activeCount))
-        expandedBellIndex = -1;
 
     if (visualizerRangeHighDb < visualizerRangeLowDb + 6.0f)
         visualizerRangeHighDb = visualizerRangeLowDb + 6.0f;
@@ -397,45 +298,30 @@ void VxAudioProcessorEditor::storeEditorStateToValueTree() noexcept
 
     if (eqeModuleLoaded)
     {
-        state.setProperty(VxAudioProcessor::activeModuleStateKey,
-                          "eqe-" + juce::String::charToString(static_cast<juce_wchar>('a' + audioProcessor.getActiveModuleInstanceIndex())),
-                          nullptr);
-        state.setProperty(editorEqeModuleExpandedStateKey, eqeModuleExpanded, nullptr);
+        state.setProperty(VxAudioProcessor::activeModuleStateKey, VxAudioProcessor::eqeModuleId, nullptr);
     }
     else if (speModuleLoaded)
     {
-        state.setProperty(VxAudioProcessor::activeModuleStateKey,
-                          "spe-" + juce::String::charToString(static_cast<juce_wchar>('a' + audioProcessor.getActiveModuleInstanceIndex())),
-                          nullptr);
-        state.setProperty(editorEqeModuleExpandedStateKey, eqeModuleExpanded, nullptr);
+        state.setProperty(VxAudioProcessor::activeModuleStateKey, VxAudioProcessor::speModuleId, nullptr);
+    }
+    else if (mieModuleLoaded)
+    {
+        state.setProperty(VxAudioProcessor::activeModuleStateKey, VxAudioProcessor::mieModuleId, nullptr);
     }
     else if (mxeModuleLoaded)
     {
-        state.setProperty(VxAudioProcessor::activeModuleStateKey,
-                          "mxe-" + juce::String::charToString(static_cast<juce_wchar>('a' + audioProcessor.getActiveModuleInstanceIndex())),
-                          nullptr);
-        state.setProperty(editorEqeModuleExpandedStateKey, eqeModuleExpanded, nullptr);
+        state.setProperty(VxAudioProcessor::activeModuleStateKey, VxAudioProcessor::mxeModuleId, nullptr);
     }
     else if (tseModuleLoaded)
     {
-        state.setProperty(VxAudioProcessor::activeModuleStateKey,
-                          "tse-" + juce::String::charToString(static_cast<juce_wchar>('a' + audioProcessor.getActiveModuleInstanceIndex())),
-                          nullptr);
-        state.setProperty(editorEqeModuleExpandedStateKey, eqeModuleExpanded, nullptr);
+        state.setProperty(VxAudioProcessor::activeModuleStateKey, VxAudioProcessor::tseModuleId, nullptr);
     }
     else
     {
         state.removeProperty(VxAudioProcessor::activeModuleStateKey, nullptr);
-        state.removeProperty(editorEqeModuleExpandedStateKey, nullptr);
     }
 
-    state.setProperty(editorShellGlobalExpandedStateKey, shellGlobalExpanded, nullptr);
-    state.setProperty(editorShellGlobalMiscExpandedStateKey, shellGlobalMiscExpanded, nullptr);
     state.setProperty(editorShellGlobalHostExpandedStateKey, shellGlobalHostExpanded, nullptr);
-    state.setProperty(editorGlobalExpandedStateKey, globalExpanded, nullptr);
-    state.setProperty(editorSpeMainExpandedStateKey, speMainExpanded, nullptr);
-    state.setProperty(editorFiltersExpandedStateKey, filtersExpanded, nullptr);
-    state.setProperty(editorPresetsExpandedStateKey, presetsExpanded, nullptr);
     state.setProperty(editorVisualizerExpandedStateKey, visualizerExpanded, nullptr);
     state.setProperty(editorVisualizerRangeLowStateKey, visualizerRangeLowDb, nullptr);
     state.setProperty(editorVisualizerRangeHighStateKey, visualizerRangeHighDb, nullptr);
@@ -446,7 +332,6 @@ void VxAudioProcessorEditor::storeEditorStateToValueTree() noexcept
     state.setProperty(editorVisualizerShowMidStateKey, visualizerShowMid, nullptr);
     state.setProperty(editorVisualizerShowSideStateKey, visualizerShowSide, nullptr);
     state.setProperty(editorLastCollapsedWidthStateKey, lastCollapsedEditorWidth, nullptr);
-    state.setProperty(editorExpandedBellIndexStateKey, expandedBellIndex, nullptr);
     state.setProperty(editorBellDisplayOrderStateKey,
                       encodeBellDisplayOrder(bellDisplayOrder, getActiveBellCount()),
                       nullptr);
@@ -505,7 +390,7 @@ int VxAudioProcessorEditor::getActiveBellCount() const noexcept
 void VxAudioProcessorEditor::updateEditorWidthForVisualizerVisibility()
 {
     const auto restoredWidth = juce::jmax(minimumEditorWidth, getWidth());
-    setResizeLimits(minimumEditorWidthWithFocusedControl,
+    setResizeLimits(minimumEditorWidth,
                     minimumEditorHeight,
                     maximumEditorWidth,
                     maximumEditorHeight);

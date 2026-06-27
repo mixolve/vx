@@ -34,7 +34,6 @@ struct VxAudioProcessorEditor::BellSection
     std::unique_ptr<BoxTextButton> header;
     std::unique_ptr<BoxTextButton> moveDownButton;
     std::unique_ptr<ChoiceControl> typeControl;
-    std::unique_ptr<ChoiceControl> ttssControl;
     std::unique_ptr<ChoiceControl> lrmsControl;
     std::unique_ptr<ChoiceControl> slopeControl;
     std::unique_ptr<ParameterControl> frequencyControl;

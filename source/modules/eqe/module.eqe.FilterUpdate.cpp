@@ -4,6 +4,8 @@
 
 void EqeModuleProcessor::resetBellFilters() noexcept
 {
+    const juce::ScopedLock lock(filterProcessLock);
+
     for (auto& bandFilters : bellOrderFilters)
         for (auto& filter : bandFilters)
             filter.reset();
@@ -24,6 +26,8 @@ void EqeModuleProcessor::resetBellFilters() noexcept
 
 void EqeModuleProcessor::updateBellFilters()
 {
+    const juce::ScopedLock lock(filterProcessLock);
+
     if (currentSampleRate <= 0.0)
         return;
 

@@ -1,5 +1,74 @@
 #include "shell.EditorControls.h"
 
+namespace
+{
+bool applyWheelToSliderValue(juce::Slider& slider, const juce::MouseWheelDetails& wheel)
+{
+    const auto dominantDelta = std::abs(wheel.deltaY) >= std::abs(wheel.deltaX) ? wheel.deltaY
+                                                                                : -wheel.deltaX;
+
+    if (std::abs(dominantDelta) < 1.0e-6f)
+        return false;
+
+    const auto directionalDelta = wheel.isReversed ? -dominantDelta : dominantDelta;
+    const auto direction = directionalDelta < 0.0f ? -1.0 : 1.0;
+    const auto minimum = static_cast<double>(slider.getMinimum());
+    const auto maximum = static_cast<double>(slider.getMaximum());
+    const auto currentValue = static_cast<double>(slider.getValue());
+
+    if (minimum > 0.0 && maximum / minimum >= 100.0)
+    {
+        const auto smoothOctaves = static_cast<double>(directionalDelta) * 0.75;
+        const auto minimumSmoothOctaves = 1.0 / 96.0;
+        const auto octaveDelta = wheel.isSmooth
+            ? direction * juce::jmax(std::abs(smoothOctaves), minimumSmoothOctaves)
+            : direction / 12.0;
+        const auto clampedOctaveDelta = juce::jlimit(-0.25, 0.25, octaveDelta);
+        const auto nextValue = currentValue * std::pow(2.0, clampedOctaveDelta);
+
+        slider.setValue(juce::jlimit(minimum, maximum, nextValue), juce::sendNotificationSync);
+        return true;
+    }
+
+    const auto& range = slider.getNormalisableRange();
+    const auto currentNormalised = static_cast<double>(range.convertTo0to1(currentValue));
+    const auto smoothStep = static_cast<double>(directionalDelta) * 0.025;
+    const auto minimumSmoothStep = 0.0025;
+    const auto normalisedStep = wheel.isSmooth
+        ? direction * juce::jmax(std::abs(smoothStep), minimumSmoothStep)
+        : direction * 0.025;
+    const auto nextNormalised = juce::jlimit(0.0, 1.0, currentNormalised + normalisedStep);
+
+    slider.setValue(range.convertFrom0to1(nextNormalised), juce::sendNotificationSync);
+    return true;
+}
+}
+
+bool scrollViewportWithWheel(juce::Viewport& viewport, const int contentHeight, const juce::MouseWheelDetails& wheel)
+{
+    const auto maxScrollY = juce::jmax(0, contentHeight - viewport.getHeight());
+
+    if (maxScrollY <= 0)
+        return false;
+
+    const auto dominantDelta = std::abs(wheel.deltaY) >= std::abs(wheel.deltaX) ? wheel.deltaY
+                                                                                : -wheel.deltaX;
+
+    if (std::abs(dominantDelta) < 1.0e-6f)
+        return false;
+
+    auto pixelDelta = juce::roundToInt(-dominantDelta
+                                       * (wheel.isSmooth
+                                              ? focusedParameterScrollSensitivity
+                                              : (focusedParameterScrollSensitivity / 2.0f)));
+
+    if (pixelDelta == 0)
+        pixelDelta = dominantDelta < 0.0f ? 24 : -24;
+
+    viewport.setViewPosition(0, juce::jlimit(0, maxScrollY, viewport.getViewPositionY() + pixelDelta));
+    return true;
+}
+
 ValueBoxComponent::ValueBoxComponent(juce::Slider& sliderToControl)
     : slider(sliderToControl)
 {
@@ -70,6 +139,11 @@ void ValueBoxComponent::setCustomPromptAction(std::function<void()> action)
 {
     customPromptAction = std::move(action);
     updateMouseCursor();
+}
+
+void ValueBoxComponent::setScrollGesturesPassThrough(const bool shouldPassThrough)
+{
+    scrollGesturesPassThrough = shouldPassThrough;
 }
 
 void ValueBoxComponent::updateMouseCursor()
@@ -147,6 +221,14 @@ void ValueBoxComponent::mouseDown(const juce::MouseEvent& event)
 
     pointerDown = true;
     dragDetected = false;
+    dragStartViewportY = 0;
+
+    if (scrollGesturesPassThrough)
+    {
+        if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
+            dragStartViewportY = viewport->getViewPositionY();
+    }
+
     pressHighlight = true;
     repaint();
 }
@@ -158,6 +240,21 @@ void ValueBoxComponent::mouseDrag(const juce::MouseEvent& event)
 
     if (! dragDetected && event.mouseWasDraggedSinceMouseDown())
         dragDetected = true;
+
+    if (scrollGesturesPassThrough)
+    {
+        if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
+        {
+            const auto viewedHeight = viewport->getViewedComponent() != nullptr
+                ? viewport->getViewedComponent()->getHeight()
+                : 0;
+            const auto maxScrollY = juce::jmax(0, viewedHeight - viewport->getHeight());
+            viewport->setViewPosition(0,
+                                      juce::jlimit(0,
+                                                   maxScrollY,
+                                                   dragStartViewportY - event.getDistanceFromDragStartY()));
+        }
+    }
 
     const auto shouldHighlight = contains(event.getPosition());
 
@@ -174,6 +271,7 @@ void ValueBoxComponent::mouseUp(const juce::MouseEvent& event)
         return;
 
     const auto shouldOpenPrompt = contains(event.getPosition())
+        && ! dragDetected
         && ! event.mods.isPopupMenu();
 
     pointerDown = false;
@@ -199,6 +297,35 @@ void ValueBoxComponent::mouseExit(const juce::MouseEvent&)
     if (pressHighlight)
     {
         pressHighlight = false;
+        repaint();
+    }
+}
+
+void ValueBoxComponent::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
+{
+    juce::ignoreUnused(event);
+
+    if (! interactionEnabled || editor != nullptr || customPromptAction != nullptr)
+        return;
+
+    if (scrollGesturesPassThrough)
+    {
+        if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
+        {
+            const auto viewedHeight = viewport->getViewedComponent() != nullptr
+                ? viewport->getViewedComponent()->getHeight()
+                : 0;
+            scrollViewportWithWheel(*viewport, viewedHeight, wheel);
+        }
+
+        return;
+    }
+
+    if (applyWheelToSliderValue(slider, wheel))
+    {
+        if (auto* parent = getParentComponent())
+            parent->repaint();
+
         repaint();
     }
 }

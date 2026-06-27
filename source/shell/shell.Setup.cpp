@@ -1,29 +1,239 @@
 #include "shell.EditorBellSection.h"
+#include "shell.MultibandComponent.h"
 #include "shell.SetupSupport.h"
-#include "../modules/mxe/module.mxe.ModuleComponent.h"
-#include "module.tse.Component.h"
-#include "../modules/mxe/module.mxe.PluginProcessor.h"
+#include "../modules/multiband/mie/module.mie.ParameterIds.h"
+#include "../modules/multiband/mie/module.mie.PluginProcessor.h"
+#include "../modules/multiband/mxe/module.mxe.ParameterIds.h"
+#include "../modules/multiband/mxe/module.mxe.PluginProcessor.h"
 #include "../modules/spe/module.spe.SpeProcessor.h"
-#include "../modules/tse/module.tse.TseProcessor.h"
+#include "../modules/multiband/tse/module.tse.TseProcessor.h"
 
 #include <array>
+
+namespace
+{
+using BandControlSpec = MultibandModuleComponent::BandControlSpec;
+using ControlKind = MultibandModuleComponent::ControlKind;
+
+BandControlSpec parameterControl(const char* suffix,
+                                 const char* label,
+                                 const int decimals,
+                                 const int sourceBandIndex = -1)
+{
+    BandControlSpec spec;
+    spec.kind = ControlKind::parameter;
+    spec.suffix = suffix;
+    spec.label = label;
+    spec.decimals = decimals;
+    spec.sourceBandIndex = sourceBandIndex;
+    return spec;
+}
+
+BandControlSpec toggleControl(const char* suffix,
+                              const char* label,
+                              const char* enabledLabel = "",
+                              const char* disabledLabel = "")
+{
+    BandControlSpec spec;
+    spec.kind = ControlKind::toggle;
+    spec.suffix = suffix;
+    spec.label = label;
+    spec.enabledLabel = enabledLabel;
+    spec.disabledLabel = disabledLabel;
+    return spec;
+}
+
+BandControlSpec timeControl(const char* suffix,
+                            const char* label,
+                            const char* modeSuffix,
+                            const char* syncSuffix)
+{
+    BandControlSpec spec;
+    spec.kind = ControlKind::time;
+    spec.suffix = suffix;
+    spec.label = label;
+    spec.decimals = 0;
+    spec.modeSuffix = modeSuffix;
+    spec.syncSuffix = syncSuffix;
+    return spec;
+}
+
+MultibandModuleComponent::Config makeMieMultibandConfig(MieAudioProcessor& processor)
+{
+    MultibandModuleComponent::Config config;
+    config.processorIdentity = &processor;
+    config.moduleKey = "mie";
+    config.valueTreeState = &processor.getValueTreeState();
+    config.undoManager = &processor.getUndoManager();
+    config.markParametersDirty = [&processor] { processor.markParametersDirty(); };
+    config.makeBandParameterId = [] (const size_t bandIndex, const char* suffix)
+    {
+        return mie::parameters::makeBandParameterId(bandIndex, suffix);
+    };
+    config.makeFullbandParameterId = [] (const char* suffix)
+    {
+        return mie::parameters::makeFullbandParameterId(suffix);
+    };
+    config.makeSoloParameterId = [] (const size_t bandIndex)
+    {
+        return mie::parameters::makeSoloParameterId(bandIndex);
+    };
+    config.makeActiveSplitCountParameterId = []
+    {
+        return mie::parameters::makeActiveSplitCountParameterId();
+    };
+    config.bandControls = {
+        parameterControl("wide", "WIDE", 1),
+        parameterControl("gainL", "GAIN-L", 1),
+        parameterControl("gainR", "GAIN-R", 1),
+        parameterControl("gainLr", "GAIN-LR", 1),
+    };
+    return config;
+}
+
+MultibandModuleComponent::Config makeMxeMultibandConfig(MxeAudioProcessor& processor)
+{
+    MultibandModuleComponent::Config config;
+    config.processorIdentity = &processor;
+    config.moduleKey = "mxe";
+    config.valueTreeState = &processor.getValueTreeState();
+    config.undoManager = &processor.getUndoManager();
+    config.markParametersDirty = [&processor] { processor.markParametersDirty(); };
+    config.makeBandParameterId = [] (const size_t bandIndex, const char* suffix)
+    {
+        return mxe::parameters::makeBandParameterId(bandIndex, suffix);
+    };
+    config.makeFullbandParameterId = [] (const char* suffix)
+    {
+        return mxe::parameters::makeFullbandParameterId(suffix);
+    };
+    config.makeSoloParameterId = [] (const size_t bandIndex)
+    {
+        return mxe::parameters::makeSoloParameterId(bandIndex);
+    };
+    config.makeActiveSplitCountParameterId = []
+    {
+        return mxe::parameters::makeActiveSplitCountParameterId();
+    };
+    config.bandControls = {
+        parameterControl("moRph", "MORPH", 1, 0),
+        parameterControl("peakHoldHz", "PEAK-HOLD", 1, 0),
+        parameterControl("TensionFlooR", "TEN-FLOOR", 1, 0),
+        parameterControl("TensionHysT", "TEN-HYST", 1, 0),
+        toggleControl("linkUpDn", "LINK-UPDN (DUAL-MONO)"),
+        toggleControl("linkLr", "LINK-LR (STEREO)"),
+        toggleControl("linkOpp", "LINK-OPP"),
+        parameterControl("thLU", "L.UP.THR", 1),
+        parameterControl("tensLU", "L.UP.TENS", 1),
+        parameterControl("relLU", "L.UP.REL", 1),
+        parameterControl("outLU", "L.UP.OUT", 1),
+        parameterControl("thLD", "L.DN.THR", 1),
+        parameterControl("tensLD", "L.DN.TENS", 1),
+        parameterControl("relLD", "L.DN.REL", 1),
+        parameterControl("outLD", "L.DN.OUT", 1),
+        parameterControl("thRU", "R.UP.THR", 1),
+        parameterControl("tensRU", "R.UP.TENS", 1),
+        parameterControl("relRU", "R.UP.REL", 1),
+        parameterControl("outRU", "R.UP.OUT", 1),
+        parameterControl("thRD", "R.DN.THR", 1),
+        parameterControl("tensRD", "R.DN.TENS", 1),
+        parameterControl("relRD", "R.DN.REL", 1),
+        parameterControl("outRD", "R.DN.OUT", 1),
+    };
+    config.bandTailControls = {
+        toggleControl("delTa", "DELTA"),
+    };
+    return config;
+}
+
+MultibandModuleComponent::Config makeTseMultibandConfig(TseModuleProcessor& processor,
+                                                        VxAudioProcessorEditor& editor,
+                                                        std::unique_ptr<juce::Component>& editorHolder)
+{
+    MultibandModuleComponent::Config config;
+    config.processorIdentity = &processor;
+    config.moduleKey = "tse";
+    config.valueTreeState = &processor.getValueTreeState();
+    config.makeBandParameterId = [] (const size_t bandIndex, const char* suffix)
+    {
+        return TseModuleProcessor::makeBandParameterId(bandIndex, suffix);
+    };
+    config.makeFullbandParameterId = [] (const char* suffix)
+    {
+        return TseModuleProcessor::makeFullbandParameterId(suffix);
+    };
+    config.makeSoloParameterId = [] (const size_t bandIndex)
+    {
+        return TseModuleProcessor::makeSoloParameterId(bandIndex);
+    };
+    config.makeActiveSplitCountParameterId = []
+    {
+        return TseModuleProcessor::makeActiveSplitCountParameterId();
+    };
+    config.bandControls = {
+        toggleControl(TseModuleProcessor::paramTransOnId, "TRANS.ON", "TRANS.ON", "TRANS.OFF"),
+        toggleControl(TseModuleProcessor::paramSusOnId, "SUS.ON", "SUS.ON", "SUS.OFF"),
+        parameterControl(TseModuleProcessor::paramTransGainId, "TRANS.GAIN", 1),
+        parameterControl(TseModuleProcessor::paramSusGainId, "SUS.GAIN", 1),
+        timeControl(TseModuleProcessor::paramTimeHoldId,
+                    "HOLD",
+                    TseModuleProcessor::paramTimeHoldModeId,
+                    TseModuleProcessor::paramTimeHoldSyncId),
+        timeControl(TseModuleProcessor::paramTimeReleaseId,
+                    "RELEASE",
+                    TseModuleProcessor::paramTimeReleaseModeId,
+                    TseModuleProcessor::paramTimeReleaseSyncId),
+        parameterControl(TseModuleProcessor::paramTimeReleaseCurveId, "REL-CURVE", 0),
+        parameterControl(TseModuleProcessor::paramSensLevelId, "SENS.LVL", 1),
+        parameterControl(TseModuleProcessor::paramSensKneeId, "SENS.KNEE", 1),
+        parameterControl(TseModuleProcessor::paramSensRetriggerId, "SENS.RETR", 0),
+        parameterControl(TseModuleProcessor::paramLookaheadId, "LOOKAHEAD", 2),
+    };
+    config.getHostSyncChoices = []
+    {
+        return TseModuleProcessor::getHostSyncChoices();
+    };
+    config.getDefaultHostSyncChoiceIndex = []
+    {
+        return TseModuleProcessor::getDefaultHostSyncChoiceIndex();
+    };
+    config.showChoicePrompt = [&editor, &editorHolder] (const juce::Rectangle<int>& anchorBounds,
+                                                        const juce::StringArray& choices,
+                                                        const int selectedIndex,
+                                                        std::vector<bool> itemEnabledStates,
+                                                        const juce::Justification itemJustification,
+                                                        std::function<void(int)> onSelect,
+                                                        std::function<void()> onClose,
+                                                        std::function<void()> onDismiss)
+    {
+        editor.showChoicePrompt(editor.getLocalArea(editorHolder.get(), anchorBounds),
+                                choices,
+                                selectedIndex,
+                                std::move(itemEnabledStates),
+                                itemJustification,
+                                std::move(onSelect),
+                                std::move(onClose),
+                                std::move(onDismiss));
+    };
+    config.clearKeyboardFocus = [&editor]
+    {
+        clearKeyboardFocus(editor);
+    };
+    return config;
+}
+} // namespace
 
 void VxAudioProcessorEditor::rebindActiveModuleEditors()
 {
     auto rebindSpeControls = [this] (juce::AudioProcessorValueTreeState& speState,
                                      SpeModuleProcessor& speProcessor)
     {
-        if (speInputGainControl != nullptr) speInputGainControl->rebind(speState);
-        if (speInputGainLControl != nullptr) speInputGainLControl->rebind(speState);
-        if (speInputGainRControl != nullptr) speInputGainRControl->rebind(speState);
-        if (speWideControl != nullptr) speWideControl->rebind(speState);
         if (speAttackControl != nullptr) speAttackControl->rebind(speState);
         if (speReleaseControl != nullptr) speReleaseControl->rebind(speState);
         if (speKneeControl != nullptr) speKneeControl->rebind(speState);
         if (speRatioControl != nullptr) speRatioControl->rebind(speState);
         if (speDspFftSizeControl != nullptr) speDspFftSizeControl->rebind(speState);
         if (speDspSlopeControl != nullptr) speDspSlopeControl->rebind(speState);
-        if (speMakeupControl != nullptr) speMakeupControl->rebind(speState);
         if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->rebind(speState);
         if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->rebind(speState);
         if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->rebind(speState);
@@ -39,14 +249,6 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
             speDeltaAttachment = std::make_unique<ButtonAttachment>(speState,
                                                                     SpeModuleProcessor::paramDeltaId,
                                                                     *speDeltaButton);
-        if (speBypassButton != nullptr)
-            speBypassAttachment = std::make_unique<ButtonAttachment>(speState,
-                                                                     SpeModuleProcessor::paramMiscBypassId,
-                                                                     *speBypassButton);
-        if (speBypassWithGainButton != nullptr)
-            speBypassWithGainAttachment = std::make_unique<ButtonAttachment>(speState,
-                                                                            SpeModuleProcessor::paramMiscBypassWithGainId,
-                                                                            *speBypassWithGainButton);
         if (speDualMonoLinkButton != nullptr)
             speDualMonoLinkAttachment = std::make_unique<ButtonAttachment>(speState,
                                                                            SpeModuleProcessor::paramDualMonoLinkId,
@@ -58,7 +260,7 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         shell_setup_support::removeOwnedChild(*this, speAnalyserComponent);
         speAnalyserComponent = shell_setup_support::createSpeAnalyserComponent(speProcessor);
         addAndMakeVisible(*speAnalyserComponent);
-        speAnalyserComponent->setVisible(eqeModuleExpanded && speModuleLoaded);
+        speAnalyserComponent->setVisible(speModuleLoaded);
     };
 
     auto rebindEqeEditorSections = [this]
@@ -67,34 +269,16 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         {
             auto& eqeState = eqeProcessor->getValueTreeState();
 
-            if (eqeBypassButton != nullptr)
-                eqeBypassAttachment = std::make_unique<ButtonAttachment>(eqeState,
-                                                                         EqeModuleProcessor::paramBypassId,
-                                                                         *eqeBypassButton);
-
-            if (eqeBypassWithGainButton != nullptr)
-                eqeBypassWithGainAttachment = std::make_unique<ButtonAttachment>(eqeState,
-                                                                                 EqeModuleProcessor::paramBypassWithGainId,
-                                                                                 *eqeBypassWithGainButton);
-
-            if (eqeInGainLrControl != nullptr)
-                eqeInGainLrControl->rebind(eqeState);
-
-            if (eqeInGainLControl != nullptr)
-                eqeInGainLControl->rebind(eqeState);
-
-            if (eqeInGainRControl != nullptr)
-                eqeInGainRControl->rebind(eqeState);
-
-            if (eqeWideControl != nullptr)
-                eqeWideControl->rebind(eqeState);
-
-            if (eqeOutGainControl != nullptr)
-                eqeOutGainControl->rebind(eqeState);
-
-            for (auto& section : bellSections)
-                if (section != nullptr)
-                    section->rebind(eqeState);
+            if (bellSections.front() == nullptr || addFilterButton == nullptr)
+            {
+                setupEqeControls(eqeState);
+            }
+            else
+            {
+                for (auto& section : bellSections)
+                    if (section != nullptr)
+                        section->rebind(eqeState);
+            }
 
             refreshFilterPresetList(eqeProcessor->getLastFilterPresetName());
         }
@@ -105,8 +289,15 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (auto* speProcessor = audioProcessor.getSpeModuleProcessor())
         {
             auto& speState = speProcessor->getValueTreeState();
-            rebindSpeControls(speState, *speProcessor);
-            rebindSpeAttachments(speState);
+
+            if (speAttackControl == nullptr)
+                setupSpeControls(speState, *speProcessor);
+            else
+            {
+                rebindSpeControls(speState, *speProcessor);
+                rebindSpeAttachments(speState);
+            }
+
             rebuildSpeAnalyser(*speProcessor);
         }
     };
@@ -124,33 +315,41 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (mxeProcessor == nullptr)
             return;
 
-        auto* currentMxeEditor = dynamic_cast<MxeModuleComponent*>(mxeModuleEditor.get());
+        auto* currentMxeEditor = dynamic_cast<MultibandModuleComponent*>(mxeModuleEditor.get());
 
-        if (currentMxeEditor == nullptr || &currentMxeEditor->getAudioProcessor() != mxeProcessor)
+        if (currentMxeEditor == nullptr || currentMxeEditor->getProcessorIdentity() != mxeProcessor)
         {
             shell_setup_support::removeOwnedChild(*this, mxeModuleEditor);
-            mxeModuleEditor = std::make_unique<MxeModuleComponent>(*mxeProcessor,
-                                                                   MxeModuleComponent::Callbacks {
-                                                                       [this] (const juce::String& currentText,
-                                                                               std::function<bool(const juce::String&)> onCommit,
-                                                                               std::function<void()> onClose,
-                                                                               std::function<void()> onDismiss)
-                                                                       {
-                                                                           showTextPrompt(currentText,
-                                                                                          std::move(onCommit),
-                                                                                          {},
-                                                                                          std::move(onClose),
-                                                                                          std::move(onDismiss));
-                                                                       },
-                                                                       [this]
-                                                                       {
-                                                                           requestCloseActiveModule();
-                                                                       }
-                                                                   });
+            mxeModuleEditor = std::make_unique<MultibandModuleComponent>(makeMxeMultibandConfig(*mxeProcessor));
             addAndMakeVisible(*mxeModuleEditor);
         }
 
-        mxeModuleEditor->setVisible(eqeModuleExpanded && mxeModuleLoaded);
+        mxeModuleEditor->setVisible(mxeModuleLoaded);
+    };
+
+    auto rebindMieEditor = [this]
+    {
+        if (! mieModuleLoaded)
+        {
+            shell_setup_support::removeOwnedChild(*this, mieModuleEditor);
+            return;
+        }
+
+        auto* mieProcessor = audioProcessor.getMieModuleProcessor();
+
+        if (mieProcessor == nullptr)
+            return;
+
+        auto* currentMieEditor = dynamic_cast<MultibandModuleComponent*>(mieModuleEditor.get());
+
+        if (currentMieEditor == nullptr || currentMieEditor->getProcessorIdentity() != mieProcessor)
+        {
+            shell_setup_support::removeOwnedChild(*this, mieModuleEditor);
+            mieModuleEditor = std::make_unique<MultibandModuleComponent>(makeMieMultibandConfig(*mieProcessor));
+            addAndMakeVisible(*mieModuleEditor);
+        }
+
+        mieModuleEditor->setVisible(mieModuleLoaded);
     };
 
     auto rebindTseEditor = [this]
@@ -166,50 +365,25 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (tseProcessor == nullptr)
             return;
 
-        auto* currentTseEditor = dynamic_cast<TseModuleComponent*>(tseModuleEditor.get());
+        auto* currentTseEditor = dynamic_cast<MultibandModuleComponent*>(tseModuleEditor.get());
 
-        if (currentTseEditor == nullptr || &currentTseEditor->getProcessor() != tseProcessor)
+        if (currentTseEditor == nullptr || currentTseEditor->getProcessorIdentity() != tseProcessor)
         {
             shell_setup_support::removeOwnedChild(*this, tseModuleEditor);
-            tseModuleEditor = std::make_unique<TseModuleComponent>(*tseProcessor,
-                                                                   TseModuleComponent::Callbacks {
-                                                                       [this] (const juce::Rectangle<int>& anchorBounds,
-                                                                               const juce::StringArray& choices,
-                                                                               const int selectedIndex,
-                                                                               std::vector<bool> itemEnabledStates,
-                                                                               const juce::Justification itemJustification,
-                                                                               std::function<void(int)> onSelect,
-                                                                               std::function<void()> onClose,
-                                                                               std::function<void()> onDismiss)
-                                                                       {
-                                                                           showChoicePrompt(getLocalArea(tseModuleEditor.get(), anchorBounds),
-                                                                                            choices,
-                                                                                            selectedIndex,
-                                                                                            std::move(itemEnabledStates),
-                                                                                            itemJustification,
-                                                                                            std::move(onSelect),
-                                                                                            std::move(onClose),
-                                                                                            std::move(onDismiss));
-                                                                       },
-                                                                       [this]
-                                                                       {
-                                                                           requestCloseActiveModule();
-                                                                       },
-                                                                       [this]
-                                                                       {
-                                                                           clearKeyboardFocus(*this);
-                                                                       }
-                                                                   });
+            tseModuleEditor = std::make_unique<MultibandModuleComponent>(makeTseMultibandConfig(*tseProcessor,
+                                                                                                *this,
+                                                                                                tseModuleEditor));
             addAndMakeVisible(*tseModuleEditor);
         }
 
-        tseModuleEditor->setVisible(eqeModuleExpanded && tseModuleLoaded);
+        tseModuleEditor->setVisible(tseModuleLoaded);
     };
 
     refreshModuleStateListeners();
 
     rebindEqeEditorSections();
     rebindSpeEditorSections();
+    rebindMieEditor();
     rebindMxeEditor();
     rebindTseEditor();
 }

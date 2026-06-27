@@ -12,7 +12,6 @@ struct VxAudioProcessorEditor::PresetsSection
     juce::String getEnteredPresetName() const;
     void setPresetNames(const juce::StringArray& presetNames, const juce::String& preferredSelection);
 
-    std::unique_ptr<BoxTextButton> header;
     NoTickComboBox presetCombo;
     std::unique_ptr<BoxTextButton> adButton;
     std::unique_ptr<BoxTextButton> saveButton;

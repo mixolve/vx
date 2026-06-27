@@ -5,9 +5,9 @@
 #include <atomic>
 
 #include "../modules/eqe/module.eqe.Processor.h"
-#include "../shared/shared.InternalParameterHost.h"
 
 class SpeModuleProcessor;
+class MieAudioProcessor;
 class MxeAudioProcessor;
 class TseModuleProcessor;
 
@@ -16,25 +16,21 @@ class VxAudioProcessor final : public juce::AudioProcessor
 public:
     using FilterType = EqeModuleProcessor::FilterType;
 
-    inline static constexpr auto paramGlobalGainLId = "global_gain_l";
-    inline static constexpr auto paramGlobalGainRId = "global_gain_r";
-    inline static constexpr auto paramGlobalGainLrId = "global_gain_lr";
-    inline static constexpr auto paramGlobalWideId = "global_wide";
-    inline static constexpr auto paramOutGainId = "out_gain";
     inline static constexpr auto paramGlobalBypassId = "global_bypass";
-    inline static constexpr auto paramGlobalBypassOutGainOnlyId = "global_bypass_out_gain_only";
     inline static constexpr auto paramHostSlotPrefix = "host_slot_";
     inline static constexpr auto activeBellCountStateKey = EqeModuleProcessor::activeBellCountStateKey;
     inline static constexpr float fixedSlopeDbPerOct = EqeModuleProcessor::fixedSlopeDbPerOct;
     inline static constexpr auto filterPresetLastSelectedStateKey = "filter_preset_last_selected";
     inline static constexpr auto filterPresetDefaultSelectedStateKey = "filter_preset_default_selected";
     inline static constexpr auto activeModuleStateKey = "vx.active_module";
-    inline static constexpr auto moduleChainStateKey = "vx.module_chain";
+    inline static constexpr auto eqeModuleStateKey = "vx.eqe_state";
     inline static constexpr auto speModuleStateKey = "vx.spe_state";
+    inline static constexpr auto mieModuleStateKey = "vx.mie_state";
     inline static constexpr auto mxeModuleStateKey = "vx.mxe_state";
     inline static constexpr auto tseModuleStateKey = "vx.tse_state";
     inline static constexpr auto eqeModuleId = "eqe";
     inline static constexpr auto speModuleId = "spe";
+    inline static constexpr auto mieModuleId = "mie";
     inline static constexpr auto mxeModuleId = "mxe";
     inline static constexpr auto tseModuleId = "tse";
     inline static constexpr auto editorWidthStateKey = "mxe.editor.width";
@@ -42,13 +38,11 @@ public:
     static constexpr int maxBellFilterCount = EqeModuleProcessor::maxBellFilterCount;
     static constexpr int visualizerScopeSize = EqeModuleProcessor::visualizerScopeSize;
     static constexpr int hostAutomationSlotCount = 64;
-    static constexpr int maxModuleInstanceCount = 8;
-    static constexpr int maxEqeModuleInstanceCount = maxModuleInstanceCount;
-    static constexpr int maxModuleSlotCount = 16;
 
     enum class ActiveModule
     {
         none,
+        mie,
         eqe,
         spe,
         mxe,
@@ -101,10 +95,7 @@ public:
     void setActiveModule(ActiveModule module);
     void setActiveModule(ActiveModule module, int instanceIndex);
     bool setActiveModuleIfPresent(ActiveModule module, int instanceIndex);
-    bool addModuleToChain(ActiveModule module);
-    bool removeModuleFromChain(ActiveModule module);
-    bool removeModuleFromChain(ActiveModule module, int instanceIndex);
-    bool moveModuleInChainAtPosition(int position, int direction);
+    bool loadModule(ActiveModule module);
     int getLoadedModuleCount() const noexcept;
     struct ModuleSlot
     {
@@ -113,7 +104,6 @@ public:
     };
     ModuleSlot getLoadedModuleSlotAtPosition(int position) const noexcept;
     juce::String getLoadedModuleLabelAtPosition(int position) const;
-    bool hasTtssSourceForActiveEqeModule() const noexcept;
     int getActiveModuleInstanceIndex() const noexcept;
     bool isEqeModuleLoaded() const noexcept;
     EqeModuleProcessor* getEqeModuleProcessor(int instanceIndex) noexcept;
@@ -125,6 +115,11 @@ public:
     const SpeModuleProcessor* getSpeModuleProcessor(int instanceIndex) const noexcept;
     SpeModuleProcessor* getSpeModuleProcessor() noexcept;
     const SpeModuleProcessor* getSpeModuleProcessor() const noexcept;
+    bool isMieModuleLoaded() const noexcept;
+    MieAudioProcessor* getMieModuleProcessor(int instanceIndex) noexcept;
+    const MieAudioProcessor* getMieModuleProcessor(int instanceIndex) const noexcept;
+    MieAudioProcessor* getMieModuleProcessor() noexcept;
+    const MieAudioProcessor* getMieModuleProcessor() const noexcept;
     bool isMxeModuleLoaded() const noexcept;
     MxeAudioProcessor* getMxeModuleProcessor(int instanceIndex) noexcept;
     const MxeAudioProcessor* getMxeModuleProcessor(int instanceIndex) const noexcept;
@@ -160,36 +155,32 @@ private:
     void setActiveBellCount(int newCount) noexcept;
     int createEqeModuleInstance();
     int createSpeModuleInstance();
+    int createMieModuleInstance();
     int createMxeModuleInstance();
     int createTseModuleInstance();
-    int getModuleChainLatencySamples() const noexcept;
+    static const char* stateIdForModule(ActiveModule module) noexcept;
+    static ActiveModule moduleFromStateId(const juce::String& moduleId);
+    int getLoadedModulesLatencySamples() const noexcept;
     void updateShellLatency() noexcept;
-    juce::String encodeModuleChainStateText() const;
-    void restoreModuleChainFromStateText(const juce::String& text);
-    void storeModuleChainStateProperty();
+    void restoreLoadedModuleFromStateText(const juce::String& text, bool publishActiveModule = true);
 
-    InternalParameterHost internalParameterHost;
     juce::AudioProcessorValueTreeState parameters;
-    std::atomic<float>* globalGainLParam = nullptr;
-    std::atomic<float>* globalGainRParam = nullptr;
-    std::atomic<float>* globalGainLrParam = nullptr;
-    std::atomic<float>* globalWideParam = nullptr;
-    std::atomic<float>* outGainParam = nullptr;
+    mutable juce::CriticalSection processingLock;
     std::atomic<float>* globalBypassParam = nullptr;
-    std::atomic<float>* globalBypassOutGainOnlyParam = nullptr;
     std::atomic<float> globalClipIndicator { 0.0f };
     std::vector<std::unique_ptr<EqeModuleProcessor>> eqeModuleProcessors;
     std::vector<std::unique_ptr<SpeModuleProcessor>> speModuleProcessors;
+    std::vector<std::unique_ptr<MieAudioProcessor>> mieModuleProcessors;
     std::vector<std::unique_ptr<MxeAudioProcessor>> mxeModuleProcessors;
     std::vector<std::unique_ptr<TseModuleProcessor>> tseModuleProcessors;
-    std::vector<ModuleSlot> moduleChain;
+    std::vector<ModuleSlot> loadedModules;
     std::atomic<ActiveModule> activeModule { ActiveModule::none };
-    std::atomic<int> activeModuleInstanceIndex { -1 };
+    std::atomic<bool> processingPrepared { false };
     std::atomic<int> lastEditorWidth { 0 };
     std::atomic<int> lastEditorHeight { 0 };
     int preparedNumChannels = 2;
     int lastProcessedBlockSize = 0;
-    double currentSampleRate = 44100.0;
+    double currentSampleRate = 0.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VxAudioProcessor)
 };

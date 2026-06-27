@@ -2,28 +2,6 @@
 
 #include <algorithm>
 
-void VxAudioProcessorEditor::openBellSection(const int bellIndex)
-{
-    if (! eqeModuleLoaded)
-        return;
-
-    const auto clickedExpanded = filtersExpanded
-        && ! globalExpanded
-        && ! speMainExpanded
-        && ! presetsExpanded
-        && ! visualizerExpanded
-        && expandedBellIndex == bellIndex;
-    globalExpanded = false;
-    speMainExpanded = false;
-    filtersExpanded = true;
-    presetsExpanded = false;
-    visualizerExpanded = false;
-    expandedBellIndex = clickedExpanded ? -1 : bellIndex;
-    storeEditorStateToValueTree();
-    updateSectionStates();
-    resized();
-}
-
 void VxAudioProcessorEditor::selectBellSection(const int bellIndex)
 {
     if (! eqeModuleLoaded)
@@ -32,20 +10,13 @@ void VxAudioProcessorEditor::selectBellSection(const int bellIndex)
     if (! juce::isPositiveAndBelow(bellIndex, getActiveBellCount()))
         return;
 
-    globalExpanded = false;
-    speMainExpanded = false;
-    filtersExpanded = true;
-    presetsExpanded = false;
-    visualizerExpanded = false;
-    expandedBellIndex = bellIndex;
-    storeEditorStateToValueTree();
     updateSectionStates();
     resized();
 
     if (auto* section = bellSections[static_cast<size_t>(bellIndex)].get())
     {
         juce::ignoreUnused(section);
-        const auto sectionBounds = getVisibleBellSectionBounds(bellIndex);
+        const auto sectionBounds = getBellSectionBounds(bellIndex);
         const auto currentY = filterViewport.getViewPositionY();
         const auto viewportHeight = filterViewport.getHeight();
         auto targetY = currentY;
@@ -62,27 +33,7 @@ void VxAudioProcessorEditor::selectBellSection(const int bellIndex)
     refreshVisualizerResponse();
 }
 
-void VxAudioProcessorEditor::selectAdjacentBellSection(const int direction)
-{
-    const auto activeCount = getActiveBellCount();
-
-    if (activeCount <= 0 || direction == 0)
-        return;
-
-    auto currentOrderIndex = expandedBellIndex >= 0 ? getBellOrderPositionForIndex(expandedBellIndex)
-                                                     : -1;
-
-    if (currentOrderIndex < 0)
-        currentOrderIndex = direction > 0 ? -1 : activeCount;
-
-    const auto targetOrderIndex = juce::jlimit(0, activeCount - 1, currentOrderIndex + (direction > 0 ? 1 : -1));
-    const auto targetBellIndex = getBellIndexForOrderPosition(targetOrderIndex);
-
-    if (targetBellIndex >= 0)
-        selectBellSection(targetBellIndex);
-}
-
-juce::Rectangle<int> VxAudioProcessorEditor::getVisibleBellSectionBounds(const int bellIndex) const
+juce::Rectangle<int> VxAudioProcessorEditor::getBellSectionBounds(const int bellIndex) const
 {
     if (! juce::isPositiveAndBelow(bellIndex, getActiveBellCount()))
         return {};
@@ -103,7 +54,6 @@ juce::Rectangle<int> VxAudioProcessorEditor::getVisibleBellSectionBounds(const i
     };
 
     includeVisibleComponent(section->typeControl.get());
-    includeVisibleComponent(section->ttssControl.get());
     includeVisibleComponent(section->lrmsControl.get());
     includeVisibleComponent(section->slopeControl.get());
     includeVisibleComponent(section->frequencyControl.get());
@@ -129,10 +79,6 @@ void VxAudioProcessorEditor::moveBellSection(const int sourceIndex, const int de
     std::swap(bellDisplayOrder[static_cast<size_t>(sourceIndex)],
               bellDisplayOrder[static_cast<size_t>(destinationIndex)]);
 
-    globalExpanded = false;
-    speMainExpanded = false;
-    filtersExpanded = true;
-    presetsExpanded = false;
     visualizerExpanded = false;
 
     storeEditorStateToValueTree();

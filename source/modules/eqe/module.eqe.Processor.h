@@ -1,8 +1,6 @@
 #pragma once
 
 #include <JuceHeader.h>
-#include "../../shared/shared.TransientSplit.h"
-#include "../../shared/shared.InternalParameterHost.h"
 
 #include <array>
 #include <atomic>
@@ -23,21 +21,7 @@ public:
         highCut,
     };
 
-    enum class TtssMode
-    {
-        ts = 0,
-        tt,
-        ss,
-    };
-
     inline static constexpr auto activeBellCountStateKey = "active_bell_count";
-    inline static constexpr auto paramBypassId = "eqe_bypass";
-    inline static constexpr auto paramBypassWithGainId = "eqe_bypass_wt_gn";
-    inline static constexpr auto paramInGainLrId = "eqe_in_gain_lr";
-    inline static constexpr auto paramInGainLId = "eqe_in_gain_l";
-    inline static constexpr auto paramInGainRId = "eqe_in_gain_r";
-    inline static constexpr auto paramWideId = "eqe_wide";
-    inline static constexpr auto paramOutGainId = "eqe_out_gain";
     inline static constexpr float fixedSlopeDbPerOct = 12.0f;
     inline static constexpr auto filterPresetLastSelectedStateKey = "filter_preset_last_selected";
     inline static constexpr auto filterPresetDefaultSelectedStateKey = "filter_preset_default_selected";
@@ -45,7 +29,6 @@ public:
     static constexpr int visualizerScopeSize = 1024;
 
     static juce::String getFilterTypeParamId(int filterIndex);
-    static juce::String getFilterTtssParamId(int filterIndex);
     static juce::String getFilterLrmsParamId(int filterIndex);
     static juce::String getBellFrequencyParamId(int bellIndex);
     static juce::String getBellBandwidthParamId(int bellIndex);
@@ -67,7 +50,6 @@ public:
     void prepareToPlay(double sampleRate, int samplesPerBlock);
     void releaseResources();
     void processBlock(juce::AudioBuffer<float>& buffer);
-    bool isModuleBypassed() const noexcept;
 
     void getStateInformation(juce::MemoryBlock& destData);
     void setStateInformation(const void* data, int sizeInBytes);
@@ -86,6 +68,7 @@ public:
     bool saveFilterPreset(const juce::String& presetName);
     bool renameFilterPreset(const juce::String& oldPresetName, const juce::String& newPresetName);
     bool setDefaultFilterPreset(const juce::String& presetName);
+    bool loadInitialFilterPreset() noexcept;
     bool loadFilterPreset(const juce::String& presetName) noexcept;
     bool deleteFilterPreset(const juce::String& presetName);
     void copyVisualiserResponse(std::array<float, visualizerScopeSize>& stereoDb,
@@ -96,9 +79,31 @@ public:
                                 double& sampleRateOut) noexcept;
     void markEqeFiltersDirty() noexcept;
     void setActiveBellCount(int newCount) noexcept;
-    void setTransientSplitProvider(TransientSplitProvider* provider) noexcept;
 
 private:
+    class InternalParameterHost final : public juce::AudioProcessor
+    {
+    public:
+        void prepareToPlay(double, int) override {}
+        void releaseResources() override {}
+        bool isBusesLayoutSupported(const BusesLayout&) const override { return true; }
+        void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override {}
+        juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+        bool hasEditor() const override { return false; }
+        const juce::String getName() const override { return "eqe_parameter_host"; }
+        bool acceptsMidi() const override { return false; }
+        bool producesMidi() const override { return false; }
+        bool isMidiEffect() const override { return false; }
+        double getTailLengthSeconds() const override { return 0.0; }
+        int getNumPrograms() override { return 1; }
+        int getCurrentProgram() override { return 0; }
+        void setCurrentProgram(int) override {}
+        const juce::String getProgramName(int) override { return {}; }
+        void changeProgramName(int, const juce::String&) override {}
+        void getStateInformation(juce::MemoryBlock&) override {}
+        void setStateInformation(const void*, int) override {}
+    };
+
     static constexpr size_t maxSupportedChannels = 2;
     static constexpr size_t maxBellOrder = 128;
     static constexpr size_t maxShelfOrder = 128;
@@ -158,20 +163,6 @@ private:
         double sampleRate = 0.0;
     };
 
-    struct TtssSplitState
-    {
-        float fastEnvelope = 0.0f;
-        float bodyEnvelope = 0.0f;
-        float transientEnvelope = 0.0f;
-        float heldTransientAmount = 0.0f;
-        float releaseStartAmount = 0.0f;
-        int holdSamplesRemaining = 0;
-        int releaseSamplesRemaining = 0;
-        int releaseSamplesTotal = 0;
-        int samplesSinceTrigger = 0;
-        bool wasAboveThreshold = false;
-    };
-
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     void registerParameterListeners();
@@ -218,23 +209,11 @@ private:
                                double octaveBandwidth,
                                double slope) noexcept;
     void updateBellFilters();
-    static TtssMode ttssModeFromChoiceIndex(int choiceIndex) noexcept;
-    float processTtssDetectorSample(float level,
-                                    const TransientSplitSettings& settings) noexcept;
-    void resetTtssSplitState() noexcept;
-    static float makeTtssReleaseProgress(float progress, float curveAmount) noexcept;
 
     InternalParameterHost internalParameterHost;
     juce::AudioProcessorValueTreeState parameters;
-    std::atomic<float>* bypassParam = nullptr;
-    std::atomic<float>* bypassWithGainParam = nullptr;
-    std::atomic<float>* inGainLrParam = nullptr;
-    std::atomic<float>* inGainLParam = nullptr;
-    std::atomic<float>* inGainRParam = nullptr;
-    std::atomic<float>* wideParam = nullptr;
-    std::atomic<float>* outGainParam = nullptr;
+    mutable juce::CriticalSection filterProcessLock;
     std::array<std::atomic<float>*, maxBellFilterCount> filterTypeParams {};
-    std::array<std::atomic<float>*, maxBellFilterCount> filterTtssParams {};
     std::array<std::atomic<float>*, maxBellFilterCount> filterLrmsParams {};
     std::array<std::atomic<float>*, maxBellFilterCount> bellFrequencyParams {};
     std::array<std::atomic<float>*, maxBellFilterCount> bellBandwidthParams {};
@@ -250,15 +229,12 @@ private:
     juce::AudioBuffer<float> bellProcessBufferB;
     juce::AudioBuffer<float> lrmsWorkBuffer;
     juce::AudioBuffer<float> lrmsAuxBuffer;
-    juce::AudioBuffer<float> ttssTransientBuffer;
-    juce::AudioBuffer<float> ttssSustainBuffer;
     int preparedNumChannels = 2;
     int lastProcessedBlockSize = 0;
-    double currentSampleRate = 44100.0;
+    double currentSampleRate = 0.0;
     std::atomic<int> activeBellCount { 0 };
     std::atomic<bool> eqeFiltersDirty { true };
-    TtssSplitState ttssSplitState;
-    TransientSplitProvider* transientSplitProvider = nullptr;
+    std::atomic<bool> prepared { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EqeModuleProcessor)
 };

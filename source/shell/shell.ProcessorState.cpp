@@ -1,117 +1,32 @@
 #include "shell.Processor.h"
-#include "../modules/eqe/module.eqe.ProcessorSupport.h"
-#include "../modules/mxe/module.mxe.PluginProcessor.h"
+#include "../modules/multiband/mie/module.mie.PluginProcessor.h"
+#include "../modules/multiband/mxe/module.mxe.PluginProcessor.h"
 #include "../modules/spe/module.spe.SpeProcessor.h"
-#include "../modules/tse/module.tse.TseProcessor.h"
+#include "../modules/multiband/tse/module.tse.TseProcessor.h"
 
 namespace
 {
-VxAudioProcessor::ActiveModule activeModuleFromId(const juce::String& moduleId)
+struct ScopedProcessingSuspend
 {
-    if (moduleId.equalsIgnoreCase(VxAudioProcessor::eqeModuleId)
-        || moduleId.startsWithIgnoreCase("eqe-")
-        || moduleId.startsWithIgnoreCase("eqe_"))
-        return VxAudioProcessor::ActiveModule::eqe;
-
-    if (moduleId.equalsIgnoreCase(VxAudioProcessor::speModuleId)
-        || moduleId.startsWithIgnoreCase("spe-")
-        || moduleId.startsWithIgnoreCase("spe_"))
-        return VxAudioProcessor::ActiveModule::spe;
-
-    if (moduleId.equalsIgnoreCase(VxAudioProcessor::mxeModuleId)
-        || moduleId.startsWithIgnoreCase("mxe-")
-        || moduleId.startsWithIgnoreCase("mxe_"))
-        return VxAudioProcessor::ActiveModule::mxe;
-
-    if (moduleId.equalsIgnoreCase(VxAudioProcessor::tseModuleId)
-        || moduleId.startsWithIgnoreCase("tse-")
-        || moduleId.startsWithIgnoreCase("tse_"))
-        return VxAudioProcessor::ActiveModule::tse;
-
-    return VxAudioProcessor::ActiveModule::none;
-}
-
-int moduleInstanceIndexFromId(const juce::String& moduleId, const juce::String& prefix) noexcept
-{
-    const auto trimmed = moduleId.trim();
-
-    if (trimmed.startsWithIgnoreCase(prefix + "-") || trimmed.startsWithIgnoreCase(prefix + "_"))
+    explicit ScopedProcessingSuspend(VxAudioProcessor& processorIn) noexcept
+        : processor(processorIn)
     {
-        const auto suffix = trimmed.substring(prefix.length() + 1, prefix.length() + 2).toLowerCase();
-        const auto instanceIndex = suffix.isNotEmpty() ? static_cast<int>(suffix[0] - static_cast<juce_wchar>('a')) : 0;
-        return juce::jlimit(0, VxAudioProcessor::maxModuleInstanceCount - 1, instanceIndex);
+        processor.suspendProcessing(true);
     }
 
-    return 0;
-}
-
-int moduleInstanceIndexFromId(const juce::String& moduleId) noexcept
-{
-    const auto module = activeModuleFromId(moduleId);
-
-    if (module == VxAudioProcessor::ActiveModule::eqe)
-        return moduleInstanceIndexFromId(moduleId, VxAudioProcessor::eqeModuleId);
-
-    if (module == VxAudioProcessor::ActiveModule::spe)
-        return moduleInstanceIndexFromId(moduleId, VxAudioProcessor::speModuleId);
-
-    if (module == VxAudioProcessor::ActiveModule::mxe)
-        return moduleInstanceIndexFromId(moduleId, VxAudioProcessor::mxeModuleId);
-
-    if (module == VxAudioProcessor::ActiveModule::tse)
-        return moduleInstanceIndexFromId(moduleId, VxAudioProcessor::tseModuleId);
-
-    return -1;
-}
-
-juce::String moduleStateKeyForInstance(const char* moduleId, const int instanceIndex)
-{
-    return "vx." + juce::String(moduleId) + "_" + juce::String::charToString(static_cast<juce_wchar>('a' + juce::jmax(0, instanceIndex))) + "_state";
-}
-
-juce::String moduleIdWithInstance(const char* moduleId, const int instanceIndex)
-{
-    return juce::String(moduleId) + "-" + juce::String::charToString(static_cast<juce_wchar>('a' + juce::jlimit(0, VxAudioProcessor::maxModuleInstanceCount - 1, instanceIndex)));
-}
-
-const char* moduleIdForModule(const VxAudioProcessor::ActiveModule module) noexcept
-{
-    switch (module)
+    ~ScopedProcessingSuspend()
     {
-        case VxAudioProcessor::ActiveModule::eqe: return VxAudioProcessor::eqeModuleId;
-        case VxAudioProcessor::ActiveModule::spe: return VxAudioProcessor::speModuleId;
-        case VxAudioProcessor::ActiveModule::mxe: return VxAudioProcessor::mxeModuleId;
-        case VxAudioProcessor::ActiveModule::tse: return VxAudioProcessor::tseModuleId;
-        case VxAudioProcessor::ActiveModule::none: break;
+        processor.suspendProcessing(false);
     }
 
-    return "";
-}
-
-juce::String normalizeModuleChainState(const juce::String& text)
-{
-    juce::StringArray modules;
-    const auto tokens = juce::StringArray::fromTokens(text, ",", "");
-
-    for (const auto& token : tokens)
-    {
-        const auto trimmed = token.trim();
-
-        const auto module = activeModuleFromId(trimmed);
-
-        if (module == VxAudioProcessor::ActiveModule::none)
-            continue;
-
-        modules.addIfNotAlreadyThere(moduleIdWithInstance(moduleIdForModule(module), moduleInstanceIndexFromId(trimmed)));
-    }
-
-    return modules.joinIntoString(",");
-}
-
+    VxAudioProcessor& processor;
+};
 }
 
 void VxAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
+    const juce::ScopedLock lock(processingLock);
+
     const auto editorWidth = lastEditorWidth.load(std::memory_order_relaxed);
     const auto editorHeight = lastEditorHeight.load(std::memory_order_relaxed);
 
@@ -124,119 +39,94 @@ void VxAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     auto state = parameters.copyState();
     state.setProperty(activeBellCountStateKey, getActiveBellCount(), nullptr);
 
-    auto moduleInstanceInChain = [this] (const ActiveModule module, const int instanceIndex)
+    const auto active = getActiveModule();
+
+    if (active == ActiveModule::none)
     {
-        for (int slotIndex = 0; slotIndex < getLoadedModuleCount(); ++slotIndex)
-        {
-            const auto slot = getLoadedModuleSlotAtPosition(slotIndex);
-
-            if (slot.module == module && slot.instanceIndex == instanceIndex)
-                return true;
-        }
-
-        return false;
-    };
-
-    switch (getActiveModule())
-    {
-        case ActiveModule::eqe:
-        case ActiveModule::spe:
-        case ActiveModule::mxe:
-        case ActiveModule::tse:
-            state.setProperty(activeModuleStateKey,
-                              moduleIdWithInstance(moduleIdForModule(getActiveModule()), getActiveModuleInstanceIndex()),
-                              nullptr);
-            break;
-
-        case ActiveModule::none:
-            state.removeProperty(activeModuleStateKey, nullptr);
-            break;
+        state.removeProperty(activeModuleStateKey, nullptr);
+        state.removeProperty(eqeModuleStateKey, nullptr);
+        state.removeProperty(speModuleStateKey, nullptr);
+        state.removeProperty(mieModuleStateKey, nullptr);
+        state.removeProperty(mxeModuleStateKey, nullptr);
+        state.removeProperty(tseModuleStateKey, nullptr);
     }
-
-    const auto normalizedModuleChain = normalizeModuleChainState(encodeModuleChainStateText());
-
-    if (normalizedModuleChain.isNotEmpty())
-        state.setProperty(moduleChainStateKey, normalizedModuleChain, nullptr);
     else
-        state.removeProperty(moduleChainStateKey, nullptr);
+    {
+        state.setProperty(activeModuleStateKey, stateIdForModule(active), nullptr);
 
-        for (int instanceIndex = 0; instanceIndex < maxModuleInstanceCount; ++instanceIndex)
+        if (auto* eqeModuleProcessor = getEqeModuleProcessor(0))
         {
-            auto* eqeModuleProcessor = getEqeModuleProcessor(instanceIndex);
-            const auto stateKey = moduleStateKeyForInstance(eqeModuleId, instanceIndex);
-
-            if (eqeModuleProcessor == nullptr || ! moduleInstanceInChain(ActiveModule::eqe, instanceIndex))
-            {
-                state.removeProperty(stateKey, nullptr);
-                continue;
-            }
-
             juce::MemoryBlock eqeStateData;
             eqeModuleProcessor->getStateInformation(eqeStateData);
 
             if (eqeStateData.getSize() > 0)
-                state.setProperty(stateKey, eqeStateData.toBase64Encoding(), nullptr);
+                state.setProperty(eqeModuleStateKey, eqeStateData.toBase64Encoding(), nullptr);
             else
-                state.removeProperty(stateKey, nullptr);
+                state.removeProperty(eqeModuleStateKey, nullptr);
+        }
+        else
+        {
+            state.removeProperty(eqeModuleStateKey, nullptr);
         }
 
-        for (int instanceIndex = 0; instanceIndex < maxModuleInstanceCount; ++instanceIndex)
+        if (auto* processor = getSpeModuleProcessor(0))
         {
-            auto* processor = getSpeModuleProcessor(instanceIndex);
-            const auto stateKey = moduleStateKeyForInstance(speModuleId, instanceIndex);
-
-            if (processor == nullptr || ! moduleInstanceInChain(ActiveModule::spe, instanceIndex))
-            {
-                state.removeProperty(stateKey, nullptr);
-                continue;
-            }
-
             const auto stateXml = processor->getStateXmlString();
 
             if (stateXml.isNotEmpty())
-                state.setProperty(stateKey, stateXml, nullptr);
+                state.setProperty(speModuleStateKey, stateXml, nullptr);
             else
-                state.removeProperty(stateKey, nullptr);
+                state.removeProperty(speModuleStateKey, nullptr);
+        }
+        else
+        {
+            state.removeProperty(speModuleStateKey, nullptr);
         }
 
-        for (int instanceIndex = 0; instanceIndex < maxModuleInstanceCount; ++instanceIndex)
+        if (auto* processor = getMieModuleProcessor(0))
         {
-            auto* processor = getMxeModuleProcessor(instanceIndex);
-            const auto stateKey = moduleStateKeyForInstance(mxeModuleId, instanceIndex);
-
-            if (processor == nullptr || ! moduleInstanceInChain(ActiveModule::mxe, instanceIndex))
-            {
-                state.removeProperty(stateKey, nullptr);
-                continue;
-            }
-
             juce::MemoryBlock stateData;
             processor->getStateInformation(stateData);
 
             if (stateData.getSize() > 0)
-                state.setProperty(stateKey, stateData.toBase64Encoding(), nullptr);
+                state.setProperty(mieModuleStateKey, stateData.toBase64Encoding(), nullptr);
             else
-                state.removeProperty(stateKey, nullptr);
+                state.removeProperty(mieModuleStateKey, nullptr);
+        }
+        else
+        {
+            state.removeProperty(mieModuleStateKey, nullptr);
         }
 
-        for (int instanceIndex = 0; instanceIndex < maxModuleInstanceCount; ++instanceIndex)
+        if (auto* processor = getMxeModuleProcessor(0))
         {
-            auto* processor = getTseModuleProcessor(instanceIndex);
-            const auto stateKey = moduleStateKeyForInstance(tseModuleId, instanceIndex);
+            juce::MemoryBlock stateData;
+            processor->getStateInformation(stateData);
 
-            if (processor == nullptr || ! moduleInstanceInChain(ActiveModule::tse, instanceIndex))
-            {
-                state.removeProperty(stateKey, nullptr);
-                continue;
-            }
+            if (stateData.getSize() > 0)
+                state.setProperty(mxeModuleStateKey, stateData.toBase64Encoding(), nullptr);
+            else
+                state.removeProperty(mxeModuleStateKey, nullptr);
+        }
+        else
+        {
+            state.removeProperty(mxeModuleStateKey, nullptr);
+        }
 
+        if (auto* processor = getTseModuleProcessor(0))
+        {
             const auto stateXml = processor->getStateXmlString();
 
             if (stateXml.isNotEmpty())
-                state.setProperty(stateKey, stateXml, nullptr);
+                state.setProperty(tseModuleStateKey, stateXml, nullptr);
             else
-                state.removeProperty(stateKey, nullptr);
+                state.removeProperty(tseModuleStateKey, nullptr);
         }
+        else
+        {
+            state.removeProperty(tseModuleStateKey, nullptr);
+        }
+    }
 
     if (auto stateXml = state.createXml())
         copyXmlToBinary(*stateXml, destData);
@@ -248,118 +138,76 @@ void VxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
     {
         if (stateXml->hasTagName(parameters.state.getType()))
         {
+            const ScopedProcessingSuspend suspendGuard(*this);
+            const auto wasProcessingPrepared = processingPrepared.exchange(false, std::memory_order_acq_rel);
+            const juce::ScopedLock lock(processingLock);
             auto restoredState = juce::ValueTree::fromXml(*stateXml);
-            const auto restoredActiveModuleText = restoredState.getProperty(activeModuleStateKey).toString();
-            const auto restoredActiveModule = activeModuleFromId(restoredActiveModuleText);
-            const auto restoredActiveModuleInstanceIndex = moduleInstanceIndexFromId(restoredActiveModuleText);
-            const auto restoredModuleChain = normalizeModuleChainState(restoredState.getProperty(moduleChainStateKey).toString());
-            const auto speStateXml = restoredState.getProperty(speModuleStateKey).toString();
-            const auto mxeStateBase64 = restoredState.getProperty(mxeModuleStateKey).toString();
-            const auto tseStateXml = restoredState.getProperty(tseModuleStateKey).toString();
+            const auto restoredActiveModule = moduleFromStateId(restoredState.getProperty(activeModuleStateKey).toString());
 
-            if (restoredModuleChain.isNotEmpty())
-                restoredState.setProperty(moduleChainStateKey, restoredModuleChain, nullptr);
-            else if (restoredActiveModule != ActiveModule::none)
-                restoredState.setProperty(moduleChainStateKey,
-                                          moduleIdWithInstance(moduleIdForModule(restoredActiveModule),
-                                                               restoredActiveModuleInstanceIndex),
-                                          nullptr);
+            if (restoredActiveModule == ActiveModule::none)
+                restoredState.removeProperty(activeModuleStateKey, nullptr);
+            else
+                restoredState.setProperty(activeModuleStateKey, stateIdForModule(restoredActiveModule), nullptr);
 
+            const auto restoredModuleId = restoredState.getProperty(activeModuleStateKey).toString();
             parameters.replaceState(restoredState);
-            const auto moduleChainText = parameters.state.getProperty(moduleChainStateKey).toString();
+            setActiveModule(ActiveModule::none, -1);
+            restoreLoadedModuleFromStateText(restoredModuleId, false);
 
-            restoreModuleChainFromStateText(moduleChainText);
-
-            auto resolvedActiveModule = restoredActiveModule;
-            auto resolvedActiveModuleInstanceIndex = restoredActiveModuleInstanceIndex;
-
-            if (resolvedActiveModule == ActiveModule::none)
+            if (auto* eqeModuleProcessor = getEqeModuleProcessor(0))
             {
-                const auto chainText = parameters.state.getProperty(moduleChainStateKey).toString();
-
-                const auto tokens = juce::StringArray::fromTokens(chainText, ",", "");
-
-                if (! tokens.isEmpty())
-                {
-                    resolvedActiveModule = activeModuleFromId(tokens[0]);
-                    resolvedActiveModuleInstanceIndex = moduleInstanceIndexFromId(tokens[0]);
-                }
-                else if (chainText.containsIgnoreCase(eqeModuleId))
-                    resolvedActiveModule = ActiveModule::eqe;
-                else if (chainText.containsIgnoreCase(speModuleId))
-                    resolvedActiveModule = ActiveModule::spe;
-                else if (chainText.containsIgnoreCase(mxeModuleId))
-                    resolvedActiveModule = ActiveModule::mxe;
-                else if (chainText.containsIgnoreCase(tseModuleId))
-                    resolvedActiveModule = ActiveModule::tse;
-            }
-
-            for (int instanceIndex = 0; instanceIndex < maxModuleInstanceCount; ++instanceIndex)
-            {
-                auto* eqeModuleProcessor = getEqeModuleProcessor(instanceIndex);
-                const auto eqeStateBase64 = restoredState.getProperty(moduleStateKeyForInstance(eqeModuleId, instanceIndex)).toString();
-
-                if (eqeModuleProcessor == nullptr || eqeStateBase64.isEmpty())
-                    continue;
-
+                const auto eqeStateBase64 = restoredState.getProperty(eqeModuleStateKey).toString();
                 juce::MemoryBlock eqeStateData;
 
                 if (eqeStateData.fromBase64Encoding(eqeStateBase64))
                     eqeModuleProcessor->setStateInformation(eqeStateData.getData(), static_cast<int>(eqeStateData.getSize()));
             }
 
-            for (int instanceIndex = 0; instanceIndex < maxModuleInstanceCount; ++instanceIndex)
+            if (auto* processor = getSpeModuleProcessor(0))
             {
-                auto* processor = getSpeModuleProcessor(instanceIndex);
-                auto speStateXmlForInstance = restoredState.getProperty(moduleStateKeyForInstance(speModuleId, instanceIndex)).toString();
+                const auto speStateXml = restoredState.getProperty(speModuleStateKey).toString();
 
-                if (instanceIndex == 0 && speStateXmlForInstance.isEmpty())
-                    speStateXmlForInstance = speStateXml;
-
-                if (processor != nullptr && speStateXmlForInstance.isNotEmpty())
-                    processor->setStateFromXmlString(speStateXmlForInstance);
+                if (speStateXml.isNotEmpty())
+                    processor->setStateFromXmlString(speStateXml);
             }
 
-            for (int instanceIndex = 0; instanceIndex < maxModuleInstanceCount; ++instanceIndex)
+            if (auto* processor = getMieModuleProcessor(0))
             {
-                auto* processor = getMxeModuleProcessor(instanceIndex);
-                auto stateBase64 = restoredState.getProperty(moduleStateKeyForInstance(mxeModuleId, instanceIndex)).toString();
-
-                if (instanceIndex == 0 && stateBase64.isEmpty())
-                    stateBase64 = mxeStateBase64;
-
-                if (processor == nullptr || stateBase64.isEmpty())
-                    continue;
-
+                const auto stateBase64 = restoredState.getProperty(mieModuleStateKey).toString();
                 juce::MemoryBlock stateData;
 
                 if (stateData.fromBase64Encoding(stateBase64))
                     processor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
             }
 
-            for (int instanceIndex = 0; instanceIndex < maxModuleInstanceCount; ++instanceIndex)
+            if (auto* processor = getMxeModuleProcessor(0))
             {
-                auto* processor = getTseModuleProcessor(instanceIndex);
-                auto tseStateXmlForInstance = restoredState.getProperty(moduleStateKeyForInstance(tseModuleId, instanceIndex)).toString();
+                const auto stateBase64 = restoredState.getProperty(mxeModuleStateKey).toString();
+                juce::MemoryBlock stateData;
 
-                if (instanceIndex == 0 && tseStateXmlForInstance.isEmpty())
-                    tseStateXmlForInstance = tseStateXml;
-
-                if (processor != nullptr && tseStateXmlForInstance.isNotEmpty())
-                    processor->setStateFromXmlString(tseStateXmlForInstance);
+                if (stateData.fromBase64Encoding(stateBase64))
+                    processor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
             }
 
-            if (! setActiveModuleIfPresent(resolvedActiveModule, resolvedActiveModuleInstanceIndex))
+            if (auto* processor = getTseModuleProcessor(0))
             {
-                const auto firstSlot = getLoadedModuleCount() > 0 ? getLoadedModuleSlotAtPosition(0)
-                                                                  : ModuleSlot {};
-                setActiveModule(firstSlot.module, firstSlot.instanceIndex);
+                const auto tseStateXml = restoredState.getProperty(tseModuleStateKey).toString();
+
+                if (tseStateXml.isNotEmpty())
+                    processor->setStateFromXmlString(tseStateXml);
             }
+
+            if (restoredActiveModule != ActiveModule::none && ! loadedModules.empty())
+                setActiveModule(restoredActiveModule, 0);
+            else
+                setActiveModule(ActiveModule::none, -1);
 
             updateShellLatency();
             setLastEditorSize(static_cast<int>(parameters.state.getProperty(editorWidthStateKey, 0)),
                               static_cast<int>(parameters.state.getProperty(editorHeightStateKey, 0)));
 
+            if (wasProcessingPrepared && currentSampleRate > 0.0)
+                processingPrepared.store(true, std::memory_order_release);
         }
     }
 }

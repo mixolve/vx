@@ -20,7 +20,6 @@ struct VisualizerMarkerData
 };
 
 juce::String getMixolveInfoMarkdown();
-std::unique_ptr<juce::Component> createSectionFrameComponent(juce::Colour outline);
 std::unique_ptr<juce::Component> createEqResponseVisualizerComponent(VxAudioProcessor& processor,
                                                                      std::function<void(int)> markerSelectCallback);
 void refreshEqResponseVisualizerComponent(juce::Component* component,

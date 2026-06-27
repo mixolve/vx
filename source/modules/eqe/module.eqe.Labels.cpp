@@ -60,11 +60,6 @@ juce::String EqeModuleProcessor::getFilterTypeParamId(const int filterIndex)
     return "filter_" + juce::String(filterIndex + 1) + "_type";
 }
 
-juce::String EqeModuleProcessor::getFilterTtssParamId(const int filterIndex)
-{
-    return "filter_" + juce::String(filterIndex + 1) + "_ttss";
-}
-
 juce::String EqeModuleProcessor::getFilterLrmsParamId(const int filterIndex)
 {
     return "filter_" + juce::String(filterIndex + 1) + "_lrms";

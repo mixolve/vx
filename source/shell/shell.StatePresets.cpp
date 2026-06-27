@@ -72,35 +72,6 @@ juce::String makeUniquePresetName(const juce::String& requestedName,
 }
 }
 
-void VxAudioProcessorEditor::openPresetsSection()
-{
-    if (! eqeModuleLoaded && ! speModuleLoaded && ! mxeModuleLoaded && ! tseModuleLoaded)
-        return;
-
-    const auto clickedExpanded = presetsExpanded
-        && ! globalExpanded
-        && ! speMainExpanded
-        && ! filtersExpanded
-        && ! visualizerExpanded;
-    presetsExpanded = ! clickedExpanded;
-    globalExpanded = false;
-    speMainExpanded = false;
-    filtersExpanded = false;
-    visualizerExpanded = false;
-    expandedBellIndex = -1;
-
-    if (presetsExpanded)
-    {
-        filterViewport.setViewPosition(0, 0);
-        refreshFilterPresetList(getActiveEqeProcessor() != nullptr ? getActiveEqeProcessor()->getLastFilterPresetName()
-                                                                   : juce::String {});
-    }
-
-    storeEditorStateToValueTree();
-    updateSectionStates();
-    resized();
-}
-
 void VxAudioProcessorEditor::refreshFilterPresetList(const juce::String& preferredSelection)
 {
     if (presetsSection == nullptr)

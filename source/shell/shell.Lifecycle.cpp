@@ -1,9 +1,49 @@
 #include "shell.EditorBellSection.h"
 #include "shell.EditorPresetSections.h"
-#include "../modules/mxe/module.mxe.ModuleComponent.h"
-#include "../modules/mxe/module.mxe.EditorControls.h"
+#include "shell.MultibandComponent.h"
 
 #include <cmath>
+
+namespace
+{
+bool usesLogFocusedParameterScale(const juce::Slider& slider) noexcept
+{
+    const auto minimum = static_cast<double>(slider.getMinimum());
+    const auto maximum = static_cast<double>(slider.getMaximum());
+
+    return minimum > 0.0 && maximum / minimum >= 100.0;
+}
+
+double sliderValueToFocusedParameterValue(const juce::Slider& slider) noexcept
+{
+    const auto currentValue = static_cast<double>(slider.getValue());
+
+    if (usesLogFocusedParameterScale(slider))
+    {
+        const auto minimum = static_cast<double>(slider.getMinimum());
+        const auto maximum = static_cast<double>(slider.getMaximum());
+        return juce::jlimit(0.0,
+                            1.0,
+                            std::log(currentValue / minimum) / std::log(maximum / minimum));
+    }
+
+    return slider.getNormalisableRange().convertTo0to1(currentValue);
+}
+
+double focusedParameterValueToSliderValue(const juce::Slider& slider, const double focusedValue) noexcept
+{
+    const auto normalisedValue = juce::jlimit(0.0, 1.0, focusedValue);
+
+    if (usesLogFocusedParameterScale(slider))
+    {
+        const auto minimum = static_cast<double>(slider.getMinimum());
+        const auto maximum = static_cast<double>(slider.getMaximum());
+        return minimum * std::pow(maximum / minimum, normalisedValue);
+    }
+
+    return slider.getNormalisableRange().convertFrom0to1(normalisedValue);
+}
+}
 
 VxAudioProcessorEditor::~VxAudioProcessorEditor()
 {
@@ -22,23 +62,36 @@ void VxAudioProcessorEditor::timerCallback()
     const auto clipValue = audioProcessor.getGlobalClipIndicator();
 
     if (shellGlobalHeader != nullptr)
-        shellGlobalHeader->setLeadingDotLevel(clipValue);
-
-    if (clipControl == nullptr)
     {
-        if (auto* mxeEditor = dynamic_cast<MxeModuleComponent*>(mxeModuleEditor.get()))
-            mxeEditor->refreshExternalState();
-
-        return;
+        if (clipValue > 0.5f)
+            shellGlobalHeader->setTextColourOverride(juce::Colour(0xffff9999));
+        else
+            shellGlobalHeader->clearTextColourOverride();
     }
 
-    if (std::abs(clipControl->getValue() - clipValue) > 1.0e-6)
-        clipControl->setValue(clipValue, false);
+    if (auto* mieEditor = dynamic_cast<MultibandModuleComponent*>(mieModuleEditor.get()))
+        mieEditor->refreshExternalState();
 
-    if (auto* mxeEditor = dynamic_cast<MxeModuleComponent*>(mxeModuleEditor.get()))
+    if (auto* mxeEditor = dynamic_cast<MultibandModuleComponent*>(mxeModuleEditor.get()))
         mxeEditor->refreshExternalState();
 
     refreshVisualizerResponse();
+}
+
+double VxAudioProcessorEditor::getFocusedParameterControlValueForTarget() const noexcept
+{
+    if (focusedParameterTargetSlider == nullptr)
+        return 0.0;
+
+    return sliderValueToFocusedParameterValue(*focusedParameterTargetSlider);
+}
+
+double VxAudioProcessorEditor::getFocusedParameterTargetValueForControl() const noexcept
+{
+    if (focusedParameterControl == nullptr || focusedParameterTargetSlider == nullptr)
+        return 0.0;
+
+    return focusedParameterValueToSliderValue(*focusedParameterTargetSlider, focusedParameterControl->getValue());
 }
 
 void VxAudioProcessorEditor::syncFocusedParameterControl()
@@ -47,28 +100,20 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
         return;
 
     shell_parameter_focus::clearFocusIfNotShowing();
-    mxe::editor::parameter_focus::clearFocusIfNotShowing();
 
     auto* nextTarget = shell_parameter_focus::getFocusedValueSlider();
 
-    if (nextTarget == nullptr)
-        nextTarget = mxe::editor::parameter_focus::getFocusedValueSlider();
-
     if (nextTarget != focusedParameterTargetSlider)
     {
-        const auto preservedGlobalScrollY = globalViewport.getViewPositionY();
         const auto preservedFilterScrollY = filterViewport.getViewPositionY();
 
         focusedParameterTargetSlider = nextTarget;
 
         if (focusedParameterTargetSlider != nullptr)
         {
-            focusedParameterControlPinnedX = juce::jmax(0, getWidth() - getEditorInsetX(getWidth()) - rowHeight);
-
-            const auto& targetRange = focusedParameterTargetSlider->getNormalisableRange();
             const juce::ScopedValueSetter<bool> scopedIgnore(suppressFocusedParameterControlChangeHandlers, true);
-            focusedParameterControl->setValue(targetRange.convertTo0to1(static_cast<float>(focusedParameterTargetSlider->getValue())),
-                                             juce::dontSendNotification);
+            focusedParameterControl->setValue(getFocusedParameterControlValueForTarget(),
+                                              juce::dontSendNotification);
             focusedParameterControl->setEnabled(true);
             focusedParameterControl->setColour(juce::Slider::backgroundColourId, uiGrey700);
             focusedParameterControl->setColour(juce::Slider::trackColourId, juce::Colour(0xFF99CC99));
@@ -84,9 +129,6 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
 
         resized();
 
-        const auto globalMaxOffset = juce::jmax(0, getActiveGlobalContentHeight() - globalViewport.getHeight());
-        globalViewport.setViewPosition(0, juce::jlimit(0, globalMaxOffset, preservedGlobalScrollY));
-
         const auto filterMaxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
         filterViewport.setViewPosition(0, juce::jlimit(0, filterMaxOffset, preservedFilterScrollY));
     }
@@ -94,8 +136,7 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
     if (focusedParameterTargetSlider == nullptr || focusedParameterControl->isMouseButtonDown())
         return;
 
-    const auto& targetRange = focusedParameterTargetSlider->getNormalisableRange();
-    const auto targetValue = targetRange.convertTo0to1(static_cast<float>(focusedParameterTargetSlider->getValue()));
+    const auto targetValue = getFocusedParameterControlValueForTarget();
 
     if (std::abs(focusedParameterControl->getValue() - targetValue) > 1.0e-6)
     {
@@ -112,58 +153,20 @@ void VxAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
 
 void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
 {
-    const auto directionalDelta = wheel.isReversed ? wheel.deltaY : -wheel.deltaY;
-    const auto scrollAmount = wheel.isSmooth
-        ? static_cast<int>(std::round(directionalDelta * focusedParameterScrollSensitivity))
-        : static_cast<int>(std::round((directionalDelta < 0.0f ? -1.0f : 1.0f) * juce::jmax(1.0f, focusedParameterScrollSensitivity / 4.0f)));
-
-    if (scrollAmount == 0)
-        return;
-
-    auto scrollViewport = [scrollAmount] (juce::Viewport& viewport, const int contentHeight)
-    {
-        const auto maxOffset = juce::jmax(0, contentHeight - viewport.getHeight());
-
-        if (maxOffset <= 0)
-            return false;
-
-        const auto currentY = viewport.getViewPositionY();
-        const auto nextY = juce::jlimit(0, maxOffset, currentY + scrollAmount);
-        viewport.setViewPosition(0, nextY);
-        return true;
-    };
-
     if (shellGlobalHostViewport.getBounds().contains(event.getPosition()))
     {
-        if (scrollViewport(shellGlobalHostViewport, shellGlobalHostContent.getHeight()))
-            return;
-    }
-
-    if (globalViewport.getBounds().contains(event.getPosition()))
-    {
-        if (scrollViewport(globalViewport, getActiveGlobalContentHeight()))
+        if (scrollViewportWithWheel(shellGlobalHostViewport, shellGlobalHostContent.getHeight(), wheel))
             return;
     }
 
     if (! filterViewport.getBounds().contains(event.getPosition()))
         return;
 
-    scrollViewport(filterViewport, getActiveFilterContentHeight());
+    scrollViewportWithWheel(filterViewport, getActiveFilterContentHeight(), wheel);
 }
 
 bool VxAudioProcessorEditor::keyPressed(const juce::KeyPress& key)
 {
-    if (key == juce::KeyPress::upKey)
-    {
-        selectAdjacentBellSection(-1);
-        return true;
-    }
-
-    if (key == juce::KeyPress::downKey)
-    {
-        selectAdjacentBellSection(1);
-        return true;
-    }
-
+    juce::ignoreUnused(key);
     return false;
 }

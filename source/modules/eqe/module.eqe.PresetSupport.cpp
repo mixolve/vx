@@ -251,7 +251,6 @@ static int getStoredFilterParameterIndex(const juce::String& parameterId)
         return -1;
 
     if (normalizedSuffix != "type"
-        && normalizedSuffix != "ttss"
         && normalizedSuffix != "place"
         && normalizedSuffix != "slope"
         && normalizedSuffix != "freq"
@@ -293,13 +292,12 @@ static int getStoredFilterParameterSortRank(const juce::String& parameterId)
 
     const auto bandIndex = numberText.getIntValue() - 1;
     const auto parameterRank = suffix == "type" ? 0
-        : suffix == "ttss" ? 1
-        : suffix == "place" ? 2
-        : suffix == "slope" ? 3
-        : suffix == "freq" ? 4
-        : suffix == "bandwidth" ? 5
-        : suffix == "gain" ? 6
-        : suffix == "bypass" ? 7
+        : suffix == "place" ? 1
+        : suffix == "slope" ? 2
+        : suffix == "freq" ? 3
+        : suffix == "bandwidth" ? 4
+        : suffix == "gain" ? 5
+        : suffix == "bypass" ? 6
         : 8;
 
     return (bandIndex * 10) + parameterRank + 1;
@@ -317,7 +315,6 @@ static bool shouldFormatFilterParameterValueAsTwoDigits(const juce::String& para
 {
     const auto trimmedId = parameterId.trim().toLowerCase();
     return trimmedId.endsWith("_type")
-        || trimmedId.endsWith("_ttss")
         || trimmedId.endsWith("_place")
         || trimmedId.endsWith("_slope")
         || trimmedId.endsWith("_bypass");
@@ -515,6 +512,13 @@ std::unique_ptr<juce::XmlElement> createSerializableStateXml(juce::AudioProcesso
 
     for (auto* child : stateXml->getChildIterator())
     {
+        const auto liveParameterId = child->hasTagName("PARAM")
+            ? child->getStringAttribute("id").trim()
+            : juce::String();
+
+        if (liveParameterId.isEmpty() || parameters.getParameter(liveParameterId) == nullptr)
+            continue;
+
         auto childCopy = std::make_unique<juce::XmlElement>(*child);
 
         rewriteFilterParameterIds(*childCopy, true);

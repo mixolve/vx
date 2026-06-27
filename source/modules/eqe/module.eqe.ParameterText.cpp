@@ -28,11 +28,6 @@ juce::String makeFilterTypeName(const int filterIndex)
     return makeEqeFilterName(filterIndex, "TYPE");
 }
 
-juce::String makeFilterTtssName(const int filterIndex)
-{
-    return makeEqeFilterName(filterIndex, "TTSS");
-}
-
 juce::String makeFilterLrmsName(const int filterIndex)
 {
     return makeEqeFilterName(filterIndex, "PLACE");

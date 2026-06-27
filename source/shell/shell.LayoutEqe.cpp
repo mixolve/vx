@@ -1,229 +1,150 @@
 #include "shell.EditorBellSection.h"
-#include "shell.Constants.h"
+#include "shell.UiConstants.h"
 #include "shell.EditorPresetSections.h"
+
+#include <array>
 
 void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bounds, const int editorInsetX)
 {
-    auto moduleViewportBounds = bounds;
-    if (! moduleViewportBounds.isEmpty())
-        moduleViewportBounds.removeFromBottom(addFilterToFooterGap);
-    moduleViewportBounds.removeFromLeft(editorInsetX);
-    moduleViewportBounds.removeFromRight(editorInsetX);
-
     if (! bounds.isEmpty())
         bounds.removeFromBottom(addFilterToFooterGap);
 
-    if (! bounds.isEmpty())
-        bounds.removeFromBottom(moduleFrameInsetY);
+    juce::Rectangle<int> presetsBounds;
 
-    auto presetsBounds = bounds.removeFromBottom(juce::jmin(bounds.getHeight(),
-                                                            rowHeight + (presetsExpanded ? verticalGap + presetsSection->getPresetRowPreferredHeight() : 0)));
-
-    if (! bounds.isEmpty())
-        bounds.removeFromBottom(addFilterToPresetsGap);
-
-    if (filtersExpanded && eqeModuleLoaded)
+    if (presetsSection != nullptr)
     {
-        auto addButtonBounds = bounds.removeFromBottom(rowHeight);
-        addButtonBounds.removeFromLeft(editorInsetX);
-        addButtonBounds.removeFromRight(editorInsetX);
-        addFilterButton->setBounds(addButtonBounds);
+        const auto presetHeight = presetsSection->getPresetRowPreferredHeight();
+        presetsBounds = bounds.removeFromBottom(juce::jmin(bounds.getHeight(), presetHeight));
 
         if (! bounds.isEmpty())
-            bounds.removeFromBottom(globalToFilterGap);
-    }
-    else
-    {
-        addFilterButton->setBounds({});
+            bounds.removeFromBottom(verticalGap);
     }
 
-    auto placeHeader = [&bounds, editorInsetX] (BoxTextButton& header)
-    {
-        auto headerBounds = bounds.removeFromTop(rowHeight);
-        headerBounds.removeFromLeft(editorInsetX);
-        headerBounds.removeFromRight(editorInsetX);
-        header.setBounds(headerBounds);
+    auto actionRowBounds = bounds.removeFromBottom(rowHeight);
+    actionRowBounds.removeFromLeft(editorInsetX);
+    actionRowBounds.removeFromRight(editorInsetX);
 
-        if (! bounds.isEmpty())
-            bounds.removeFromTop(verticalGap);
+    std::array<BoxTextButton*, 5> actionButtons {
+        addFilterButton.get(),
+        clearFiltersButton.get(),
+        sortPlaceButton.get(),
+        sortFreqButton.get(),
+        sortDuoButton.get()
     };
 
-    placeHeader(*globalHeader);
+    auto remainingActionBounds = actionRowBounds;
+    const auto actionButtonCount = static_cast<int>(actionButtons.size());
+    const auto actionTotalGap = parameterGap * (actionButtonCount - 1);
+    const auto actionBaseWidth = juce::jmax(0, (remainingActionBounds.getWidth() - actionTotalGap) / actionButtonCount);
 
-    if (globalExpanded)
+    for (int buttonIndex = 0; buttonIndex < actionButtonCount; ++buttonIndex)
     {
-        const auto minimumBelowGlobal = rowHeight + verticalGap + globalToFilterGap;
-        const auto globalContentHeight = getGlobalContentHeight();
-        const auto viewportHeight = juce::jmin(juce::jmax(0, bounds.getHeight() - minimumBelowGlobal),
-                                              globalContentHeight);
-        auto globalViewportBounds = bounds.removeFromTop(viewportHeight);
-        globalViewport.setBounds(globalViewportBounds);
-        globalContent.setSize(globalViewportBounds.getWidth(), juce::jmax(globalViewportBounds.getHeight(), globalContentHeight));
+        auto* button = actionButtons[static_cast<size_t>(buttonIndex)];
 
-        auto globalBounds = globalContent.getLocalBounds();
+        if (button == nullptr)
+            continue;
 
-        auto placeGlobalButton = [&globalBounds, editorInsetX] (BoxTextButton& button)
+        const auto isLastButton = buttonIndex + 1 == actionButtonCount;
+        auto buttonBounds = isLastButton ? remainingActionBounds
+                                         : remainingActionBounds.removeFromLeft(actionBaseWidth);
+        button->setBounds(buttonBounds);
+
+        if (! isLastButton)
+            remainingActionBounds.removeFromLeft(parameterGap);
+    }
+
+    if (! bounds.isEmpty())
+        bounds.removeFromBottom(globalToFilterGap);
+
+    filterViewport.setBounds(bounds);
+    filterViewport.setVisible(true);
+    filterContent.setSize(bounds.getWidth(), juce::jmax(bounds.getHeight(), getFilterContentHeight()));
+
+    auto contentBounds = filterContent.getLocalBounds();
+
+    const auto activeBellCount = getActiveBellCount();
+
+    for (int displayIndex = 0; displayIndex < activeBellCount; ++displayIndex)
+    {
+        const auto bellIndex = getBellIndexForOrderPosition(displayIndex);
+
+        if (bellIndex < 0)
+            continue;
+
+        auto* section = bellSections[static_cast<size_t>(bellIndex)].get();
+
+        if (section == nullptr)
+            continue;
+
+        auto headerBounds = contentBounds.removeFromTop(rowHeight);
+        headerBounds.removeFromLeft(editorInsetX);
+        headerBounds.removeFromRight(editorInsetX);
+
+        auto moveUpBounds = headerBounds.removeFromLeft(rowHeight);
+        headerBounds.removeFromLeft(parameterGap);
+        auto moveDownBounds = headerBounds.removeFromRight(rowHeight);
+        headerBounds.removeFromRight(parameterGap);
+
+        section->moveUpButton->setBounds(moveUpBounds);
+        section->header->setBounds(headerBounds);
+        section->moveDownButton->setBounds(moveDownBounds);
+
+        if (! contentBounds.isEmpty())
+            contentBounds.removeFromTop(verticalGap);
+
+        auto placeFilterControl = [&contentBounds, editorInsetX] (auto& control)
         {
-            auto buttonBounds = globalBounds.removeFromTop(rowHeight);
-            buttonBounds.removeFromLeft(editorInsetX);
-            buttonBounds.removeFromRight(editorInsetX);
-            button.setBounds(buttonBounds);
-
-            if (! globalBounds.isEmpty())
-                globalBounds.removeFromTop(verticalGap);
-        };
-
-        auto placeGlobalControl = [&globalBounds, editorInsetX] (auto& control)
-        {
-            auto controlBounds = globalBounds.removeFromTop(control.getPreferredHeight());
+            auto controlBounds = contentBounds.removeFromTop(control.getPreferredHeight());
             controlBounds.removeFromLeft(editorInsetX);
             controlBounds.removeFromRight(editorInsetX);
             control.setBounds(controlBounds);
 
-            if (! globalBounds.isEmpty())
-                globalBounds.removeFromTop(verticalGap);
+            if (! contentBounds.isEmpty())
+                contentBounds.removeFromTop(verticalGap);
         };
 
-        placeGlobalButton(*moduleCloseButton);
-        placeGlobalButton(*eqeBypassButton);
-        placeGlobalButton(*eqeBypassWithGainButton);
-        placeGlobalControl(*eqeInGainLrControl);
-        placeGlobalControl(*eqeInGainLControl);
-        placeGlobalControl(*eqeInGainRControl);
-        placeGlobalControl(*eqeWideControl);
-        placeGlobalControl(*eqeOutGainControl);
-        placeGlobalButton(*clearFiltersButton);
-        placeGlobalButton(*sortPlaceButton);
-        placeGlobalButton(*sortFreqButton);
-        placeGlobalButton(*sortDuoButton);
-
-        if (! bounds.isEmpty())
-            bounds.removeFromTop(globalToFilterGap);
-    }
-    else
-    {
-        globalViewport.setBounds({});
-        globalContent.setSize(0, 0);
-    }
-
-    placeHeader(*filtersHeader);
-
-    filterViewport.setBounds({});
-    filterViewport.setVisible(false);
-    filterContent.setSize(0, 0);
-
-    if (filtersExpanded)
-    {
-        filterViewport.setBounds(bounds);
-        filterViewport.setVisible(true);
-        filterContent.setSize(bounds.getWidth(), juce::jmax(bounds.getHeight(), getFilterContentHeight()));
-        auto filterBounds = filterContent.getLocalBounds();
-
-        const auto activeBellCount = getActiveBellCount();
-
-        for (int displayIndex = 0; displayIndex < activeBellCount; ++displayIndex)
+        auto placeFilterActionButton = [&contentBounds, editorInsetX] (BoxTextButton& button)
         {
-            const auto bellIndex = getBellIndexForOrderPosition(displayIndex);
+            auto rowBounds = contentBounds.removeFromTop(rowHeight);
+            rowBounds.removeFromLeft(editorInsetX);
+            rowBounds.removeFromRight(editorInsetX);
+            button.setBounds(rowBounds);
 
-            if (bellIndex < 0)
-                continue;
+            if (! contentBounds.isEmpty())
+                contentBounds.removeFromTop(verticalGap);
+        };
 
-            auto& section = *bellSections[static_cast<size_t>(bellIndex)];
-            auto placeBellHeader = [&filterBounds, editorInsetX] (BellSection& bellSection)
-            {
-                auto headerBounds = filterBounds.removeFromTop(rowHeight);
-                headerBounds.removeFromLeft(editorInsetX);
-                headerBounds.removeFromRight(editorInsetX);
-
-                auto moveUpBounds = headerBounds.removeFromLeft(rowHeight);
-                headerBounds.removeFromLeft(parameterGap);
-                auto moveDownBounds = headerBounds.removeFromRight(rowHeight);
-                headerBounds.removeFromRight(parameterGap);
-
-                bellSection.moveUpButton->setBounds(moveUpBounds);
-                bellSection.header->setBounds(headerBounds);
-                bellSection.moveDownButton->setBounds(moveDownBounds);
-
-                if (! filterBounds.isEmpty())
-                    filterBounds.removeFromTop(verticalGap);
-            };
-
-            auto placeFilterControl = [&filterBounds, editorInsetX] (auto& control)
-            {
-                auto controlBounds = filterBounds.removeFromTop(control.getPreferredHeight());
-                controlBounds.removeFromLeft(editorInsetX);
-                controlBounds.removeFromRight(editorInsetX);
-                control.setBounds(controlBounds);
-
-                if (! filterBounds.isEmpty())
-                    filterBounds.removeFromTop(verticalGap);
-            };
-
-            auto placeFilterActionButton = [&filterBounds, editorInsetX] (BoxTextButton& button)
-            {
-                auto rowBounds = filterBounds.removeFromTop(rowHeight);
-                rowBounds.removeFromLeft(editorInsetX);
-                rowBounds.removeFromRight(editorInsetX);
-                button.setBounds(rowBounds);
-
-                if (! filterBounds.isEmpty())
-                    filterBounds.removeFromTop(verticalGap);
-            };
-
-            placeBellHeader(section);
-
-            if (! globalExpanded && ! presetsExpanded && expandedBellIndex == bellIndex)
-            {
-                placeFilterControl(*section.typeControl);
-                placeFilterControl(*section.ttssControl);
-                placeFilterControl(*section.lrmsControl);
-                if (section.slopeControl->isVisible())
-                    placeFilterControl(*section.slopeControl);
-                placeFilterControl(*section.frequencyControl);
-                if (section.bandwidthControl->isVisible())
-                    placeFilterControl(*section.bandwidthControl);
-                placeFilterControl(*section.gainControl);
-                placeFilterActionButton(*section.bypassButton);
-                placeFilterActionButton(*section.deleteButton);
-            }
-        }
+        placeFilterControl(*section->typeControl);
+        placeFilterControl(*section->lrmsControl);
+        placeFilterControl(*section->slopeControl);
+        placeFilterControl(*section->frequencyControl);
+        placeFilterControl(*section->bandwidthControl);
+        placeFilterControl(*section->gainControl);
+        placeFilterActionButton(*section->bypassButton);
+        placeFilterActionButton(*section->deleteButton);
     }
 
-    auto presetsContentBounds = presetsBounds;
-    auto presetsHeaderBounds = presetsContentBounds.removeFromTop(rowHeight);
-    presetsHeaderBounds.removeFromLeft(editorInsetX);
-    presetsHeaderBounds.removeFromRight(editorInsetX);
-    presetsSection->header->setBounds(presetsHeaderBounds);
-
-    if (presetsExpanded)
+    if (presetsSection != nullptr)
     {
-        if (! presetsContentBounds.isEmpty())
-            presetsContentBounds.removeFromTop(verticalGap);
+        auto presetContentBounds = presetsBounds;
 
-        filterViewport.setBounds(presetsContentBounds);
-        filterViewport.setVisible(true);
-        filterContent.setSize(presetsContentBounds.getWidth(),
-                              juce::jmax(presetsContentBounds.getHeight(), presetsSection->getPresetRowPreferredHeight()));
-
-        auto presetRowsBounds = filterContent.getLocalBounds();
-
-        auto presetNameRowBounds = presetRowsBounds.removeFromTop(rowHeight);
+        auto presetNameRowBounds = presetContentBounds.removeFromTop(rowHeight);
         presetNameRowBounds.removeFromLeft(editorInsetX);
         presetNameRowBounds.removeFromRight(editorInsetX);
         presetsSection->presetCombo.setBounds(presetNameRowBounds);
 
-        if (! presetRowsBounds.isEmpty())
-            presetRowsBounds.removeFromTop(verticalGap);
+        if (! presetContentBounds.isEmpty())
+            presetContentBounds.removeFromTop(verticalGap);
 
-        auto presetButtonRowBounds = presetRowsBounds.removeFromTop(rowHeight);
+        auto presetButtonRowBounds = presetContentBounds.removeFromTop(rowHeight);
         presetButtonRowBounds.removeFromLeft(editorInsetX);
         presetButtonRowBounds.removeFromRight(editorInsetX);
 
-        const auto buttonCount = 5;
-        const auto totalGapWidth = presetRowGap * (buttonCount - 1);
+        const auto presetButtonCount = 5;
+        const auto totalGapWidth = presetRowGap * (presetButtonCount - 1);
         const auto availableButtonWidth = juce::jmax(0, presetButtonRowBounds.getWidth() - totalGapWidth);
-        const auto baseButtonWidth = availableButtonWidth / buttonCount;
-        const auto buttonWidthRemainder = availableButtonWidth % buttonCount;
+        const auto baseButtonWidth = availableButtonWidth / presetButtonCount;
+        const auto buttonWidthRemainder = availableButtonWidth % presetButtonCount;
 
         auto placePresetButton = [&presetButtonRowBounds, baseButtonWidth, buttonWidthRemainder] (BoxTextButton& button, const int index)
         {
@@ -231,7 +152,7 @@ void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bound
             auto buttonBounds = presetButtonRowBounds.removeFromLeft(buttonWidth);
             button.setBounds(buttonBounds);
 
-            if (index < 4)
+            if (index + 1 < presetButtonCount)
                 presetButtonRowBounds.removeFromLeft(presetRowGap);
         };
 
@@ -242,58 +163,4 @@ void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bound
         placePresetButton(*presetsSection->deleteButton, 4);
     }
 
-    juce::Rectangle<int> globalFrameBounds;
-    includeComponentBounds(globalFrameBounds, globalHeader.get());
-    if (globalViewport.isVisible())
-    {
-        auto globalViewportContentBounds = globalViewport.getBounds();
-        globalViewportContentBounds.removeFromLeft(editorInsetX);
-        globalViewportContentBounds.removeFromRight(editorInsetX);
-        includeBounds(globalFrameBounds, globalViewportContentBounds);
-    }
-    placeSectionFrame(globalSectionFrame.get(), globalExpanded, globalFrameBounds);
-
-    juce::Rectangle<int> filtersFrameBounds;
-    includeComponentBounds(filtersFrameBounds, filtersHeader.get());
-    if (filtersExpanded && filterViewport.isVisible())
-    {
-        auto filterViewportContentBounds = filterViewport.getBounds();
-        filterViewportContentBounds.removeFromLeft(editorInsetX);
-        filterViewportContentBounds.removeFromRight(editorInsetX);
-        includeBounds(filtersFrameBounds, filterViewportContentBounds);
-    }
-    includeComponentBounds(filtersFrameBounds, addFilterButton.get());
-    placeSectionFrame(filtersSectionFrame.get(), filtersExpanded, filtersFrameBounds);
-
-    juce::Rectangle<int> presetsFrameBounds;
-    includeComponentBounds(presetsFrameBounds, presetsSection != nullptr ? presetsSection->header.get() : nullptr);
-
-    if (presetsExpanded && filterViewport.isVisible())
-    {
-        auto presetsViewportContentBounds = filterViewport.getBounds();
-        presetsViewportContentBounds.removeFromLeft(editorInsetX);
-        presetsViewportContentBounds.removeFromRight(editorInsetX);
-        includeBounds(presetsFrameBounds, presetsViewportContentBounds);
-    }
-
-    placeSectionFrame(presetsSectionFrame.get(), presetsExpanded, presetsFrameBounds);
-
-    auto moduleFrameBounds = shellGlobalExpanded ? buildShellGlobalFrameBounds()
-                                                 : juce::Rectangle<int>();
-
-    if (! shellGlobalExpanded && eqeModuleExpanded)
-    {
-        includeModuleTabRowBounds(moduleFrameBounds);
-        includeBounds(moduleFrameBounds, moduleViewportBounds);
-
-        includeComponentBounds(moduleFrameBounds, globalHeader.get());
-        includeComponentBounds(moduleFrameBounds, filtersHeader.get());
-        includeComponentBounds(moduleFrameBounds, addFilterButton.get());
-        includeComponentBounds(moduleFrameBounds, presetsSection != nullptr ? presetsSection->header.get() : nullptr);
-        includeBounds(moduleFrameBounds, globalFrameBounds);
-        includeBounds(moduleFrameBounds, filtersFrameBounds);
-        includeBounds(moduleFrameBounds, presetsFrameBounds);
-    }
-
-    placeModuleFrame(eqeModuleFrame.get(), shellGlobalExpanded || eqeModuleExpanded, moduleFrameBounds);
 }

@@ -8,7 +8,6 @@
 #include <utility>
 
 #include "module.spe.SpeShared.h"
-#include "../../shared/shared.InternalParameterHost.h"
 
 class SpeModuleProcessor final : private juce::AudioProcessorValueTreeState::Listener
 {
@@ -50,17 +49,10 @@ public:
     inline static constexpr auto paramDualMonoLeftAdaptiveOffsetId = "spe_dual_mono_left_adaptive_offset";
     inline static constexpr auto paramDualMonoRightAdaptiveOffsetId = "spe_dual_mono_right_adaptive_offset";
     inline static constexpr auto paramDualMonoLinkId = "spe_dual_mono_link_lr";
-    inline static constexpr auto paramInputGainLrId = "spe_input_gain";
-    inline static constexpr auto paramInputGainLId = "spe_input_gain_l";
-    inline static constexpr auto paramInputGainRId = "spe_input_gain_r";
-    inline static constexpr auto paramWideId = "spe_wide";
     inline static constexpr auto paramAttackId = "spe_attack";
     inline static constexpr auto paramReleaseId = "spe_release";
     inline static constexpr auto paramKneeId = "spe_knee";
     inline static constexpr auto paramRatioId = "spe_ratio";
-    inline static constexpr auto paramMakeupId = "spe_makeup";
-    inline static constexpr auto paramMiscBypassId = "spe_misc_bypass";
-    inline static constexpr auto paramMiscBypassWithGainId = "spe_misc_bypass_wt_gain";
     inline static constexpr auto paramDeltaId = "spe_delta";
     inline static constexpr auto paramDspFftSizeId = "spe_dsp_fft_size";
     inline static constexpr auto paramDspSlopeId = "spe_dsp_slope";
@@ -92,14 +84,34 @@ public:
     const juce::AudioProcessorValueTreeState& getValueTreeState() const noexcept;
 
 private:
+    class InternalParameterHost final : public juce::AudioProcessor
+    {
+    public:
+        void prepareToPlay(double, int) override {}
+        void releaseResources() override {}
+        bool isBusesLayoutSupported(const BusesLayout&) const override { return true; }
+        void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override {}
+        juce::AudioProcessorEditor* createEditor() override { return nullptr; }
+        bool hasEditor() const override { return false; }
+        const juce::String getName() const override { return "spe_parameter_host"; }
+        bool acceptsMidi() const override { return false; }
+        bool producesMidi() const override { return false; }
+        bool isMidiEffect() const override { return false; }
+        double getTailLengthSeconds() const override { return 0.0; }
+        int getNumPrograms() override { return 1; }
+        int getCurrentProgram() override { return 0; }
+        void setCurrentProgram(int) override {}
+        const juce::String getProgramName(int) override { return {}; }
+        void changeProgramName(int, const juce::String&) override {}
+        void getStateInformation(juce::MemoryBlock&) override {}
+        void setStateInformation(const void*, int) override {}
+    };
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void parameterChanged(const juce::String& parameterID, float newValue) override;
 
     CompressorSettings getCompressorSettings() const noexcept;
-    bool isModuleBypassEnabled() const noexcept;
-    bool isModuleBypassWithGainEnabled() const noexcept;
     bool isDeltaEnabled() const noexcept;
-    void applyMakeupGain(juce::AudioBuffer<float>& buffer, int channelsToUse) const noexcept;
     void resetDeltaDelay() noexcept;
     void ensureDeltaDryBufferSize(int channels, int samples);
     void populateAlignedDryBuffer(const juce::AudioBuffer<float>& inputBuffer,
@@ -228,17 +240,10 @@ private:
     std::atomic<float>* dualMonoLeftAdaptiveOffsetParam = nullptr;
     std::atomic<float>* dualMonoRightAdaptiveOffsetParam = nullptr;
     std::atomic<float>* dualMonoLinkParam = nullptr;
-    std::atomic<float>* inputGainLrParam = nullptr;
-    std::atomic<float>* inputGainLParam = nullptr;
-    std::atomic<float>* inputGainRParam = nullptr;
-    std::atomic<float>* wideParam = nullptr;
     std::atomic<float>* attackParam = nullptr;
     std::atomic<float>* releaseParam = nullptr;
     std::atomic<float>* kneeParam = nullptr;
     std::atomic<float>* ratioParam = nullptr;
-    std::atomic<float>* makeupParam = nullptr;
-    std::atomic<float>* miscBypassParam = nullptr;
-    std::atomic<float>* miscBypassWithGainParam = nullptr;
     std::atomic<float>* deltaParam = nullptr;
     std::atomic<float>* dspFftSizeParam = nullptr;
     std::atomic<float>* dspSlopeParam = nullptr;

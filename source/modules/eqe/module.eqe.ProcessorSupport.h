@@ -17,7 +17,6 @@ inline constexpr auto defaultTiltFrequency = 632.0f;
 inline constexpr auto nyquistSafetyFactor = 0.98;
 inline constexpr auto flatTiltStageCount = 16;
 inline const juce::StringArray filterTypeChoices { "LCT", "LSH", "BEL", "FTL", "HSH", "HCT" };
-inline const juce::StringArray filterTtssChoices { "TS", "TT", "SS" };
 inline const juce::StringArray filterLrmsChoices { "LR", "LL", "RR", "MM", "SS" };
 
 inline constexpr auto filterPresetsRootTag = "FILTER_PRESETS";
@@ -43,7 +42,6 @@ juce::String formatDecibelValue(float value);
 juce::String formatFrequencyValue(float value);
 juce::String formatBandwidthValue(float value);
 juce::String makeFilterTypeName(int filterIndex);
-juce::String makeFilterTtssName(int filterIndex);
 juce::String makeFilterLrmsName(int filterIndex);
 juce::String makeFilterParameterId(const char* suffix, int filterIndex);
 juce::String makeBellParameterName(const char* suffix, int bellIndex);

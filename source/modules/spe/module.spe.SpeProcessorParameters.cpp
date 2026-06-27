@@ -14,13 +14,6 @@ struct ParameterOrderEntry
 };
 
 inline constexpr auto speMiscOrder = std::to_array<ParameterOrderEntry>({
-    { "bypass", "BYPASS" },
-    { "bypass_wt_gain", "BYPASS.WT-GAIN" },
-    { "in_gain_lr", "IN-GAIN-LR" },
-    { "in_gain_l", "IN-GAIN-L" },
-    { "in_gain_r", "IN-GAIN-R" },
-    { "in_wide", "IN-WIDE" },
-    { "out_gain", "OUT-GAIN" },
     { "delta", "DELTA" },
 });
 
@@ -126,7 +119,7 @@ SpeModuleProcessor::CompressorSettings SpeModuleProcessor::getCompressorSettings
         juce::jlimit(0.0f, 2000.0f, releaseParam != nullptr ? releaseParam->load(std::memory_order_relaxed) : 0.0f),
         juce::jlimit(0.0f, 24.0f, kneeParam != nullptr ? kneeParam->load(std::memory_order_relaxed) : 0.0f),
         juce::jlimit(1.0f, 100.0f, ratioParam != nullptr ? ratioParam->load(std::memory_order_relaxed) : 100.0f),
-        juce::jlimit(-48.0f, 48.0f, makeupParam != nullptr ? makeupParam->load(std::memory_order_relaxed) : 0.0f)
+        0.0f
     };
 }
 
@@ -134,31 +127,6 @@ bool SpeModuleProcessor::isDeltaEnabled() const noexcept
 {
     return deltaParam != nullptr
         && juce::roundToInt(deltaParam->load(std::memory_order_relaxed)) != 0;
-}
-
-bool SpeModuleProcessor::isModuleBypassEnabled() const noexcept
-{
-    return miscBypassParam != nullptr
-        && juce::roundToInt(miscBypassParam->load(std::memory_order_relaxed)) != 0;
-}
-
-bool SpeModuleProcessor::isModuleBypassWithGainEnabled() const noexcept
-{
-    return miscBypassWithGainParam != nullptr
-        && juce::roundToInt(miscBypassWithGainParam->load(std::memory_order_relaxed)) != 0;
-}
-
-void SpeModuleProcessor::applyMakeupGain(juce::AudioBuffer<float>& buffer, const int channelsToUse) const noexcept
-{
-    const auto makeupDb = juce::jlimit(-48.0f, 48.0f, makeupParam != nullptr ? makeupParam->load(std::memory_order_relaxed) : 0.0f);
-
-    if (std::abs(makeupDb) <= 1.0e-6f)
-        return;
-
-    const auto gain = juce::Decibels::decibelsToGain(makeupDb);
-
-    for (auto channel = 0; channel < channelsToUse; ++channel)
-        buffer.applyGain(channel, 0, buffer.getNumSamples(), gain);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout SpeModuleProcessor::createParameterLayout()
@@ -172,108 +140,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpeModuleProcessor::createPa
     for (const auto& entry : speMiscOrder)
     {
         const auto key = juce::String(entry.key);
-        const auto name = makeSpeName("MISC", entry.label);
-
-        if (key == "bypass")
-        {
-            parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
-                juce::ParameterID { paramMiscBypassId, 1 },
-                name,
-                false,
-                juce::AudioParameterBoolAttributes()));
-            continue;
-        }
-
-        if (key == "bypass_wt_gain")
-        {
-            parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
-                juce::ParameterID { paramMiscBypassWithGainId, 1 },
-                name,
-                false,
-                juce::AudioParameterBoolAttributes()));
-            continue;
-        }
-
-        if (key == "in_gain_lr")
-        {
-            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID { paramInputGainLrId, 1 },
-                name,
-                juce::NormalisableRange<float> { -48.0f, 48.0f, 0.1f },
-                0.0f,
-                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
-                    [] (float value, int)
-                    {
-                        return formatDecibelValue(value);
-                    })));
-            continue;
-        }
-
-        if (key == "in_gain_l")
-        {
-            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID { paramInputGainLId, 1 },
-                name,
-                juce::NormalisableRange<float> { -48.0f, 48.0f, 0.1f },
-                0.0f,
-                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
-                    [] (float value, int)
-                    {
-                        return formatDecibelValue(value);
-                    })));
-            continue;
-        }
-
-        if (key == "in_gain_r")
-        {
-            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID { paramInputGainRId, 1 },
-                name,
-                juce::NormalisableRange<float> { -48.0f, 48.0f, 0.1f },
-                0.0f,
-                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
-                    [] (float value, int)
-                    {
-                        return formatDecibelValue(value);
-                    })));
-            continue;
-        }
-
-        if (key == "in_wide")
-        {
-            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID { paramWideId, 1 },
-                name,
-                juce::NormalisableRange<float> { 0.0f, 400.0f, 0.1f },
-                100.0f,
-                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
-                    [] (float value, int)
-                    {
-                        return juce::String::formatted("%.0f", static_cast<double>(value));
-                    })));
-            continue;
-        }
-
-        if (key == "out_gain")
-        {
-            parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID { paramMakeupId, 1 },
-                name,
-                juce::NormalisableRange<float> { -48.0f, 48.0f, 0.1f },
-                0.0f,
-                juce::AudioParameterFloatAttributes().withStringFromValueFunction(
-                    [] (float value, int)
-                    {
-                        return formatDecibelValue(value);
-                    })));
-            continue;
-        }
-
         if (key == "delta")
         {
             parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
                 juce::ParameterID { paramDeltaId, 1 },
-                name,
+                entry.label,
                 false,
                 juce::AudioParameterBoolAttributes()));
         }
@@ -282,7 +153,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpeModuleProcessor::createPa
     for (const auto& entry : speMainOrder)
     {
         const auto key = juce::String(entry.key);
-        const auto name = makeSpeName("MAIN", entry.label);
+        const auto name = makeSpeName("SPE", entry.label);
 
         if (key == "attack")
         {

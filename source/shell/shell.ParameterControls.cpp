@@ -113,7 +113,14 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
         focusParameterTitleButton(titleButton.get(), &slider);
 
         if (onTitleClick)
+        {
             onTitleClick();
+        }
+        else if (parameter != nullptr)
+        {
+            slider.setValue(parameter->convertFrom0to1(parameter->getDefaultValue()),
+                            juce::sendNotificationSync);
+        }
 
         clearKeyboardFocus(*this);
     });
@@ -369,7 +376,15 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
         focusParameterTitleButton(titleButton.get(), nullptr);
 
         if (onTitleClick)
+        {
             onTitleClick();
+        }
+        else if (parameter != nullptr)
+        {
+            auto* rangedParameter = static_cast<juce::RangedAudioParameter*>(parameter);
+            setSelectedChoiceIndex(juce::roundToInt(rangedParameter->convertFrom0to1(rangedParameter->getDefaultValue())),
+                                   true);
+        }
 
         clearKeyboardFocus(*this);
     });

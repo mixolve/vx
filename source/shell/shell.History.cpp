@@ -2,9 +2,10 @@
 #include "shell.ShellState.h"
 #include "shell.SetupSupport.h"
 #include "../modules/eqe/module.eqe.ProcessorSupport.h"
-#include "../modules/mxe/module.mxe.PluginProcessor.h"
+#include "../modules/multiband/mie/module.mie.PluginProcessor.h"
+#include "../modules/multiband/mxe/module.mxe.PluginProcessor.h"
 #include "../modules/spe/module.spe.SpeProcessor.h"
-#include "../modules/tse/module.tse.TseProcessor.h"
+#include "../modules/multiband/tse/module.tse.TseProcessor.h"
 
 void VxAudioProcessorEditor::syncHostSlotAssignmentValue(const int slotIndex, const float normalizedValue)
 {
@@ -70,14 +71,6 @@ void VxAudioProcessorEditor::valueTreePropertyChanged(juce::ValueTree&, const ju
 
 void VxAudioProcessorEditor::registerParameterListeners()
 {
-    valueTreeState.addParameterListener(VxAudioProcessor::paramGlobalGainLId, this);
-    valueTreeState.addParameterListener(VxAudioProcessor::paramGlobalGainRId, this);
-    valueTreeState.addParameterListener(VxAudioProcessor::paramGlobalGainLrId, this);
-    valueTreeState.addParameterListener(VxAudioProcessor::paramGlobalWideId, this);
-    valueTreeState.addParameterListener(VxAudioProcessor::paramOutGainId, this);
-    valueTreeState.addParameterListener(VxAudioProcessor::paramGlobalBypassId, this);
-    valueTreeState.addParameterListener(VxAudioProcessor::paramGlobalBypassOutGainOnlyId, this);
-
     for (int slotIndex = 0; slotIndex < VxAudioProcessor::hostAutomationSlotCount; ++slotIndex)
         valueTreeState.addParameterListener(VxAudioProcessor::getHostSlotParameterId(slotIndex), this);
 
@@ -106,14 +99,6 @@ void VxAudioProcessorEditor::registerObservedModuleParameterListeners(juce::Audi
 
 void VxAudioProcessorEditor::unregisterParameterListeners()
 {
-    valueTreeState.removeParameterListener(VxAudioProcessor::paramGlobalGainLId, this);
-    valueTreeState.removeParameterListener(VxAudioProcessor::paramGlobalGainRId, this);
-    valueTreeState.removeParameterListener(VxAudioProcessor::paramGlobalGainLrId, this);
-    valueTreeState.removeParameterListener(VxAudioProcessor::paramGlobalWideId, this);
-    valueTreeState.removeParameterListener(VxAudioProcessor::paramOutGainId, this);
-    valueTreeState.removeParameterListener(VxAudioProcessor::paramGlobalBypassId, this);
-    valueTreeState.removeParameterListener(VxAudioProcessor::paramGlobalBypassOutGainOnlyId, this);
-
     for (int slotIndex = 0; slotIndex < VxAudioProcessor::hostAutomationSlotCount; ++slotIndex)
         valueTreeState.removeParameterListener(VxAudioProcessor::getHostSlotParameterId(slotIndex), this);
 
@@ -155,6 +140,10 @@ void VxAudioProcessorEditor::refreshModuleStateListeners()
                     moduleState = moduleValueTreeState.state;
                     registerObservedModuleParameterListeners(moduleValueTreeState);
                 }
+                break;
+
+            case VxAudioProcessor::ActiveModule::mie:
+                observeModule(audioProcessor.getMieModuleProcessor(slot.instanceIndex));
                 break;
 
             case VxAudioProcessor::ActiveModule::mxe:
@@ -201,35 +190,19 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
 {
     clearModuleStateListeners();
 
-    eqeBypassAttachment.reset();
-    eqeBypassWithGainAttachment.reset();
-
-    if (eqeInGainLrControl != nullptr) eqeInGainLrControl->detach();
-    if (eqeInGainLControl != nullptr) eqeInGainLControl->detach();
-    if (eqeInGainRControl != nullptr) eqeInGainRControl->detach();
-    if (eqeWideControl != nullptr) eqeWideControl->detach();
-    if (eqeOutGainControl != nullptr) eqeOutGainControl->detach();
-
     for (auto& section : bellSections)
         if (section != nullptr)
             section->detach();
 
     speDeltaAttachment.reset();
-    speBypassAttachment.reset();
-    speBypassWithGainAttachment.reset();
     speDualMonoLinkAttachment.reset();
 
-    if (speInputGainControl != nullptr) speInputGainControl->detach();
-    if (speInputGainLControl != nullptr) speInputGainLControl->detach();
-    if (speInputGainRControl != nullptr) speInputGainRControl->detach();
-    if (speWideControl != nullptr) speWideControl->detach();
     if (speAttackControl != nullptr) speAttackControl->detach();
     if (speReleaseControl != nullptr) speReleaseControl->detach();
     if (speKneeControl != nullptr) speKneeControl->detach();
     if (speRatioControl != nullptr) speRatioControl->detach();
     if (speDspFftSizeControl != nullptr) speDspFftSizeControl->detach();
     if (speDspSlopeControl != nullptr) speDspSlopeControl->detach();
-    if (speMakeupControl != nullptr) speMakeupControl->detach();
     if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->detach();
     if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->detach();
     if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->detach();
@@ -238,6 +211,7 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
     if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->detach();
 
     shell_setup_support::removeOwnedChild(*this, speAnalyserComponent);
+    shell_setup_support::removeOwnedChild(*this, mieModuleEditor);
     shell_setup_support::removeOwnedChild(*this, mxeModuleEditor);
     shell_setup_support::removeOwnedChild(*this, tseModuleEditor);
 }
@@ -304,68 +278,46 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
 
     struct PreservedUiState
     {
-        bool shellGlobal = false;
-        bool shellGlobalMisc = true;
         bool shellGlobalHost = false;
-        bool global = false;
-        bool speMain = false;
-        bool filters = false;
-        bool presets = false;
         bool visualizer = false;
-        int expandedBell = -1;
-        int globalScrollY = 0;
         int filterScrollY = 0;
     };
 
     const PreservedUiState preservedUiState
     {
-        shellGlobalExpanded,
-        shellGlobalMiscExpanded,
         shellGlobalHostExpanded,
-        globalExpanded,
-        speMainExpanded,
-        filtersExpanded,
-        presetsExpanded,
         visualizerExpanded,
-        expandedBellIndex,
-        globalViewport.getViewPositionY(),
         filterViewport.getViewPositionY()
     };
+    auto* bypassParameter = valueTreeState.getParameter(VxAudioProcessor::paramGlobalBypassId);
+    const auto preservedBypassValue = bypassParameter != nullptr ? bypassParameter->getValue() : 0.0f;
 
     const juce::ScopedValueSetter<bool> suppressHistory(suppressHistorySnapshots, true);
     pendingHistorySnapshot.store(false, std::memory_order_relaxed);
     detachModuleEditorBindings();
     audioProcessor.setStateInformation(mergedSnapshot.getData(), static_cast<int>(mergedSnapshot.getSize()));
+    if (bypassParameter != nullptr)
+        bypassParameter->setValueNotifyingHost(preservedBypassValue);
+
     restoreEditorStateFromValueTree();
     rebuildModuleTabRows();
     refreshFilterPresetList(getActiveEqeProcessor() != nullptr ? getActiveEqeProcessor()->getLastFilterPresetName()
                                                                : juce::String {});
     reloadFilterPresetFromProcessor();
 
-    shellGlobalExpanded = preservedUiState.shellGlobal;
-    shellGlobalMiscExpanded = preservedUiState.shellGlobalMisc;
     shellGlobalHostExpanded = preservedUiState.shellGlobalHost;
 
-    if (shellGlobalMiscExpanded && shellGlobalHostExpanded)
-        shellGlobalMiscExpanded = false;
-
-    globalExpanded = preservedUiState.global;
-    speMainExpanded = preservedUiState.speMain;
-    filtersExpanded = preservedUiState.filters;
-    presetsExpanded = preservedUiState.presets;
     visualizerExpanded = preservedUiState.visualizer;
-    expandedBellIndex = preservedUiState.expandedBell;
 
-    if (! filtersExpanded || ! juce::isPositiveAndBelow(expandedBellIndex, getActiveBellCount()))
-        expandedBellIndex = -1;
+    if (eqeModuleLoaded)
+    {
+        visualizerExpanded = false;
+    }
 
     storeEditorStateToValueTree();
     updateEditorWidthForVisualizerVisibility();
     updateSectionStates();
     resized();
-
-    const auto globalMaxOffset = juce::jmax(0, getActiveGlobalContentHeight() - globalViewport.getHeight());
-    globalViewport.setViewPosition(0, juce::jlimit(0, globalMaxOffset, preservedUiState.globalScrollY));
 
     const auto filterMaxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
     filterViewport.setViewPosition(0, juce::jlimit(0, filterMaxOffset, preservedUiState.filterScrollY));

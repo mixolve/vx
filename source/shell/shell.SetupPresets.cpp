@@ -3,11 +3,6 @@
 void VxAudioProcessorEditor::setupPresetControls()
 {
     presetsSection = std::make_unique<PresetsSection>();
-    presetsSection->header->onClick = [this]
-    {
-        openPresetsSection();
-        clearKeyboardFocus(*this);
-    };
     presetsSection->onPresetSelected = [this]
     {
         if (presetsSection == nullptr)
@@ -51,13 +46,12 @@ void VxAudioProcessorEditor::setupPresetControls()
         deleteSelectedFilterPreset();
         clearKeyboardFocus(*this);
     };
-    addAndMakeVisible(*presetsSection->header);
-    filterContent.addAndMakeVisible(presetsSection->presetCombo);
-    filterContent.addAndMakeVisible(*presetsSection->adButton);
-    filterContent.addAndMakeVisible(*presetsSection->saveButton);
-    filterContent.addAndMakeVisible(*presetsSection->renameButton);
-    filterContent.addAndMakeVisible(*presetsSection->defaultButton);
-    filterContent.addAndMakeVisible(*presetsSection->deleteButton);
+    addAndMakeVisible(presetsSection->presetCombo);
+    addAndMakeVisible(*presetsSection->adButton);
+    addAndMakeVisible(*presetsSection->saveButton);
+    addAndMakeVisible(*presetsSection->renameButton);
+    addAndMakeVisible(*presetsSection->defaultButton);
+    addAndMakeVisible(*presetsSection->deleteButton);
     presetsSection->onRenameRequested = [this] (const juce::String& currentName)
     {
         showTextPrompt(currentName,

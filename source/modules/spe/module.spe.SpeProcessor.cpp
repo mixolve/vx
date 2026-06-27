@@ -35,17 +35,10 @@ SpeModuleProcessor::SpeModuleProcessor(juce::AudioProcessor& owner)
     dualMonoLeftAdaptiveOffsetParam = parameters.getRawParameterValue(paramDualMonoLeftAdaptiveOffsetId);
     dualMonoRightAdaptiveOffsetParam = parameters.getRawParameterValue(paramDualMonoRightAdaptiveOffsetId);
     dualMonoLinkParam = parameters.getRawParameterValue(paramDualMonoLinkId);
-    inputGainLrParam = parameters.getRawParameterValue(paramInputGainLrId);
-    inputGainLParam = parameters.getRawParameterValue(paramInputGainLId);
-    inputGainRParam = parameters.getRawParameterValue(paramInputGainRId);
-    wideParam = parameters.getRawParameterValue(paramWideId);
     attackParam = parameters.getRawParameterValue(paramAttackId);
     releaseParam = parameters.getRawParameterValue(paramReleaseId);
     kneeParam = parameters.getRawParameterValue(paramKneeId);
     ratioParam = parameters.getRawParameterValue(paramRatioId);
-    makeupParam = parameters.getRawParameterValue(paramMakeupId);
-    miscBypassParam = parameters.getRawParameterValue(paramMiscBypassId);
-    miscBypassWithGainParam = parameters.getRawParameterValue(paramMiscBypassWithGainId);
     deltaParam = parameters.getRawParameterValue(paramDeltaId);
     dspFftSizeParam = parameters.getRawParameterValue(paramDspFftSizeId);
     dspSlopeParam = parameters.getRawParameterValue(paramDspSlopeId);
@@ -83,11 +76,7 @@ void SpeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
     auto compressorSettings = getCompressorSettings();
     const auto deltaEnabled = isDeltaEnabled();
     const auto channelsToUse = juce::jmin(ownerProcessor.getTotalNumInputChannels(), buffer.getNumChannels());
-    const auto moduleBypass = isModuleBypassEnabled();
-    const auto moduleBypassWithGain = isModuleBypassWithGainEnabled();
-
-    const auto desiredLatencySamples = (moduleBypass || moduleBypassWithGain) ? 0
-                                                                              : compressorSettings.fftSize;
+    const auto desiredLatencySamples = compressorSettings.fftSize;
 
     if (desiredLatencySamples != activeLatencySamples)
     {
@@ -101,72 +90,6 @@ void SpeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
 
     for (auto channel = ownerProcessor.getTotalNumInputChannels(); channel < ownerProcessor.getTotalNumOutputChannels(); ++channel)
         buffer.clear(channel, 0, buffer.getNumSamples());
-
-    if (moduleBypass)
-    {
-        outputAnalyser.pushBuffer(buffer,
-                                  channelsToUse,
-                                  analysisSettings.fftSize,
-                                  analysisSettings.overlapFactor,
-                                  analysisSettings.averagingTimeMs);
-        return;
-    }
-
-    if (moduleBypassWithGain)
-    {
-        applyMakeupGain(buffer, channelsToUse);
-
-        outputAnalyser.pushBuffer(buffer,
-                                  channelsToUse,
-                                  analysisSettings.fftSize,
-                                  analysisSettings.overlapFactor,
-                                  analysisSettings.averagingTimeMs);
-        return;
-    }
-
-    const auto wideAmount = wideParam != nullptr
-        ? juce::jlimit(0.0f, 4.0f, wideParam->load(std::memory_order_relaxed) / 100.0f)
-        : 1.0f;
-
-    if (channelsToUse > 1 && std::abs(wideAmount - 1.0f) > 1.0e-6f)
-    {
-        const auto numSamples = buffer.getNumSamples();
-        auto* left = buffer.getWritePointer(0);
-        auto* right = buffer.getWritePointer(1);
-
-        for (int sampleIndex = 0; sampleIndex < numSamples; ++sampleIndex)
-        {
-            const auto mid = 0.5f * (left[sampleIndex] + right[sampleIndex]);
-            const auto side = 0.5f * (left[sampleIndex] - right[sampleIndex]) * wideAmount;
-            left[sampleIndex] = mid + side;
-            right[sampleIndex] = mid - side;
-        }
-    }
-
-    const auto gainLrDb = juce::jlimit(-48.0f, 48.0f, inputGainLrParam != nullptr ? inputGainLrParam->load(std::memory_order_relaxed) : 0.0f);
-    const auto gainLDb = juce::jlimit(-48.0f, 48.0f, inputGainLParam != nullptr ? inputGainLParam->load(std::memory_order_relaxed) : 0.0f);
-    const auto gainRDb = juce::jlimit(-48.0f, 48.0f, inputGainRParam != nullptr ? inputGainRParam->load(std::memory_order_relaxed) : 0.0f);
-    const auto effectiveGainLDb = gainLDb + gainLrDb;
-    const auto effectiveGainRDb = gainRDb + gainLrDb;
-    const auto applyInputGain = std::abs(effectiveGainLDb) > 1.0e-6f || std::abs(effectiveGainRDb) > 1.0e-6f;
-
-    if (applyInputGain)
-    {
-        if (channelsToUse > 0)
-            buffer.applyGain(0, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveGainLDb));
-
-        if (channelsToUse > 1)
-            buffer.applyGain(1, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveGainRDb));
-
-        if (deltaEnabled)
-        {
-            if (channelsToUse > 0)
-                deltaDryBuffer.applyGain(0, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveGainLDb));
-
-            if (channelsToUse > 1)
-                deltaDryBuffer.applyGain(1, 0, buffer.getNumSamples(), juce::Decibels::decibelsToGain(effectiveGainRDb));
-        }
-    }
 
     if (deltaEnabled)
         compressorSettings.makeupDb = 0.0f;
@@ -301,8 +224,7 @@ int SpeModuleProcessor::getLatencySamples() const noexcept
 
 bool SpeModuleProcessor::refreshLatencyState() noexcept
 {
-    const auto newLatencySamples = (isModuleBypassEnabled() || isModuleBypassWithGainEnabled()) ? 0
-                                                                                                 : getSelectedDspFftSize();
+    const auto newLatencySamples = getSelectedDspFftSize();
     const auto changed = activeLatencySamples != newLatencySamples;
     activeLatencySamples = newLatencySamples;
     return changed;

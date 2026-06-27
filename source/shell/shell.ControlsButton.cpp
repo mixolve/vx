@@ -107,6 +107,22 @@ void BoxTextButton::setBorderVisible(const bool shouldShow) noexcept
     repaint();
 }
 
+void BoxTextButton::setTextColourOverride(const juce::Colour colour)
+{
+    hasTextColourOverride = true;
+    textColourOverride = colour;
+    repaint();
+}
+
+void BoxTextButton::clearTextColourOverride()
+{
+    if (! hasTextColourOverride)
+        return;
+
+    hasTextColourOverride = false;
+    repaint();
+}
+
 void BoxTextButton::setLeadingDot(const juce::Colour colour, const float level)
 {
     leadingDotVisible = true;
@@ -151,7 +167,10 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
         graphics.drawRect(getLocalBounds(), 1);
     }
 
-    graphics.setColour(uiWhite);
+    const auto textColour = isEnabled()
+        ? (hasTextColourOverride ? textColourOverride : uiWhite)
+        : uiGrey500;
+    graphics.setColour(textColour);
     if (arrowDirection == ArrowDirection::none)
     {
         const auto font = makeUiFont();
@@ -189,7 +208,7 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
         graphics.setColour(leadingDotColour.withAlpha(leadingDotLevel > 0.5f ? 1.0f : 0.25f));
         graphics.fillEllipse(dotBounds);
 
-        graphics.setColour(uiWhite);
+        graphics.setColour(textColour);
         graphics.drawFittedText(getButtonText(),
                                 juce::Rectangle<int>(juce::roundToInt(groupLeft + dotDiameter + dotGap),
                                                      getLocalBounds().getY(),

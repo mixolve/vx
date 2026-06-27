@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../shared/shared.UiControls.h"
+#include "shell.UiControls.h"
 #include "shell.Editor.h"
 
 #include <functional>
