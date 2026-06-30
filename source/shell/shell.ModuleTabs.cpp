@@ -1,4 +1,6 @@
 #include "shell.EditorControls.h"
+#include "shell.EditorFilterSection.h"
+#include "shell.EditorPresetSections.h"
 
 #include <utility>
 
@@ -7,7 +9,7 @@ void VxAudioProcessorEditor::showModulePicker()
     if (moduleAddButton == nullptr)
         return;
 
-    if (audioProcessor.getLoadedModuleCount() != 0)
+    if (audioProcessor.isModuleLoaded())
         return;
 
     auto anchorBounds = moduleAddButton->getBounds();
@@ -17,11 +19,11 @@ void VxAudioProcessorEditor::showModulePicker()
     showChoicePrompt(anchorBounds,
                      { "MIE", "EQE", "SPE", "MXE", "TSE" },
                      -1,
-                     { audioProcessor.getLoadedModuleCount() == 0,
-                       audioProcessor.getLoadedModuleCount() == 0,
-                       audioProcessor.getLoadedModuleCount() == 0,
-                       audioProcessor.getLoadedModuleCount() == 0,
-                       audioProcessor.getLoadedModuleCount() == 0 },
+                     { ! audioProcessor.isModuleLoaded(),
+                       ! audioProcessor.isModuleLoaded(),
+                       ! audioProcessor.isModuleLoaded(),
+                       ! audioProcessor.isModuleLoaded(),
+                       ! audioProcessor.isModuleLoaded() },
                      juce::Justification::centred,
                        [this] (const int selectedIndex)
                        {
@@ -35,7 +37,89 @@ void VxAudioProcessorEditor::showModulePicker()
                                loadMxeModule();
                            else if (selectedIndex == 4)
                                loadTseModule();
-                       });
+                       },
+                     {},
+                     {},
+                     { "MULTIBAND/SINGLEBAND TOOLS",
+                       "PARAMETRIC EQUALIZER",
+                       "DUAL-MONO SPECTRAL PROCESSOR",
+                       "MULTIBAND/SINGLEBAND/DUAL-MONO/HALFWAVE DYNAMIC PROCESSOR",
+                       "MUTIBAND/SINGLEBAND TRANSIENT PROCESSOR" });
+}
+
+void VxAudioProcessorEditor::closeActiveModule()
+{
+    if (! audioProcessor.isModuleLoaded()
+        && audioProcessor.getActiveModule() == VxAudioProcessor::ActiveModule::none)
+        return;
+
+    detachModuleEditorBindings();
+
+    if (! audioProcessor.clearLoadedModule())
+        return;
+
+    eqeModuleLoaded = false;
+    speModuleLoaded = false;
+    mieModuleLoaded = false;
+    mxeModuleLoaded = false;
+    tseModuleLoaded = false;
+
+    shellGlobalHostExpanded = false;
+
+    filterViewport.setVisible(false);
+    filterViewport.setBounds({});
+    filterContent.setSize(0, 0);
+
+    auto hideComponent = [] (juce::Component* component)
+    {
+        if (component == nullptr)
+            return;
+
+        component->setVisible(false);
+        component->setBounds({});
+    };
+
+    hideComponent(addFilterButton.get());
+    hideComponent(clearFiltersButton.get());
+    hideComponent(sortPlaceButton.get());
+    hideComponent(sortFreqButton.get());
+    hideComponent(sortDuoButton.get());
+
+    if (presetsSection != nullptr)
+    {
+        hideComponent(&presetsSection->presetCombo);
+        hideComponent(presetsSection->adButton.get());
+        hideComponent(presetsSection->saveButton.get());
+        hideComponent(presetsSection->renameButton.get());
+        hideComponent(presetsSection->defaultButton.get());
+        hideComponent(presetsSection->deleteButton.get());
+    }
+
+    for (auto& section : filterSections)
+    {
+        if (section == nullptr)
+            continue;
+
+        section->expanded = false;
+        hideComponent(section->moveUpButton.get());
+        hideComponent(section->moveDownButton.get());
+        hideComponent(section->header.get());
+        hideComponent(section->typeControl.get());
+        hideComponent(section->lrmsControl.get());
+        hideComponent(section->slopeControl.get());
+        hideComponent(section->frequencyControl.get());
+        hideComponent(section->bandwidthControl.get());
+        hideComponent(section->gainControl.get());
+        hideComponent(section->bypassButton.get());
+    }
+
+    rebindActiveModuleEditors();
+    updateEditorWidthState();
+    refreshModuleTabButton();
+    storeEditorStateToValueTree();
+    updateSectionStates();
+    resized();
+    scheduleHistorySnapshot();
 }
 
 void VxAudioProcessorEditor::loadEqeModule()
@@ -50,11 +134,11 @@ void VxAudioProcessorEditor::loadEqeModule()
     tseModuleLoaded = false;
 
     shellGlobalHostExpanded = false;
-    visualizerExpanded = false;
 
     rebindActiveModuleEditors();
-    updateEditorWidthForVisualizerVisibility();
-    rebuildModuleTabRows();
+    enforceSingleExpandedFilterSection();
+    updateEditorWidthState();
+    refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
     resized();
@@ -73,11 +157,10 @@ void VxAudioProcessorEditor::loadMieModule()
     tseModuleLoaded = false;
 
     shellGlobalHostExpanded = false;
-    visualizerExpanded = false;
 
     rebindActiveModuleEditors();
-    updateEditorWidthForVisualizerVisibility();
-    rebuildModuleTabRows();
+    updateEditorWidthState();
+    refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
     resized();
@@ -96,11 +179,10 @@ void VxAudioProcessorEditor::loadMxeModule()
     tseModuleLoaded = false;
 
     shellGlobalHostExpanded = false;
-    visualizerExpanded = false;
 
     rebindActiveModuleEditors();
-    updateEditorWidthForVisualizerVisibility();
-    rebuildModuleTabRows();
+    updateEditorWidthState();
+    refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
     resized();
@@ -119,45 +201,28 @@ void VxAudioProcessorEditor::loadTseModule()
     mxeModuleLoaded = false;
 
     shellGlobalHostExpanded = false;
-    visualizerExpanded = false;
 
     rebindActiveModuleEditors();
-    updateEditorWidthForVisualizerVisibility();
-    rebuildModuleTabRows();
+    updateEditorWidthState();
+    refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
     resized();
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::rebuildModuleTabRows()
+void VxAudioProcessorEditor::refreshModuleTabButton()
 {
-    const auto rowCount = audioProcessor.getLoadedModuleCount();
-
-    while (static_cast<int>(moduleTabRows.size()) > rowCount)
+    if (moduleTabButton == nullptr)
     {
-        auto& row = moduleTabRows.back();
-        removeChildComponent(row->tabButton.get());
-        moduleTabRows.pop_back();
+        moduleTabButton = std::make_unique<BoxTextButton>(uiClip);
+        moduleTabButton->setTextJustification(juce::Justification::centred);
+        moduleTabButton->setInterceptsMouseClicks(false, false);
+        addAndMakeVisible(*moduleTabButton);
     }
 
-    while (static_cast<int>(moduleTabRows.size()) < rowCount)
-    {
-        auto row = std::make_unique<ModuleTabRow>();
-        row->tabButton = std::make_unique<BoxTextButton>(uiClip);
-        row->tabButton->setTextJustification(juce::Justification::centred);
-        row->tabButton->setInterceptsMouseClicks(false, false);
-
-        addAndMakeVisible(*row->tabButton);
-        moduleTabRows.push_back(std::move(row));
-    }
-
-    for (int rowIndex = 0; rowIndex < static_cast<int>(moduleTabRows.size()); ++rowIndex)
-    {
-        auto& row = *moduleTabRows[static_cast<size_t>(rowIndex)];
-        row.slotIndex = rowIndex;
-        row.tabButton->setButtonText(audioProcessor.getLoadedModuleLabelAtPosition(rowIndex));
-    }
+    moduleTabButton->setButtonText(audioProcessor.getLoadedModuleLabel());
+    moduleTabButton->setVisible(audioProcessor.getActiveModule() != VxAudioProcessor::ActiveModule::none);
 }
 
 void VxAudioProcessorEditor::openShellGlobalHostSection()

@@ -127,3 +127,52 @@ void EqeModuleProcessor::BiquadCascade::process(juce::AudioBuffer<float>& buffer
     for (int sectionIndex = 0; sectionIndex < stageCount; ++sectionIndex)
         sections[static_cast<size_t>(sectionIndex)].process(buffer, numChannels);
 }
+
+void EqeModuleProcessor::PhaseFirFilter::reset() noexcept
+{
+    for (auto& channelState : state)
+        channelState.fill(0.0f);
+
+    writeIndex = 0;
+}
+
+void EqeModuleProcessor::PhaseFirFilter::setIdentity() noexcept
+{
+    active = false;
+    taps.fill(0.0f);
+    taps[static_cast<size_t>(phaseFirLatencySamples)] = 1.0f;
+    reset();
+}
+
+void EqeModuleProcessor::PhaseFirFilter::process(juce::AudioBuffer<float>& buffer, const int numChannels) noexcept
+{
+    if (! active)
+        return;
+
+    const auto channelLimit = juce::jlimit(0, static_cast<int>(maxSupportedChannels), numChannels);
+
+    for (int sampleIndex = 0; sampleIndex < buffer.getNumSamples(); ++sampleIndex)
+    {
+        for (int channel = 0; channel < channelLimit; ++channel)
+        {
+            auto& channelState = state[static_cast<size_t>(channel)];
+            channelState[static_cast<size_t>(writeIndex)] = buffer.getSample(channel, sampleIndex);
+
+            auto output = 0.0f;
+            auto readIndex = writeIndex;
+
+            for (int tapIndex = 0; tapIndex < phaseFirSize; ++tapIndex)
+            {
+                output += taps[static_cast<size_t>(tapIndex)] * channelState[static_cast<size_t>(readIndex)];
+
+                if (--readIndex < 0)
+                    readIndex = phaseFirSize - 1;
+            }
+
+            buffer.setSample(channel, sampleIndex, output);
+        }
+
+        if (++writeIndex >= phaseFirSize)
+            writeIndex = 0;
+    }
+}

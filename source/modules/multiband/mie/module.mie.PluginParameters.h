@@ -19,6 +19,29 @@ enum class ParameterSlot : size_t
     gainL,
     gainR,
     gainLr,
+    rectPlus,
+    rectMinus,
+    rectFoldPlus,
+    rectFoldMinus,
+    panL,
+    panR,
+    law,
+    shear,
+    shearMode,
+    midBal,
+    sideBal,
+    ortDegRotation,
+    ortFlipR,
+    listenL,
+    listenR,
+    listenM,
+    listenS,
+    listenInPlace,
+    depStereo,
+    depRight,
+    depBuffer,
+    depPhaseL,
+    depPhaseR,
     count
 };
 
@@ -45,6 +68,7 @@ struct ParameterSpec
     float step = 0.01f;
     float defaultValue = 0.0f;
     const char* label = "";
+    int displayDecimals = 1;
 };
 
 inline constexpr auto parameterSpecs = std::to_array<ParameterSpec>({
@@ -52,6 +76,29 @@ inline constexpr auto parameterSpecs = std::to_array<ParameterSpec>({
     { "gainL", "GAIN-L", ParameterType::floating, -48.0f, 48.0f, 0.1f, 0.0f, "dB" },
     { "gainR", "GAIN-R", ParameterType::floating, -48.0f, 48.0f, 0.1f, 0.0f, "dB" },
     { "gainLr", "GAIN-LR", ParameterType::floating, -48.0f, 48.0f, 0.1f, 0.0f, "dB" },
+    { "rectPlus", "RECT+", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "rectMinus", "RECT-", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "rectFoldPlus", "RECTF+", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "rectFoldMinus", "RECTF-", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "panL", "PAN-L", ParameterType::floating, -100.0f, 100.0f, 0.1f, -100.0f, "%" },
+    { "panR", "PAN-R", ParameterType::floating, -100.0f, 100.0f, 0.1f, 100.0f, "%" },
+    { "law", "LAW", ParameterType::floating, 0.0f, 6.0f, 0.01f, 0.0f, "dB", 2 },
+    { "shear", "SHEAR", ParameterType::floating, -100.0f, 100.0f, 0.1f, 0.0f, "%" },
+    { "shearMode", "TO-L/TO-R", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "midBal", "MID-BAL", ParameterType::floating, -100.0f, 100.0f, 0.1f, 0.0f, "%" },
+    { "sideBal", "SIDE-BAL", ParameterType::floating, -100.0f, 100.0f, 0.1f, 0.0f, "%" },
+    { "ortDegRotation", "ORT-DEG", ParameterType::floating, 0.0f, 360.0f, 0.1f, 0.0f, "deg" },
+    { "ortFlipR", "ORT-FLIP-R", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenL", "L", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenR", "R", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenM", "M", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenS", "S", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenInPlace", "INPL", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "depStereo", "D-STEREO", ParameterType::floating, -100.0f, 100.0f, 0.01f, 0.0f, "ms", 2 },
+    { "depRight", "D-RIGHT", ParameterType::floating, -100.0f, 100.0f, 0.01f, 0.0f, "ms", 2 },
+    { "depBuffer", "BUFFER", ParameterType::floating, 0.0f, 200.0f, 0.01f, 0.0f, "ms", 2 },
+    { "depPhaseL", "PHASE-L", ParameterType::floating, -180.0f, 180.0f, 0.1f, 0.0f, "deg" },
+    { "depPhaseR", "PHASE-R", ParameterType::floating, -180.0f, 180.0f, 0.1f, 0.0f, "deg" },
 });
 
 inline constexpr auto crossoverSpecs = std::to_array<ParameterSpec>({

@@ -1,4 +1,4 @@
-#include "shell.EditorBellSection.h"
+#include "shell.EditorFilterSection.h"
 #include "shell.UiConstants.h"
 #include "shell.EditorPresetSections.h"
 
@@ -7,7 +7,7 @@
 void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bounds, const int editorInsetX)
 {
     if (! bounds.isEmpty())
-        bounds.removeFromBottom(addFilterToFooterGap);
+        bounds.removeFromBottom(viewportToPotentiometerGap);
 
     juce::Rectangle<int> presetsBounds;
 
@@ -62,16 +62,16 @@ void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bound
 
     auto contentBounds = filterContent.getLocalBounds();
 
-    const auto activeBellCount = getActiveBellCount();
+    const auto activeFilterCount = getActiveFilterCount();
 
-    for (int displayIndex = 0; displayIndex < activeBellCount; ++displayIndex)
+    for (int displayIndex = 0; displayIndex < activeFilterCount; ++displayIndex)
     {
-        const auto bellIndex = getBellIndexForOrderPosition(displayIndex);
+        const auto filterIndex = getFilterIndexForOrderPosition(displayIndex);
 
-        if (bellIndex < 0)
+        if (filterIndex < 0)
             continue;
 
-        auto* section = bellSections[static_cast<size_t>(bellIndex)].get();
+        auto* section = filterSections[static_cast<size_t>(filterIndex)].get();
 
         if (section == nullptr)
             continue;
@@ -82,15 +82,21 @@ void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bound
 
         auto moveUpBounds = headerBounds.removeFromLeft(rowHeight);
         headerBounds.removeFromLeft(parameterGap);
+        auto bypassBounds = headerBounds.removeFromLeft(rowHeight);
+        headerBounds.removeFromLeft(parameterGap);
         auto moveDownBounds = headerBounds.removeFromRight(rowHeight);
         headerBounds.removeFromRight(parameterGap);
 
         section->moveUpButton->setBounds(moveUpBounds);
+        section->bypassButton->setBounds(bypassBounds);
         section->header->setBounds(headerBounds);
         section->moveDownButton->setBounds(moveDownBounds);
 
         if (! contentBounds.isEmpty())
             contentBounds.removeFromTop(verticalGap);
+
+        if (! section->expanded)
+            continue;
 
         auto placeFilterControl = [&contentBounds, editorInsetX] (auto& control)
         {
@@ -103,25 +109,12 @@ void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bound
                 contentBounds.removeFromTop(verticalGap);
         };
 
-        auto placeFilterActionButton = [&contentBounds, editorInsetX] (BoxTextButton& button)
-        {
-            auto rowBounds = contentBounds.removeFromTop(rowHeight);
-            rowBounds.removeFromLeft(editorInsetX);
-            rowBounds.removeFromRight(editorInsetX);
-            button.setBounds(rowBounds);
-
-            if (! contentBounds.isEmpty())
-                contentBounds.removeFromTop(verticalGap);
-        };
-
         placeFilterControl(*section->typeControl);
         placeFilterControl(*section->lrmsControl);
         placeFilterControl(*section->slopeControl);
         placeFilterControl(*section->frequencyControl);
         placeFilterControl(*section->bandwidthControl);
         placeFilterControl(*section->gainControl);
-        placeFilterActionButton(*section->bypassButton);
-        placeFilterActionButton(*section->deleteButton);
     }
 
     if (presetsSection != nullptr)

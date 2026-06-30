@@ -56,12 +56,39 @@ mie::dsp::DspCore::Parameters MieAudioProcessor::readBandParameters(const size_t
         jassertfalse;
         return 0.0f;
     };
+    const auto loadBool = [&loadFloat] (const ParameterSlot slot)
+    {
+        return loadFloat(slot) >= 0.5f;
+    };
 
     mie::dsp::DspCore::Parameters parameters;
     parameters.wide = loadFloat(ParameterSlot::wide);
     parameters.gainL = loadFloat(ParameterSlot::gainL);
     parameters.gainR = loadFloat(ParameterSlot::gainR);
     parameters.gainLr = loadFloat(ParameterSlot::gainLr);
+    parameters.rectPlus = loadBool(ParameterSlot::rectPlus);
+    parameters.rectMinus = loadBool(ParameterSlot::rectMinus);
+    parameters.rectFoldPlus = loadBool(ParameterSlot::rectFoldPlus);
+    parameters.rectFoldMinus = loadBool(ParameterSlot::rectFoldMinus);
+    parameters.panL = loadFloat(ParameterSlot::panL);
+    parameters.panR = loadFloat(ParameterSlot::panR);
+    parameters.law = loadFloat(ParameterSlot::law);
+    parameters.shear = loadFloat(ParameterSlot::shear);
+    parameters.shearToRight = loadBool(ParameterSlot::shearMode);
+    parameters.midBal = loadFloat(ParameterSlot::midBal);
+    parameters.sideBal = loadFloat(ParameterSlot::sideBal);
+    parameters.ortDegRotation = loadFloat(ParameterSlot::ortDegRotation);
+    parameters.ortFlipR = loadBool(ParameterSlot::ortFlipR);
+    parameters.listenL = loadBool(ParameterSlot::listenL);
+    parameters.listenR = loadBool(ParameterSlot::listenR);
+    parameters.listenM = loadBool(ParameterSlot::listenM);
+    parameters.listenS = loadBool(ParameterSlot::listenS);
+    parameters.listenInPlace = loadBool(ParameterSlot::listenInPlace);
+    parameters.depStereoMs = loadFloat(ParameterSlot::depStereo);
+    parameters.depRightMs = loadFloat(ParameterSlot::depRight);
+    parameters.depBufferMs = loadFloat(ParameterSlot::depBuffer);
+    parameters.depPhaseL = loadFloat(ParameterSlot::depPhaseL);
+    parameters.depPhaseR = loadFloat(ParameterSlot::depPhaseR);
 
     return parameters;
 }

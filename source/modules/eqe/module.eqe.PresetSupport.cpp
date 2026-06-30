@@ -303,6 +303,60 @@ static int getStoredFilterParameterSortRank(const juce::String& parameterId)
     return (bandIndex * 10) + parameterRank + 1;
 }
 
+static juce::String getStoredFilterParameterSuffix(const juce::String& parameterId)
+{
+    const auto trimmedId = parameterId.trim();
+
+    if (! trimmedId.startsWithIgnoreCase("filter_"))
+        return {};
+
+    const auto remainder = trimmedId.substring(7);
+    const auto separatorIndex = remainder.indexOfChar('_');
+
+    if (separatorIndex <= 0)
+        return {};
+
+    return remainder.substring(separatorIndex + 1).trim().toLowerCase();
+}
+
+static float readPlainParameterValue(juce::AudioProcessorValueTreeState& parameters,
+                                     const juce::String& parameterId)
+{
+    if (auto* parameter = parameters.getParameter(parameterId))
+        return parameter->convertFrom0to1(parameter->getValue());
+
+    return 0.0f;
+}
+
+static bool shouldStoreFilterParameter(const juce::String& parameterId,
+                                       juce::AudioProcessorValueTreeState& parameters,
+                                       const int storageFilterIndex)
+{
+    const auto suffix = getStoredFilterParameterSuffix(parameterId);
+
+    if (suffix.isEmpty())
+        return true;
+
+    const auto filterIndex = storageFilterIndex - 1;
+
+    if (filterIndex < 0 || filterIndex >= EqeModuleProcessor::maxFilterCount)
+        return false;
+
+    const auto typeChoice = static_cast<int>(std::lround(readPlainParameterValue(parameters,
+                                                                                 EqeModuleProcessor::getFilterTypeParamId(filterIndex))));
+    const auto filterType = EqeModuleProcessor::filterTypeFromChoiceIndex(typeChoice);
+
+    if (filterType == EqeModuleProcessor::FilterType::volume)
+    {
+        return suffix == "type"
+            || suffix == "place"
+            || suffix == "gain"
+            || suffix == "bypass";
+    }
+
+    return true;
+}
+
 static bool shouldFormatFilterParameterValueAsTwoDecimals(const juce::String& parameterId)
 {
     const auto trimmedId = parameterId.trim().toLowerCase();
@@ -486,14 +540,14 @@ bool writeFilterPresetsXml(const juce::XmlElement& rootElement)
 std::unique_ptr<juce::XmlElement> createSerializableStateXml(const EqeModuleProcessor& processor)
 {
     return createSerializableStateXml(const_cast<EqeModuleProcessor&>(processor).getValueTreeState(),
-                                      processor.getActiveBellCount());
+                                      processor.getActiveFilterCount());
 }
 
 std::unique_ptr<juce::XmlElement> createSerializableStateXml(juce::AudioProcessorValueTreeState& parameters,
-                                                             const int activeBellCount)
+                                                             const int activeFilterCount)
 {
     auto state = parameters.copyState();
-    state.setProperty(EqeModuleProcessor::activeBellCountStateKey, activeBellCount, nullptr);
+    state.setProperty(EqeModuleProcessor::activeFilterCountStateKey, activeFilterCount, nullptr);
     state.removeProperty(EqeModuleProcessor::filterPresetLastSelectedStateKey, nullptr);
     state.removeProperty(EqeModuleProcessor::filterPresetDefaultSelectedStateKey, nullptr);
 
@@ -533,7 +587,10 @@ std::unique_ptr<juce::XmlElement> createSerializableStateXml(juce::AudioProcesso
         if (filterIndex < 0 && parameterId.startsWithIgnoreCase("filter_"))
             continue;
 
-        if (filterIndex > activeBellCount)
+        if (filterIndex > activeFilterCount)
+            continue;
+
+        if (filterIndex > 0 && ! shouldStoreFilterParameter(parameterId, parameters, filterIndex))
             continue;
 
         childElements.push_back({ getStoredFilterParameterSortRank(parameterId), std::move(childCopy) });
@@ -547,7 +604,7 @@ std::unique_ptr<juce::XmlElement> createSerializableStateXml(juce::AudioProcesso
               });
 
     auto storageState = std::make_unique<juce::XmlElement>(stateXml->getTagName());
-    storageState->setAttribute(EqeModuleProcessor::activeBellCountStateKey, activeBellCount);
+    storageState->setAttribute(EqeModuleProcessor::activeFilterCountStateKey, activeFilterCount);
 
     for (auto& childElement : childElements)
         storageState->addChildElement(childElement.element.release());

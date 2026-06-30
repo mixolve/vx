@@ -1,4 +1,4 @@
-#include "shell.EditorBellSection.h"
+#include "shell.EditorFilterSection.h"
 #include "shell.EditorPresetSections.h"
 #include "../modules/eqe/module.eqe.ProcessorSupport.h"
 
@@ -106,7 +106,7 @@ void VxAudioProcessorEditor::reloadFilterPresetFromProcessor()
 
     restoreEditorStateFromValueTree();
 
-    for (auto& sectionPtr : bellSections)
+    for (auto& sectionPtr : filterSections)
     {
         auto* section = sectionPtr.get();
 
@@ -117,6 +117,7 @@ void VxAudioProcessorEditor::reloadFilterPresetFromProcessor()
         section->lastFilterType = loadedType;
         section->slopeControl->setChoices(getBellSlopeDisplayChoicesForType(loadedType));
         section->slopeControl->setChoiceEnabled(0, loadedType != EqeModuleProcessor::FilterType::bell);
+        section->updatePlaceChoicesForType(true);
 
         for (const auto filterType : VxAudioProcessor::filterTypePresetOrder)
         {
@@ -131,6 +132,7 @@ void VxAudioProcessorEditor::reloadFilterPresetFromProcessor()
         section->captureCurrentValuesForCurrentType(true);
     }
 
+    enforceSingleExpandedFilterSection();
     storeEditorStateToValueTree();
     updateSectionStates();
     resized();
@@ -171,17 +173,17 @@ void VxAudioProcessorEditor::saveFilterPreset()
         refreshFilterPresetList(presetName);
 }
 
-bool VxAudioProcessorEditor::renameFilterPreset(const juce::String& oldPresetName, const juce::String& newPresetName)
+bool VxAudioProcessorEditor::renameFilterPreset(const juce::String& sourcePresetName, const juce::String& newPresetName)
 {
-    const auto trimmedOldName = oldPresetName.trim();
+    const auto trimmedSourceName = sourcePresetName.trim();
     const auto trimmedNewName = newPresetName.trim();
 
-    if (trimmedOldName.isEmpty() || trimmedNewName.isEmpty())
+    if (trimmedSourceName.isEmpty() || trimmedNewName.isEmpty())
         return false;
 
     auto* eqeProcessor = getActiveEqeProcessor();
 
-    if (eqeProcessor == nullptr || ! eqeProcessor->renameFilterPreset(trimmedOldName, trimmedNewName))
+    if (eqeProcessor == nullptr || ! eqeProcessor->renameFilterPreset(trimmedSourceName, trimmedNewName))
         return false;
 
     refreshFilterPresetList(trimmedNewName);

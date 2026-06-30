@@ -1,4 +1,4 @@
-#include "shell.EditorBellSection.h"
+#include "shell.EditorFilterSection.h"
 #include "shell.UiConstants.h"
 #include "shell.EditorPresetSections.h"
 
@@ -19,7 +19,7 @@ void VxAudioProcessorEditor::layoutNoModuleState(juce::Rectangle<int>& bounds)
 void VxAudioProcessorEditor::layoutModuleEditorContent(juce::Rectangle<int>& bounds)
 {
     auto contentBounds = bounds;
-    contentBounds.removeFromBottom(addFilterToFooterGap);
+    contentBounds.removeFromBottom(viewportToPotentiometerGap);
 
     if (mieModuleEditor != nullptr)
     {

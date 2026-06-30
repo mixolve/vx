@@ -13,7 +13,7 @@ void VxAudioProcessorEditor::setupPresetControls()
         if (presetName.isEmpty())
             return;
 
-        const juce::ScopedValueSetter<bool> suppressHandlers(suppressBellSectionValueChangeHandlers, true);
+        const juce::ScopedValueSetter<bool> suppressHandlers(suppressFilterSectionValueChangeHandlers, true);
 
         if (auto* eqeProcessor = getActiveEqeProcessor(); eqeProcessor != nullptr && eqeProcessor->loadFilterPreset(presetName))
         {

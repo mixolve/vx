@@ -1,4 +1,4 @@
-#include "shell.EditorBellSection.h"
+#include "shell.EditorFilterSection.h"
 #include "shell.UiConstants.h"
 #include "shell.EditorPresetSections.h"
 
@@ -49,34 +49,39 @@ int VxAudioProcessorEditor::getFilterContentHeight() const
     if (addFilterButton == nullptr)
         return 0;
 
-    for (const auto& section : bellSections)
+    for (const auto& section : filterSections)
     {
         if (section == nullptr)
             return 0;
     }
 
-    const auto activeBellCount = getActiveBellCount();
+    const auto activeFilterCount = getActiveFilterCount();
     auto totalHeight = 0;
 
-    for (int displayIndex = 0; displayIndex < activeBellCount; ++displayIndex)
+    for (int displayIndex = 0; displayIndex < activeFilterCount; ++displayIndex)
     {
-        const auto bellIndex = getBellIndexForOrderPosition(displayIndex);
-        if (bellIndex < 0)
+        const auto filterIndex = getFilterIndexForOrderPosition(displayIndex);
+        if (filterIndex < 0)
             continue;
 
         totalHeight += rowHeight;
-        totalHeight += verticalGap + bellSections[static_cast<size_t>(bellIndex)]->typeControl->getPreferredHeight();
-        totalHeight += verticalGap + bellSections[static_cast<size_t>(bellIndex)]->lrmsControl->getPreferredHeight();
-        totalHeight += verticalGap + bellSections[static_cast<size_t>(bellIndex)]->slopeControl->getPreferredHeight();
-        totalHeight += verticalGap + bellSections[static_cast<size_t>(bellIndex)]->frequencyControl->getPreferredHeight();
-        totalHeight += verticalGap + bellSections[static_cast<size_t>(bellIndex)]->bandwidthControl->getPreferredHeight();
-        totalHeight += verticalGap + bellSections[static_cast<size_t>(bellIndex)]->gainControl->getPreferredHeight();
-        totalHeight += verticalGap + rowHeight;
-        totalHeight += verticalGap + rowHeight;
+
+        const auto* section = filterSections[static_cast<size_t>(filterIndex)].get();
+
+        if (section != nullptr && section->expanded)
+        {
+            totalHeight += verticalGap + section->typeControl->getPreferredHeight();
+            totalHeight += verticalGap + section->lrmsControl->getPreferredHeight();
+            totalHeight += verticalGap + section->slopeControl->getPreferredHeight();
+            totalHeight += verticalGap + section->frequencyControl->getPreferredHeight();
+            totalHeight += verticalGap + section->bandwidthControl->getPreferredHeight();
+            totalHeight += verticalGap + section->gainControl->getPreferredHeight();
+        }
+
         totalHeight += verticalGap;
     }
 
-    return totalHeight;
+    return totalHeight + verticalGap;
 }
 
 int VxAudioProcessorEditor::getActiveFilterContentHeight() const
@@ -86,12 +91,7 @@ int VxAudioProcessorEditor::getActiveFilterContentHeight() const
 
     if (speModuleLoaded)
     {
-        auto contentHeight = getSpeMainContentHeight() + verticalGap + rowHeight;
-
-        if (visualizerExpanded)
-            contentHeight += verticalGap + getSpeAnalyserContentHeight();
-
-        return contentHeight + verticalGap;
+        return getSpeMainContentHeight() + moduleContentBottomGap;
     }
 
     if (eqeModuleLoaded)
@@ -100,15 +100,16 @@ int VxAudioProcessorEditor::getActiveFilterContentHeight() const
     return 0;
 }
 
-void VxAudioProcessorEditor::updateVisualizerPanelBounds()
+void VxAudioProcessorEditor::resetAnalyserPanelBounds()
 {
     lastCollapsedEditorWidth = juce::jmax(minimumEditorWidth, getWidth());
 
-    if (visualizerComponent != nullptr)
-        visualizerComponent->setBounds({});
 
     if (speAnalyserComponent != nullptr)
         speAnalyserComponent->setBounds({});
+
+    speAnalyserViewport.setBounds({});
+    speAnalyserContent.setSize(0, 0);
 }
 
 void VxAudioProcessorEditor::layoutShellGlobalSection(juce::Rectangle<int>& bounds, const int editorInsetX)
@@ -237,43 +238,32 @@ void VxAudioProcessorEditor::layoutFooter(juce::Rectangle<int>& bounds, const in
     focusedParameterControl->setBounds(focusedBounds);
 }
 
-void VxAudioProcessorEditor::layoutModuleTabRows(juce::Rectangle<int>& bounds, const int editorInsetX)
+void VxAudioProcessorEditor::layoutModuleTabButton(juce::Rectangle<int>& bounds, const int editorInsetX)
 {
-    auto placeModuleRow = [&bounds, editorInsetX] (BoxTextButton& tab)
-    {
-        auto rowBounds = bounds.removeFromTop(rowHeight);
-        rowBounds.removeFromLeft(editorInsetX);
-        rowBounds.removeFromRight(editorInsetX);
+    if (moduleTabButton == nullptr)
+        return;
 
-        tab.setBounds(rowBounds);
+    moduleTabButton->setBounds({});
 
-        if (! bounds.isEmpty())
-            bounds.removeFromTop(verticalGap);
-    };
+    if (! moduleTabButton->isVisible())
+        return;
 
-    for (auto& row : moduleTabRows)
-    {
-        if (row == nullptr)
-            continue;
+    auto rowBounds = bounds.removeFromTop(rowHeight);
+    rowBounds.removeFromLeft(editorInsetX);
+    rowBounds.removeFromRight(editorInsetX);
+    moduleTabButton->setBounds(rowBounds);
 
-        row->tabButton->setBounds({});
-
-        if (row->tabButton->isVisible())
-            placeModuleRow(*row->tabButton);
-    }
+    if (! bounds.isEmpty())
+        bounds.removeFromTop(verticalGap);
 }
 
 void VxAudioProcessorEditor::finalizeLayout() noexcept
 {
+    updateTooltipBoundsConstraint();
     shell_parameter_focus::clearFocusIfNotShowing();
 
-    for (const auto& row : moduleTabRows)
-    {
-        if (row == nullptr)
-            continue;
-
-        row->tabButton->toFront(false);
-    }
+    if (moduleTabButton != nullptr)
+        moduleTabButton->toFront(false);
 
     shellGlobalHeader->toFront(false);
     if (undoButton != nullptr) undoButton->toFront(false);
@@ -313,7 +303,7 @@ void VxAudioProcessorEditor::resized()
     if (eqeModuleLoaded && addFilterButton == nullptr)
         return;
 
-    for (const auto& section : bellSections)
+    for (const auto& section : filterSections)
     {
         if (eqeModuleLoaded && section == nullptr)
             return;
@@ -321,7 +311,7 @@ void VxAudioProcessorEditor::resized()
 
     auto bounds = getLocalBounds();
 
-    updateVisualizerPanelBounds();
+    resetAnalyserPanelBounds();
 
     const auto editorInsetX = getEditorInsetX(bounds.getWidth());
     const auto totalHeight = bounds.getHeight();
@@ -344,7 +334,7 @@ void VxAudioProcessorEditor::resized()
         return;
     }
 
-    layoutModuleTabRows(bounds, editorInsetX);
+    layoutModuleTabButton(bounds, editorInsetX);
 
     if (mieModuleLoaded || mxeModuleLoaded || tseModuleLoaded)
     {

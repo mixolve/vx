@@ -78,11 +78,6 @@ VxAudioProcessor::ActiveModule VxAudioProcessor::getActiveModule() const noexcep
 
 void VxAudioProcessor::setActiveModule(const ActiveModule module)
 {
-    setActiveModule(module, module == ActiveModule::none ? -1 : 0);
-}
-
-void VxAudioProcessor::setActiveModule(const ActiveModule module, const int)
-{
     activeModule.store(module, std::memory_order_release);
 
     const auto activeId = juce::String(stateIdForModule(module));
@@ -93,28 +88,11 @@ void VxAudioProcessor::setActiveModule(const ActiveModule module, const int)
         parameters.state.removeProperty(activeModuleStateKey, nullptr);
 }
 
-bool VxAudioProcessor::setActiveModuleIfPresent(const ActiveModule module, const int)
-{
-    if (module == ActiveModule::none)
-    {
-        setActiveModule(ActiveModule::none, -1);
-        return true;
-    }
-
-    if (! loadedModules.empty() && loadedModules.front().module == module)
-    {
-        setActiveModule(module, 0);
-        return true;
-    }
-
-    return false;
-}
-
 bool VxAudioProcessor::loadModule(const ActiveModule module)
 {
     const juce::ScopedLock lock(processingLock);
 
-    if (module == ActiveModule::none || ! loadedModules.empty())
+    if (module == ActiveModule::none || getActiveModule() != ActiveModule::none)
         return false;
 
     const ScopedProcessingSuspend suspendGuard(*this);
@@ -125,53 +103,62 @@ bool VxAudioProcessor::loadModule(const ActiveModule module)
             processingPrepared.store(true, std::memory_order_release);
     };
 
-    auto instanceIndex = -1;
+    auto created = false;
 
     switch (module)
     {
-        case ActiveModule::mie: instanceIndex = createMieModuleInstance(); break;
-        case ActiveModule::eqe: instanceIndex = createEqeModuleInstance(); break;
-        case ActiveModule::spe: instanceIndex = createSpeModuleInstance(); break;
-        case ActiveModule::mxe: instanceIndex = createMxeModuleInstance(); break;
-        case ActiveModule::tse: instanceIndex = createTseModuleInstance(); break;
+        case ActiveModule::mie: created = createMieModule(); break;
+        case ActiveModule::eqe: created = createEqeModule(); break;
+        case ActiveModule::spe: created = createSpeModule(); break;
+        case ActiveModule::mxe: created = createMxeModule(); break;
+        case ActiveModule::tse: created = createTseModule(); break;
         case ActiveModule::none: break;
     }
 
-    if (instanceIndex < 0)
+    if (! created)
     {
         restoreProcessingPrepared();
         return false;
     }
 
     if (module == ActiveModule::eqe)
-        if (auto* eqeModuleProcessor = getEqeModuleProcessor(instanceIndex))
-            eqeModuleProcessor->loadInitialFilterPreset();
+        if (auto* eqe = getEqeModuleProcessor())
+            eqe->loadInitialFilterPreset();
 
-    loadedModules.push_back({ module, 0 });
-    setActiveModule(module, 0);
+    setActiveModule(module);
     updateShellLatency();
     restoreProcessingPrepared();
     return true;
 }
 
-int VxAudioProcessor::getLoadedModuleCount() const noexcept
+bool VxAudioProcessor::clearLoadedModule()
 {
-    return static_cast<int>(loadedModules.size());
+    const juce::ScopedLock lock(processingLock);
+
+    if (getActiveModule() == ActiveModule::none)
+        return false;
+
+    const ScopedProcessingSuspend suspendGuard(*this);
+    eqeModuleProcessor.reset();
+    speModuleProcessor.reset();
+    mieModuleProcessor.reset();
+    mxeModuleProcessor.reset();
+    tseModuleProcessor.reset();
+    setActiveModule(ActiveModule::none);
+    updateShellLatency();
+    return true;
 }
 
-VxAudioProcessor::ModuleSlot VxAudioProcessor::getLoadedModuleSlotAtPosition(const int position) const noexcept
+bool VxAudioProcessor::isModuleLoaded() const noexcept
 {
-    if (position != 0 || loadedModules.empty())
-        return {};
-
-    return loadedModules.front();
+    return getActiveModule() != ActiveModule::none;
 }
 
-juce::String VxAudioProcessor::getLoadedModuleLabelAtPosition(const int position) const
+juce::String VxAudioProcessor::getLoadedModuleLabel() const
 {
-    const auto slot = getLoadedModuleSlotAtPosition(position);
+    const auto module = getActiveModule();
 
-    switch (slot.module)
+    switch (module)
     {
         case ActiveModule::mie: return "MIE";
         case ActiveModule::eqe: return "EQE";
@@ -184,220 +171,129 @@ juce::String VxAudioProcessor::getLoadedModuleLabelAtPosition(const int position
     return {};
 }
 
-int VxAudioProcessor::getActiveModuleInstanceIndex() const noexcept
-{
-    return getActiveModule() == ActiveModule::none ? -1 : 0;
-}
-
 bool VxAudioProcessor::isEqeModuleLoaded() const noexcept
 {
-    return ! loadedModules.empty() && loadedModules.front().module == ActiveModule::eqe;
+    return getActiveModule() == ActiveModule::eqe && eqeModuleProcessor != nullptr;
 }
 
 bool VxAudioProcessor::isSpeModuleLoaded() const noexcept
 {
-    return ! loadedModules.empty() && loadedModules.front().module == ActiveModule::spe;
+    return getActiveModule() == ActiveModule::spe && speModuleProcessor != nullptr;
 }
 
 bool VxAudioProcessor::isMieModuleLoaded() const noexcept
 {
-    return ! loadedModules.empty() && loadedModules.front().module == ActiveModule::mie;
+    return getActiveModule() == ActiveModule::mie && mieModuleProcessor != nullptr;
 }
 
 MieAudioProcessor* VxAudioProcessor::getMieModuleProcessor() noexcept
 {
-    return getMieModuleProcessor(0);
+    return mieModuleProcessor.get();
 }
 
 const MieAudioProcessor* VxAudioProcessor::getMieModuleProcessor() const noexcept
 {
-    return getMieModuleProcessor(0);
-}
-
-MieAudioProcessor* VxAudioProcessor::getMieModuleProcessor(const int instanceIndex) noexcept
-{
-    if (! juce::isPositiveAndBelow(instanceIndex, static_cast<int>(mieModuleProcessors.size())))
-        return nullptr;
-
-    return mieModuleProcessors[static_cast<size_t>(instanceIndex)].get();
-}
-
-const MieAudioProcessor* VxAudioProcessor::getMieModuleProcessor(const int instanceIndex) const noexcept
-{
-    if (! juce::isPositiveAndBelow(instanceIndex, static_cast<int>(mieModuleProcessors.size())))
-        return nullptr;
-
-    return mieModuleProcessors[static_cast<size_t>(instanceIndex)].get();
+    return mieModuleProcessor.get();
 }
 
 SpeModuleProcessor* VxAudioProcessor::getSpeModuleProcessor() noexcept
 {
-    return getSpeModuleProcessor(0);
+    return speModuleProcessor.get();
 }
 
 const SpeModuleProcessor* VxAudioProcessor::getSpeModuleProcessor() const noexcept
 {
-    return getSpeModuleProcessor(0);
-}
-
-SpeModuleProcessor* VxAudioProcessor::getSpeModuleProcessor(const int instanceIndex) noexcept
-{
-    if (! juce::isPositiveAndBelow(instanceIndex, static_cast<int>(speModuleProcessors.size())))
-        return nullptr;
-
-    return speModuleProcessors[static_cast<size_t>(instanceIndex)].get();
-}
-
-const SpeModuleProcessor* VxAudioProcessor::getSpeModuleProcessor(const int instanceIndex) const noexcept
-{
-    if (! juce::isPositiveAndBelow(instanceIndex, static_cast<int>(speModuleProcessors.size())))
-        return nullptr;
-
-    return speModuleProcessors[static_cast<size_t>(instanceIndex)].get();
+    return speModuleProcessor.get();
 }
 
 bool VxAudioProcessor::isMxeModuleLoaded() const noexcept
 {
-    return ! loadedModules.empty() && loadedModules.front().module == ActiveModule::mxe;
+    return getActiveModule() == ActiveModule::mxe && mxeModuleProcessor != nullptr;
 }
 
 MxeAudioProcessor* VxAudioProcessor::getMxeModuleProcessor() noexcept
 {
-    return getMxeModuleProcessor(0);
+    return mxeModuleProcessor.get();
 }
 
 const MxeAudioProcessor* VxAudioProcessor::getMxeModuleProcessor() const noexcept
 {
-    return getMxeModuleProcessor(0);
-}
-
-MxeAudioProcessor* VxAudioProcessor::getMxeModuleProcessor(const int instanceIndex) noexcept
-{
-    if (! juce::isPositiveAndBelow(instanceIndex, static_cast<int>(mxeModuleProcessors.size())))
-        return nullptr;
-
-    return mxeModuleProcessors[static_cast<size_t>(instanceIndex)].get();
-}
-
-const MxeAudioProcessor* VxAudioProcessor::getMxeModuleProcessor(const int instanceIndex) const noexcept
-{
-    if (! juce::isPositiveAndBelow(instanceIndex, static_cast<int>(mxeModuleProcessors.size())))
-        return nullptr;
-
-    return mxeModuleProcessors[static_cast<size_t>(instanceIndex)].get();
+    return mxeModuleProcessor.get();
 }
 
 bool VxAudioProcessor::isTseModuleLoaded() const noexcept
 {
-    return ! loadedModules.empty() && loadedModules.front().module == ActiveModule::tse;
+    return getActiveModule() == ActiveModule::tse && tseModuleProcessor != nullptr;
 }
 
 TseModuleProcessor* VxAudioProcessor::getTseModuleProcessor() noexcept
 {
-    return getTseModuleProcessor(0);
+    return tseModuleProcessor.get();
 }
 
 const TseModuleProcessor* VxAudioProcessor::getTseModuleProcessor() const noexcept
 {
-    return getTseModuleProcessor(0);
+    return tseModuleProcessor.get();
 }
 
-TseModuleProcessor* VxAudioProcessor::getTseModuleProcessor(const int instanceIndex) noexcept
+bool VxAudioProcessor::createEqeModule()
 {
-    if (! juce::isPositiveAndBelow(instanceIndex, static_cast<int>(tseModuleProcessors.size())))
-        return nullptr;
-
-    return tseModuleProcessors[static_cast<size_t>(instanceIndex)].get();
-}
-
-const TseModuleProcessor* VxAudioProcessor::getTseModuleProcessor(const int instanceIndex) const noexcept
-{
-    if (! juce::isPositiveAndBelow(instanceIndex, static_cast<int>(tseModuleProcessors.size())))
-        return nullptr;
-
-    return tseModuleProcessors[static_cast<size_t>(instanceIndex)].get();
-}
-
-int VxAudioProcessor::createEqeModuleInstance()
-{
-    if (eqeModuleProcessors.empty())
-        eqeModuleProcessors.resize(1);
-
-    if (eqeModuleProcessors[0] == nullptr)
-        eqeModuleProcessors[0] = std::make_unique<EqeModuleProcessor>(*this);
+    eqeModuleProcessor = std::make_unique<EqeModuleProcessor>(*this);
 
     if (currentSampleRate > 0.0 && lastProcessedBlockSize > 0)
-        eqeModuleProcessors[0]->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
+        eqeModuleProcessor->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
 
-    return 0;
+    return true;
 }
 
-int VxAudioProcessor::createSpeModuleInstance()
+bool VxAudioProcessor::createSpeModule()
 {
-    if (speModuleProcessors.empty())
-        speModuleProcessors.resize(1);
-
-    speModuleProcessors[0] = std::make_unique<SpeModuleProcessor>(*this);
+    speModuleProcessor = std::make_unique<SpeModuleProcessor>(*this);
 
     if (currentSampleRate > 0.0 && lastProcessedBlockSize > 0)
-        speModuleProcessors[0]->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
+        speModuleProcessor->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
 
-    return 0;
+    return true;
 }
 
-int VxAudioProcessor::createMieModuleInstance()
+bool VxAudioProcessor::createMieModule()
 {
-    if (mieModuleProcessors.empty())
-        mieModuleProcessors.resize(1);
-
-    mieModuleProcessors[0] = std::make_unique<MieAudioProcessor>(*this);
+    mieModuleProcessor = std::make_unique<MieAudioProcessor>(*this);
 
     if (currentSampleRate > 0.0 && lastProcessedBlockSize > 0)
-        mieModuleProcessors[0]->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
+        mieModuleProcessor->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
 
-    return 0;
+    return true;
 }
 
-int VxAudioProcessor::createMxeModuleInstance()
+bool VxAudioProcessor::createMxeModule()
 {
-    if (mxeModuleProcessors.empty())
-        mxeModuleProcessors.resize(1);
-
-    mxeModuleProcessors[0] = std::make_unique<MxeAudioProcessor>(*this);
+    mxeModuleProcessor = std::make_unique<MxeAudioProcessor>(*this);
 
     if (currentSampleRate > 0.0 && lastProcessedBlockSize > 0)
-        mxeModuleProcessors[0]->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
+        mxeModuleProcessor->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
 
-    return 0;
+    return true;
 }
 
-int VxAudioProcessor::createTseModuleInstance()
+bool VxAudioProcessor::createTseModule()
 {
-    if (tseModuleProcessors.empty())
-        tseModuleProcessors.resize(1);
-
-    tseModuleProcessors[0] = std::make_unique<TseModuleProcessor>(*this);
+    tseModuleProcessor = std::make_unique<TseModuleProcessor>(*this);
 
     if (currentSampleRate > 0.0 && lastProcessedBlockSize > 0)
-        tseModuleProcessors[0]->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
+        tseModuleProcessor->prepareToPlay(currentSampleRate, lastProcessedBlockSize);
 
-    return 0;
+    return true;
 }
 
-EqeModuleProcessor* VxAudioProcessor::getEqeModuleProcessor(const int instanceIndex) noexcept
+EqeModuleProcessor* VxAudioProcessor::getEqeModuleProcessor() noexcept
 {
-    if (! juce::isPositiveAndBelow(instanceIndex, static_cast<int>(eqeModuleProcessors.size())))
-        return nullptr;
-
-    return eqeModuleProcessors[static_cast<size_t>(instanceIndex)].get();
+    return eqeModuleProcessor.get();
 }
 
-const EqeModuleProcessor* VxAudioProcessor::getEqeModuleProcessor(const int instanceIndex) const noexcept
+const EqeModuleProcessor* VxAudioProcessor::getEqeModuleProcessor() const noexcept
 {
-    if (! juce::isPositiveAndBelow(instanceIndex, static_cast<int>(eqeModuleProcessors.size())))
-        return nullptr;
-
-    return eqeModuleProcessors[static_cast<size_t>(instanceIndex)].get();
+    return eqeModuleProcessor.get();
 }
 
 EqeModuleProcessor* VxAudioProcessor::getActiveEqeModuleProcessor() noexcept
@@ -405,7 +301,7 @@ EqeModuleProcessor* VxAudioProcessor::getActiveEqeModuleProcessor() noexcept
     if (getActiveModule() != ActiveModule::eqe)
         return nullptr;
 
-    return getEqeModuleProcessor(0);
+    return getEqeModuleProcessor();
 }
 
 const EqeModuleProcessor* VxAudioProcessor::getActiveEqeModuleProcessor() const noexcept
@@ -413,7 +309,7 @@ const EqeModuleProcessor* VxAudioProcessor::getActiveEqeModuleProcessor() const 
     if (getActiveModule() != ActiveModule::eqe)
         return nullptr;
 
-    return getEqeModuleProcessor(0);
+    return getEqeModuleProcessor();
 }
 
 void VxAudioProcessor::restoreLoadedModuleFromStateText(const juce::String& text, const bool publishActiveModule)
@@ -425,56 +321,45 @@ void VxAudioProcessor::restoreLoadedModuleFromStateText(const juce::String& text
     if (publishActiveModule)
         suspendGuard = std::make_unique<ScopedProcessingSuspend>(*this);
 
-    loadedModules.clear();
-    eqeModuleProcessors.clear();
-    speModuleProcessors.clear();
-    mieModuleProcessors.clear();
-    mxeModuleProcessors.clear();
-    tseModuleProcessors.clear();
+    eqeModuleProcessor.reset();
+    speModuleProcessor.reset();
+    mieModuleProcessor.reset();
+    mxeModuleProcessor.reset();
+    tseModuleProcessor.reset();
 
     const auto module = moduleFromStateId(text);
 
     if (module == ActiveModule::none)
     {
         if (publishActiveModule)
-            setActiveModule(ActiveModule::none, -1);
+            setActiveModule(ActiveModule::none);
 
         updateShellLatency();
         return;
     }
 
-    auto instanceIndex = -1;
+    auto created = false;
 
     switch (module)
     {
-        case ActiveModule::mie: instanceIndex = createMieModuleInstance(); break;
-        case ActiveModule::eqe: instanceIndex = createEqeModuleInstance(); break;
-        case ActiveModule::spe: instanceIndex = createSpeModuleInstance(); break;
-        case ActiveModule::mxe: instanceIndex = createMxeModuleInstance(); break;
-        case ActiveModule::tse: instanceIndex = createTseModuleInstance(); break;
+        case ActiveModule::mie: created = createMieModule(); break;
+        case ActiveModule::eqe: created = createEqeModule(); break;
+        case ActiveModule::spe: created = createSpeModule(); break;
+        case ActiveModule::mxe: created = createMxeModule(); break;
+        case ActiveModule::tse: created = createTseModule(); break;
         case ActiveModule::none: break;
     }
 
-    if (instanceIndex >= 0)
+    if (created)
     {
-        loadedModules.push_back({ module, 0 });
-
         if (publishActiveModule)
-            setActiveModule(module, 0);
+            setActiveModule(module);
     }
     else
     {
         if (publishActiveModule)
-            setActiveModule(ActiveModule::none, -1);
+            setActiveModule(ActiveModule::none);
     }
 
     updateShellLatency();
-}
-
-int VxAudioProcessor::getActiveBellCount() const noexcept
-{
-    if (const auto* activeEqeModule = getActiveEqeModuleProcessor())
-        return activeEqeModule->getActiveBellCount();
-
-    return 0;
 }

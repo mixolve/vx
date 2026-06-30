@@ -32,6 +32,29 @@ inline constexpr auto mieBandOrder = std::to_array<ParameterOrderEntry>({
     { "gainL", "GAIN-L" },
     { "gainR", "GAIN-R" },
     { "gainLr", "GAIN-LR" },
+    { "rectPlus", "RECT+" },
+    { "rectMinus", "RECT-" },
+    { "rectFoldPlus", "RECTF+" },
+    { "rectFoldMinus", "RECTF-" },
+    { "panL", "PAN-L" },
+    { "panR", "PAN-R" },
+    { "law", "LAW" },
+    { "shear", "SHEAR" },
+    { "shearMode", "TO-L/TO-R" },
+    { "midBal", "MID-BAL" },
+    { "sideBal", "SIDE-BAL" },
+    { "ortDegRotation", "ORT-DEG" },
+    { "ortFlipR", "ORT-FLIP-R" },
+    { "listenL", "L" },
+    { "listenR", "R" },
+    { "listenM", "M" },
+    { "listenS", "S" },
+    { "listenInPlace", "INPL" },
+    { "depStereo", "D-STEREO" },
+    { "depRight", "D-RIGHT" },
+    { "depBuffer", "BUFFER" },
+    { "depPhaseL", "PHASE-L" },
+    { "depPhaseR", "PHASE-R" },
 });
 
 constexpr size_t numBands = mie::dsp::MultibandProcessor::numBands;
@@ -46,19 +69,9 @@ juce::String makeBandHostName(const size_t bandIndex, const juce::String& sectio
     return "BAND " + juce::String(static_cast<int>(bandIndex + 1)) + " - " + sectionName + " - " + parameterName;
 }
 
-double roundToDisplayStep(const double value) noexcept
+juce::String formatParameterValue(const float value, const int decimalPlaces)
 {
-    auto rounded = std::floor((value * 10.0) + 0.5) * 0.1;
-
-    if (std::abs(rounded) < 0.05)
-        rounded = 0.0;
-
-    return rounded;
-}
-
-juce::String formatParameterValue(const float value)
-{
-    return juce::String::formatted("%.1f", roundToDisplayStep(value));
+    return juce::String(value, juce::jmax(0, decimalPlaces));
 }
 
 constexpr bool isHostEditableParameter = false;
@@ -76,6 +89,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                           const float step,
                           const float defaultValue,
                           const juce::String& label,
+                          const int displayDecimals,
                           const bool isAutomatable,
                           const bool isMeta = false) -> Parameter
     {
@@ -84,9 +98,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                               .withLabel(label)
                               .withAutomatable(isAutomatable)
                               .withMeta(isMeta)
-                              .withStringFromValueFunction([] (float value, int)
+                              .withStringFromValueFunction([displayDecimals] (float value, int)
                               {
-                                  return formatParameterValue(value);
+                                  return formatParameterValue(value, displayDecimals);
                               })
                               .withValueFromStringFunction([] (const juce::String& text)
                               {
@@ -139,6 +153,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                                         1.0f,
                                                         0.0f,
                                                         "",
+                                                        0,
                                                         false,
                                                         true));
             continue;
@@ -158,6 +173,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                                         crossoverIt->step,
                                                         crossoverIt->defaultValue,
                                                         crossoverIt->label,
+                                                        crossoverIt->displayDecimals,
                                                         false,
                                                         true));
         }
@@ -196,6 +212,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                            it->step,
                                            it->defaultValue,
                                            it->label,
+                                           it->displayDecimals,
                                            false));
         }
 

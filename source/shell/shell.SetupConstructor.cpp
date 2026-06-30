@@ -1,4 +1,4 @@
-#include "shell.EditorBellSection.h"
+#include "shell.EditorFilterSection.h"
 #include "shell.EditorPresetSections.h"
 #include "shell.SetupSupport.h"
 #include "../modules/spe/module.spe.SpeProcessor.h"
@@ -46,6 +46,31 @@ bool applyWheelToSliderValue(juce::Slider& slider, const juce::MouseWheelDetails
     return true;
 }
 
+bool applyWheelToNormalisedSliderValue(juce::Slider& slider, const juce::MouseWheelDetails& wheel)
+{
+    const auto dominantDelta = std::abs(wheel.deltaY) >= std::abs(wheel.deltaX) ? wheel.deltaY
+                                                                                : -wheel.deltaX;
+
+    if (std::abs(dominantDelta) < 1.0e-6f)
+        return false;
+
+    const auto directionalDelta = wheel.isReversed ? -dominantDelta : dominantDelta;
+    const auto direction = directionalDelta < 0.0f ? -1.0 : 1.0;
+    const auto minimumSmoothStep = 0.005;
+    const auto normalisedStep = wheel.isSmooth
+        ? direction * juce::jmax(std::abs(static_cast<double>(directionalDelta) * 0.02), minimumSmoothStep)
+        : direction * 0.025;
+    const auto nextValue = juce::jlimit(0.0,
+                                        1.0,
+                                        static_cast<double>(slider.getValue()) + normalisedStep);
+
+    if (std::abs(nextValue - static_cast<double>(slider.getValue())) <= 1.0e-9)
+        return false;
+
+    slider.setValue(nextValue, juce::sendNotificationSync);
+    return true;
+}
+
 class FocusedParameterSlider final : public juce::Slider
 {
 public:
@@ -83,9 +108,7 @@ public:
         const auto width = juce::jmax(1, getWidth());
         const auto horizontalDelta = static_cast<double>(event.getDistanceFromDragStartX());
         const auto verticalDelta = -static_cast<double>(event.getDistanceFromDragStartY());
-        const auto dominantDelta = std::abs(horizontalDelta) >= std::abs(verticalDelta) ? horizontalDelta
-                                                                                        : verticalDelta;
-        const auto delta = dominantDelta / static_cast<double>(width);
+        const auto delta = (horizontalDelta + verticalDelta) / static_cast<double>(width);
         setValue(juce::jlimit(0.0, 1.0, dragStartValue + delta), juce::sendNotificationSync);
     }
 
@@ -121,11 +144,17 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     setResizable(true, true);
     setWantsKeyboardFocus(true);
     setMouseClickGrabsKeyboardFocus(false);
+    tooltipWindow = std::make_unique<DelayedTooltipWindow>(this, 1500);
     shellGlobalHostViewport.setViewedComponent(&shellGlobalHostContent, false);
     shellGlobalHostViewport.setScrollBarsShown(false, true);
     shellGlobalHostViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
     shellGlobalHostViewport.setWantsKeyboardFocus(false);
     addAndMakeVisible(shellGlobalHostViewport);
+    speAnalyserViewport.setViewedComponent(&speAnalyserContent, false);
+    speAnalyserViewport.setScrollBarsShown(false, false);
+    speAnalyserViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
+    speAnalyserViewport.setWantsKeyboardFocus(false);
+    addAndMakeVisible(speAnalyserViewport);
     filterViewport.setViewedComponent(&filterContent, false);
     filterViewport.setScrollBarsShown(false, false);
     filterViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
@@ -138,27 +167,14 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
         if (focusedParameterTargetSlider == nullptr)
             return false;
 
-        if (! applyWheelToSliderValue(*focusedParameterTargetSlider, wheel))
-            return false;
-
-        const juce::ScopedValueSetter<bool> scopedIgnore(suppressFocusedParameterControlChangeHandlers, true);
-        focusedParameterControl->setValue(getFocusedParameterControlValueForTarget(), juce::dontSendNotification);
-        return true;
+        return focusedParameterControl != nullptr
+            && applyWheelToNormalisedSliderValue(*focusedParameterControl, wheel);
     };
     focusedParameterControl = std::move(focusedSlider);
     focusedParameterControl->setSliderStyle(juce::Slider::LinearHorizontal);
     focusedParameterControl->setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     focusedParameterControl->setSliderSnapsToMousePosition(false);
-#if JUCE_IOS
     focusedParameterControl->setVelocityBasedMode(false);
-#else
-    focusedParameterControl->setVelocityBasedMode(true);
-    focusedParameterControl->setMouseDragSensitivity(focusedParameterDragSensitivity);
-    focusedParameterControl->setVelocityModeParameters(static_cast<double>(juce::jmax(1, focusedParameterDragSensitivity)),
-                                                       1,
-                                                       0.0,
-                                                       false);
-#endif
     focusedParameterControl->setScrollWheelEnabled(true);
     focusedParameterControl->setColour(juce::Slider::backgroundColourId, uiGrey800);
     focusedParameterControl->setColour(juce::Slider::trackColourId, uiGrey500);
@@ -176,11 +192,16 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
 
         focusedParameterTargetSlider->setValue(getFocusedParameterTargetValueForControl(),
                                                juce::sendNotificationSync);
+
+        const juce::ScopedValueSetter<bool> scopedIgnore(suppressFocusedParameterControlChangeHandlers, true);
+        focusedParameterControl->setValue(getFocusedParameterControlValueForTarget(),
+                                          juce::dontSendNotification);
     };
     addAndMakeVisible(*focusedParameterControl);
 
     shellGlobalHeader = std::make_unique<BoxTextButton>(uiClip);
-    shellGlobalHeader->setButtonText("CLIP");
+    shellGlobalHeader->setButtonText("C");
+    shellGlobalHeader->setTooltip("CLIP INDICATOR");
     shellGlobalHeader->setTextJustification(juce::Justification::centred);
     shellGlobalHeader->setClickingTogglesState(false);
     shellGlobalHeader->onClick = [this]
@@ -190,7 +211,8 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     addAndMakeVisible(*shellGlobalHeader);
 
     shellGlobalHostHeader = std::make_unique<BoxTextButton>(uiAccent);
-    shellGlobalHostHeader->setButtonText("HOST");
+    shellGlobalHostHeader->setButtonText("H");
+    shellGlobalHostHeader->setTooltip("CLICK: HOST PARAMETERS -- LONG PRESS: TURN ON/OFF HINTS");
     shellGlobalHostHeader->setTextJustification(juce::Justification::centred);
     shellGlobalHostHeader->setClickingTogglesState(true);
     shellGlobalHostHeader->onClick = [this]
@@ -201,8 +223,9 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     addAndMakeVisible(*shellGlobalHostHeader);
 
     moduleAddButton = std::make_unique<BoxTextButton>(uiClip);
-    moduleAddButton->setButtonText("ADD-MODULE");
+    moduleAddButton->setButtonText("ADD MODULE");
     moduleAddButton->setTextJustification(juce::Justification::centred);
+    moduleAddButton->setPressFillEnabled(false);
     moduleAddButton->onClick = [this]
     {
         showModulePicker();
@@ -216,25 +239,25 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
 
         setupSpeControls(speState, *speProcessor);
         speAnalyserComponent = shell_setup_support::createSpeAnalyserComponent(*speProcessor);
-        addAndMakeVisible(*speAnalyserComponent);
+        speAnalyserContent.addAndMakeVisible(*speAnalyserComponent);
     }
 
     setupShellControls();
-    setupVisualizerControls();
 
     setupPresetControls();
 
-    bellDisplayOrder.reserve(VxAudioProcessor::maxBellFilterCount);
-    for (int bellIndex = 0; bellIndex < VxAudioProcessor::maxBellFilterCount; ++bellIndex)
-        bellDisplayOrder.push_back(bellIndex);
+    filterDisplayOrder.reserve(VxAudioProcessor::maxEqeFilterCount);
+    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
+        filterDisplayOrder.push_back(filterIndex);
+
+    if (auto* initialEqeProcessor = audioProcessor.getEqeModuleProcessor())
+        setupEqeControls(initialEqeProcessor->getValueTreeState());
 
     restoreEditorStateFromValueTree();
 
-    if (auto* initialEqeProcessor = audioProcessor.getEqeModuleProcessor(0))
-        setupEqeControls(initialEqeProcessor->getValueTreeState());
-
     footerTab = std::make_unique<BoxTextButton>(uiGrey500);
     footerTab->setButtonText("VX by MIXOLVE");
+    footerTab->setTooltip("ABOUT");
     footerTab->onClick = [this]
     {
         showInfoPrompt(shell_setup_support::getMixolveInfoMarkdown());
@@ -246,21 +269,20 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     registerParameterListeners();
     rebindActiveModuleEditors();
 
-    rebuildModuleTabRows();
+    refreshModuleTabButton();
     updateSectionStates();
+    updateTooltipTogglePrompt();
     setResizeLimits(minimumEditorWidth, minimumEditorHeight, maximumEditorWidth, maximumEditorHeight);
 
     const auto restoredEditorSize = getRestoredEditorSize();
-    lastCollapsedEditorWidth = juce::jlimit(minimumEditorWidth,
-                                            juce::jmax(minimumEditorWidth, maximumEditorWidth - minimumVisualizerWidth),
-                                            lastCollapsedEditorWidth);
+    lastCollapsedEditorWidth = juce::jlimit(minimumEditorWidth, maximumEditorWidth, lastCollapsedEditorWidth);
     setResizeLimits(minimumEditorWidth, minimumEditorHeight, maximumEditorWidth, maximumEditorHeight);
     setSize(restoredEditorSize.x, restoredEditorSize.y);
     audioProcessor.setLastEditorSize(restoredEditorSize.x, restoredEditorSize.y);
 
     suppressEditorSizeStateSave = false;
     syncFocusedParameterControl();
-    refreshVisualizerResponse();
+    refreshSpeAnalyserResponse();
 
     audioProcessor.getStateInformation(committedHistorySnapshot);
     updateUndoRedoButtons();

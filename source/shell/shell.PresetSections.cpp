@@ -4,6 +4,7 @@ namespace
 {
 void configurePresetCombo(NoTickComboBox& combo)
 {
+    combo.setTooltip("CHOOSE PRESET");
     combo.setEditableText(false);
     combo.setJustificationType(juce::Justification::centred);
     combo.setPopupMenuTextJustification(juce::Justification::centred);
@@ -30,10 +31,15 @@ VxAudioProcessorEditor::PresetsSection::PresetsSection()
     configurePresetCombo(presetCombo);
 
     adButton = makeSectionButton("AD", uiAccent);
+    adButton->setTooltip("ADD PRESET");
     saveButton = makeSectionButton("SV", uiGrey500);
+    saveButton->setTooltip("SAVE PRESET");
     renameButton = makeSectionButton("RN", uiGrey500);
+    renameButton->setTooltip("RENAME PRESET");
     defaultButton = makeSectionButton("DF", uiAccent);
+    defaultButton->setTooltip("MAKE PRESET AS DEFAULT");
     deleteButton = makeSectionButton("DL", uiAccent);
+    deleteButton->setTooltip("DELETE PRESET");
 
     auto handlePresetSelection = [this]
     {

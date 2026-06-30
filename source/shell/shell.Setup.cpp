@@ -1,4 +1,4 @@
-#include "shell.EditorBellSection.h"
+#include "shell.EditorFilterSection.h"
 #include "shell.MultibandComponent.h"
 #include "shell.SetupSupport.h"
 #include "../modules/multiband/mie/module.mie.ParameterIds.h"
@@ -18,7 +18,8 @@ using ControlKind = MultibandModuleComponent::ControlKind;
 BandControlSpec parameterControl(const char* suffix,
                                  const char* label,
                                  const int decimals,
-                                 const int sourceBandIndex = -1)
+                                 const int sourceBandIndex = -1,
+                                 const int topGapMultiplier = 1)
 {
     BandControlSpec spec;
     spec.kind = ControlKind::parameter;
@@ -26,13 +27,16 @@ BandControlSpec parameterControl(const char* suffix,
     spec.label = label;
     spec.decimals = decimals;
     spec.sourceBandIndex = sourceBandIndex;
+    spec.topGapMultiplier = topGapMultiplier;
     return spec;
 }
 
 BandControlSpec toggleControl(const char* suffix,
                               const char* label,
                               const char* enabledLabel = "",
-                              const char* disabledLabel = "")
+                              const char* disabledLabel = "",
+                              const char* exclusiveGroup = "",
+                              const int topGapMultiplier = 1)
 {
     BandControlSpec spec;
     spec.kind = ControlKind::toggle;
@@ -40,6 +44,8 @@ BandControlSpec toggleControl(const char* suffix,
     spec.label = label;
     spec.enabledLabel = enabledLabel;
     spec.disabledLabel = disabledLabel;
+    spec.exclusiveGroup = exclusiveGroup;
+    spec.topGapMultiplier = topGapMultiplier;
     return spec;
 }
 
@@ -83,10 +89,33 @@ MultibandModuleComponent::Config makeMieMultibandConfig(MieAudioProcessor& proce
         return mie::parameters::makeActiveSplitCountParameterId();
     };
     config.bandControls = {
-        parameterControl("wide", "WIDE", 1),
+        parameterControl("wide", "WIDE", 1, -1, 2),
         parameterControl("gainL", "GAIN-L", 1),
         parameterControl("gainR", "GAIN-R", 1),
         parameterControl("gainLr", "GAIN-LR", 1),
+        toggleControl("rectPlus", "RECT+", "", "", "rect", 2),
+        toggleControl("rectMinus", "RECT-", "", "", "rect"),
+        toggleControl("rectFoldPlus", "RECTF+", "", "", "rect"),
+        toggleControl("rectFoldMinus", "RECTF-", "", "", "rect"),
+        parameterControl("panL", "PAN-L", 1, -1, 2),
+        parameterControl("panR", "PAN-R", 1),
+        parameterControl("law", "LAW", 2),
+        parameterControl("shear", "SHEAR", 1, -1, 2),
+        toggleControl("shearMode", "TO-L", "TO-L", "TO-R"),
+        parameterControl("midBal", "MID-BAL", 1, -1, 2),
+        parameterControl("sideBal", "SIDE-BAL", 1),
+        parameterControl("ortDegRotation", "ORT-DEG", 1, -1, 2),
+        toggleControl("ortFlipR", "ORT-FLIP-R"),
+        toggleControl("listenL", "L", "", "", "listen", 2),
+        toggleControl("listenR", "R", "", "", "listen"),
+        toggleControl("listenM", "M", "", "", "listen"),
+        toggleControl("listenS", "S", "", "", "listen"),
+        toggleControl("listenInPlace", "INPL"),
+        parameterControl("depStereo", "D-STEREO", 2, -1, 2),
+        parameterControl("depRight", "D-RIGHT", 2),
+        parameterControl("depBuffer", "BUFFER", 2),
+        parameterControl("depPhaseL", "PHASE-L", 1),
+        parameterControl("depPhaseR", "PHASE-R", 1),
     };
     return config;
 }
@@ -233,6 +262,7 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (speKneeControl != nullptr) speKneeControl->rebind(speState);
         if (speRatioControl != nullptr) speRatioControl->rebind(speState);
         if (speDspFftSizeControl != nullptr) speDspFftSizeControl->rebind(speState);
+        if (speDspHopDivisorControl != nullptr) speDspHopDivisorControl->rebind(speState);
         if (speDspSlopeControl != nullptr) speDspSlopeControl->rebind(speState);
         if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->rebind(speState);
         if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->rebind(speState);
@@ -240,6 +270,21 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->rebind(speState);
         if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->rebind(speState);
         if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->rebind(speState);
+        for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        {
+            if (spePhaseTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
+                spePhaseTypeControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (spePhasePlaceControls[static_cast<size_t>(filterIndex)] != nullptr)
+                spePhasePlaceControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (spePhaseSlopeControls[static_cast<size_t>(filterIndex)] != nullptr)
+                spePhaseSlopeControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (spePhaseFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr)
+                spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (spePhaseBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr)
+                spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (spePhaseImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
+                spePhaseImpactControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+        }
         refreshSpeAnalyserControls(speProcessor);
     };
 
@@ -257,9 +302,9 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
 
     auto rebuildSpeAnalyser = [this] (SpeModuleProcessor& speProcessor)
     {
-        shell_setup_support::removeOwnedChild(*this, speAnalyserComponent);
+        shell_setup_support::removeOwnedChild(speAnalyserContent, speAnalyserComponent);
         speAnalyserComponent = shell_setup_support::createSpeAnalyserComponent(speProcessor);
-        addAndMakeVisible(*speAnalyserComponent);
+        speAnalyserContent.addAndMakeVisible(*speAnalyserComponent);
         speAnalyserComponent->setVisible(speModuleLoaded);
     };
 
@@ -269,13 +314,13 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         {
             auto& eqeState = eqeProcessor->getValueTreeState();
 
-            if (bellSections.front() == nullptr || addFilterButton == nullptr)
+            if (filterSections.front() == nullptr || addFilterButton == nullptr)
             {
                 setupEqeControls(eqeState);
             }
             else
             {
-                for (auto& section : bellSections)
+                for (auto& section : filterSections)
                     if (section != nullptr)
                         section->rebind(eqeState);
             }

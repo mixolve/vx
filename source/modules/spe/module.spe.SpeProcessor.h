@@ -18,6 +18,16 @@ public:
 
     struct CompressorSettings
     {
+        struct PhaseFilter
+        {
+            int type = 1;
+            int place = 0;
+            int slope = 1;
+            float frequency = 632.0f;
+            float bandwidth = 1.0f;
+            float impactPercent = 0.0f;
+        };
+
         int fftSize = 4096;
         int overlapFactor = 32;
         float leftThresholdDb = 0.0f;
@@ -32,6 +42,8 @@ public:
         float kneeDb = 0.0f;
         float ratio = 100.0f;
         float makeupDb = 0.0f;
+        int phaseFilterCount = 0;
+        std::array<PhaseFilter, 16> phaseFilters {};
     };
 
     inline static constexpr auto paramFftSizeId = "spe_fft_size";
@@ -55,7 +67,16 @@ public:
     inline static constexpr auto paramRatioId = "spe_ratio";
     inline static constexpr auto paramDeltaId = "spe_delta";
     inline static constexpr auto paramDspFftSizeId = "spe_dsp_fft_size";
+    inline static constexpr auto paramDspHopDivisorId = "spe_dsp_hop_divisor";
     inline static constexpr auto paramDspSlopeId = "spe_dsp_slope";
+    inline static constexpr auto paramPhaseFilterCountId = "spe_phase_filter_count";
+    static constexpr int maxPhaseFilterCount = 16;
+    static juce::String getPhaseFilterTypeParamId(int filterIndex);
+    static juce::String getPhaseFilterPlaceParamId(int filterIndex);
+    static juce::String getPhaseFilterSlopeParamId(int filterIndex);
+    static juce::String getPhaseFilterFrequencyParamId(int filterIndex);
+    static juce::String getPhaseFilterBandwidthParamId(int filterIndex);
+    static juce::String getPhaseFilterImpactParamId(int filterIndex);
 
     explicit SpeModuleProcessor(juce::AudioProcessor& ownerProcessor);
     ~SpeModuleProcessor() override;
@@ -82,6 +103,9 @@ public:
 
     juce::AudioProcessorValueTreeState& getValueTreeState() noexcept;
     const juce::AudioProcessorValueTreeState& getValueTreeState() const noexcept;
+    int getActivePhaseFilterCount() const noexcept;
+    bool addPhaseFilter() noexcept;
+    bool removePhaseFilter(int filterIndex) noexcept;
 
 private:
     class InternalParameterHost final : public juce::AudioProcessor
@@ -120,6 +144,7 @@ private:
                                   int latencySamples) noexcept;
     int getSelectedAnalyserFftSize() const noexcept;
     int getSelectedDspFftSize() const noexcept;
+    int getSelectedDspHopDivisor() const noexcept;
     int getSelectedOverlapFactor() const noexcept;
     float getSelectedAveragingTimeMs() const noexcept;
     juce::ValueTree createAnalyserStateSnapshot() const;
@@ -246,7 +271,15 @@ private:
     std::atomic<float>* ratioParam = nullptr;
     std::atomic<float>* deltaParam = nullptr;
     std::atomic<float>* dspFftSizeParam = nullptr;
+    std::atomic<float>* dspHopDivisorParam = nullptr;
     std::atomic<float>* dspSlopeParam = nullptr;
+    std::atomic<float>* phaseFilterCountParam = nullptr;
+    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseTypeParams {};
+    std::array<std::atomic<float>*, maxPhaseFilterCount> phasePlaceParams {};
+    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseSlopeParams {};
+    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseFrequencyParams {};
+    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseBandwidthParams {};
+    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseImpactParams {};
     std::atomic<bool> linkedDualMonoPropagationInProgress { false };
     SpectralCompressor spectralCompressor;
     static constexpr int deltaDelayBufferSize = SpectralCompressor::maxFftSize + 1;

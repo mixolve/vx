@@ -41,7 +41,19 @@ SpeModuleProcessor::SpeModuleProcessor(juce::AudioProcessor& owner)
     ratioParam = parameters.getRawParameterValue(paramRatioId);
     deltaParam = parameters.getRawParameterValue(paramDeltaId);
     dspFftSizeParam = parameters.getRawParameterValue(paramDspFftSizeId);
+    dspHopDivisorParam = parameters.getRawParameterValue(paramDspHopDivisorId);
     dspSlopeParam = parameters.getRawParameterValue(paramDspSlopeId);
+    phaseFilterCountParam = parameters.getRawParameterValue(paramPhaseFilterCountId);
+
+    for (auto filterIndex = 0; filterIndex < maxPhaseFilterCount; ++filterIndex)
+    {
+        phaseTypeParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterTypeParamId(filterIndex));
+        phasePlaceParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterPlaceParamId(filterIndex));
+        phaseSlopeParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterSlopeParamId(filterIndex));
+        phaseFrequencyParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterFrequencyParamId(filterIndex));
+        phaseBandwidthParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterBandwidthParamId(filterIndex));
+        phaseImpactParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterImpactParamId(filterIndex));
+    }
 
     for (const auto* parameterId : dualMonoLinkedParameterIds)
         parameters.addParameterListener(parameterId, this);
@@ -76,7 +88,7 @@ void SpeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
     auto compressorSettings = getCompressorSettings();
     const auto deltaEnabled = isDeltaEnabled();
     const auto channelsToUse = juce::jmin(ownerProcessor.getTotalNumInputChannels(), buffer.getNumChannels());
-    const auto desiredLatencySamples = compressorSettings.fftSize;
+    const auto desiredLatencySamples = juce::jmax(0, compressorSettings.fftSize - 1);
 
     if (desiredLatencySamples != activeLatencySamples)
     {
@@ -224,7 +236,7 @@ int SpeModuleProcessor::getLatencySamples() const noexcept
 
 bool SpeModuleProcessor::refreshLatencyState() noexcept
 {
-    const auto newLatencySamples = getSelectedDspFftSize();
+    const auto newLatencySamples = juce::jmax(0, getSelectedDspFftSize() - 1);
     const auto changed = activeLatencySamples != newLatencySamples;
     activeLatencySamples = newLatencySamples;
     return changed;
@@ -273,7 +285,7 @@ void SpeModuleProcessor::populateAlignedDryBuffer(const juce::AudioBuffer<float>
     if (channelsToUse <= 0)
         return;
 
-    const auto delaySamples = juce::jlimit(0, deltaDelayBufferSize - 1, juce::jmax(0, latencySamples - 1));
+    const auto delaySamples = juce::jlimit(0, deltaDelayBufferSize - 1, juce::jmax(0, latencySamples));
 
     if (delaySamples == 0)
     {

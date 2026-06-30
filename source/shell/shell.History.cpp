@@ -1,4 +1,4 @@
-#include "shell.EditorBellSection.h"
+#include "shell.EditorFilterSection.h"
 #include "shell.ShellState.h"
 #include "shell.SetupSupport.h"
 #include "../modules/eqe/module.eqe.ProcessorSupport.h"
@@ -109,58 +109,49 @@ void VxAudioProcessorEditor::refreshModuleStateListeners()
 {
     clearModuleStateListeners();
 
-    observedModuleStates.reserve(static_cast<size_t>(audioProcessor.getLoadedModuleCount()) * 2);
-    observedModuleParameterListeners.reserve(static_cast<size_t>(audioProcessor.getLoadedModuleCount()) * 2);
+    observedModuleStates.reserve(1);
+    observedModuleParameterListeners.reserve(1);
 
-    for (int slotIndex = 0; slotIndex < audioProcessor.getLoadedModuleCount(); ++slotIndex)
+    juce::ValueTree moduleState;
+
+    auto observeModule = [this, &moduleState] (auto* processor)
     {
-        const auto slot = audioProcessor.getLoadedModuleSlotAtPosition(slotIndex);
-        juce::ValueTree moduleState;
+        if (processor == nullptr)
+            return;
 
-        auto observeModule = [this, &moduleState] (auto* processor)
-        {
-            if (processor == nullptr)
-                return;
+        auto& moduleValueTreeState = processor->getValueTreeState();
+        moduleState = moduleValueTreeState.state;
+        registerObservedModuleParameterListeners(moduleValueTreeState);
+    };
 
-            auto& moduleValueTreeState = processor->getValueTreeState();
-            moduleState = moduleValueTreeState.state;
-            registerObservedModuleParameterListeners(moduleValueTreeState);
-        };
+    switch (audioProcessor.getActiveModule())
+    {
+        case VxAudioProcessor::ActiveModule::eqe:
+            observeModule(audioProcessor.getEqeModuleProcessor());
+            break;
 
-        switch (slot.module)
-        {
-            case VxAudioProcessor::ActiveModule::eqe:
-                observeModule(audioProcessor.getEqeModuleProcessor(slot.instanceIndex));
-                break;
+        case VxAudioProcessor::ActiveModule::spe:
+            observeModule(audioProcessor.getSpeModuleProcessor());
+            break;
 
-            case VxAudioProcessor::ActiveModule::spe:
-                if (auto* processor = audioProcessor.getSpeModuleProcessor(slot.instanceIndex))
-                {
-                    auto& moduleValueTreeState = processor->getValueTreeState();
-                    moduleState = moduleValueTreeState.state;
-                    registerObservedModuleParameterListeners(moduleValueTreeState);
-                }
-                break;
+        case VxAudioProcessor::ActiveModule::mie:
+            observeModule(audioProcessor.getMieModuleProcessor());
+            break;
 
-            case VxAudioProcessor::ActiveModule::mie:
-                observeModule(audioProcessor.getMieModuleProcessor(slot.instanceIndex));
-                break;
+        case VxAudioProcessor::ActiveModule::mxe:
+            observeModule(audioProcessor.getMxeModuleProcessor());
+            break;
 
-            case VxAudioProcessor::ActiveModule::mxe:
-                observeModule(audioProcessor.getMxeModuleProcessor(slot.instanceIndex));
-                break;
+        case VxAudioProcessor::ActiveModule::tse:
+            observeModule(audioProcessor.getTseModuleProcessor());
+            break;
 
-            case VxAudioProcessor::ActiveModule::tse:
-                observeModule(audioProcessor.getTseModuleProcessor(slot.instanceIndex));
-                break;
+        case VxAudioProcessor::ActiveModule::none:
+            break;
+    }
 
-            case VxAudioProcessor::ActiveModule::none:
-                break;
-        }
-
-        if (! moduleState.isValid())
-            continue;
-
+    if (moduleState.isValid())
+    {
         moduleState.addListener(this);
         observedModuleStates.push_back(moduleState);
     }
@@ -190,7 +181,7 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
 {
     clearModuleStateListeners();
 
-    for (auto& section : bellSections)
+    for (auto& section : filterSections)
         if (section != nullptr)
             section->detach();
 
@@ -202,6 +193,7 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
     if (speKneeControl != nullptr) speKneeControl->detach();
     if (speRatioControl != nullptr) speRatioControl->detach();
     if (speDspFftSizeControl != nullptr) speDspFftSizeControl->detach();
+    if (speDspHopDivisorControl != nullptr) speDspHopDivisorControl->detach();
     if (speDspSlopeControl != nullptr) speDspSlopeControl->detach();
     if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->detach();
     if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->detach();
@@ -209,8 +201,23 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
     if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->detach();
     if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->detach();
     if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->detach();
+    for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+    {
+        if (spePhaseTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
+            spePhaseTypeControls[static_cast<size_t>(filterIndex)]->detach();
+        if (spePhasePlaceControls[static_cast<size_t>(filterIndex)] != nullptr)
+            spePhasePlaceControls[static_cast<size_t>(filterIndex)]->detach();
+        if (spePhaseSlopeControls[static_cast<size_t>(filterIndex)] != nullptr)
+            spePhaseSlopeControls[static_cast<size_t>(filterIndex)]->detach();
+        if (spePhaseFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr)
+            spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->detach();
+        if (spePhaseBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr)
+            spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->detach();
+        if (spePhaseImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
+            spePhaseImpactControls[static_cast<size_t>(filterIndex)]->detach();
+    }
 
-    shell_setup_support::removeOwnedChild(*this, speAnalyserComponent);
+    shell_setup_support::removeOwnedChild(speAnalyserContent, speAnalyserComponent);
     shell_setup_support::removeOwnedChild(*this, mieModuleEditor);
     shell_setup_support::removeOwnedChild(*this, mxeModuleEditor);
     shell_setup_support::removeOwnedChild(*this, tseModuleEditor);
@@ -271,7 +278,7 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
     if (mergedStateXml == nullptr || ! mergedStateXml->hasTagName(valueTreeState.state.getType().toString()))
         return;
 
-    preserveEditorWindowAndVisualizerState(*mergedStateXml, valueTreeState.state);
+    preserveEditorWindowState(*mergedStateXml, valueTreeState.state);
 
     juce::MemoryBlock mergedSnapshot;
     VxAudioProcessor::copyXmlToBinary(*mergedStateXml, mergedSnapshot);
@@ -279,14 +286,12 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
     struct PreservedUiState
     {
         bool shellGlobalHost = false;
-        bool visualizer = false;
         int filterScrollY = 0;
     };
 
     const PreservedUiState preservedUiState
     {
         shellGlobalHostExpanded,
-        visualizerExpanded,
         filterViewport.getViewPositionY()
     };
     auto* bypassParameter = valueTreeState.getParameter(VxAudioProcessor::paramGlobalBypassId);
@@ -300,22 +305,15 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
         bypassParameter->setValueNotifyingHost(preservedBypassValue);
 
     restoreEditorStateFromValueTree();
-    rebuildModuleTabRows();
+    refreshModuleTabButton();
     refreshFilterPresetList(getActiveEqeProcessor() != nullptr ? getActiveEqeProcessor()->getLastFilterPresetName()
                                                                : juce::String {});
     reloadFilterPresetFromProcessor();
 
     shellGlobalHostExpanded = preservedUiState.shellGlobalHost;
 
-    visualizerExpanded = preservedUiState.visualizer;
-
-    if (eqeModuleLoaded)
-    {
-        visualizerExpanded = false;
-    }
-
     storeEditorStateToValueTree();
-    updateEditorWidthForVisualizerVisibility();
+    updateEditorWidthState();
     updateSectionStates();
     resized();
 
@@ -343,12 +341,12 @@ void VxAudioProcessorEditor::updateUndoRedoButtons()
     }
 }
 
-void VxAudioProcessorEditor::resetBellSectionStoredValues(const int bellIndex)
+void VxAudioProcessorEditor::resetFilterSectionStoredValues(const int filterIndex)
 {
-    if (! juce::isPositiveAndBelow(bellIndex, static_cast<int>(bellSections.size())))
+    if (! juce::isPositiveAndBelow(filterIndex, static_cast<int>(filterSections.size())))
         return;
 
-    auto* section = bellSections[static_cast<size_t>(bellIndex)].get();
+    auto* section = filterSections[static_cast<size_t>(filterIndex)].get();
 
     if (section == nullptr)
         return;
@@ -364,49 +362,50 @@ void VxAudioProcessorEditor::resetBellSectionStoredValues(const int bellIndex)
     }
 
     section->lastFilterType = section->getFilterType();
+    section->expanded = false;
     section->captureCurrentValuesForCurrentType(true);
 }
 
-void VxAudioProcessorEditor::removeBellSectionStoredValues(const int removedIndex, const int previousCount)
+void VxAudioProcessorEditor::removeFilterSectionStoredValues(const int removedIndex, const int previousCount)
 {
     if (previousCount <= 0)
         return;
 
     if (previousCount == 1)
     {
-        resetBellSectionStoredValues(0);
+        resetFilterSectionStoredValues(0);
         return;
     }
 
     for (int sourceIndex = removedIndex + 1; sourceIndex < previousCount; ++sourceIndex)
-        bellSections[static_cast<size_t>(sourceIndex - 1)]->copyStoredValuesFrom(*bellSections[static_cast<size_t>(sourceIndex)]);
+        filterSections[static_cast<size_t>(sourceIndex - 1)]->copyStoredValuesFrom(*filterSections[static_cast<size_t>(sourceIndex)]);
 
     std::vector<int> reorderedOrder;
     reorderedOrder.reserve(static_cast<size_t>(previousCount - 1));
 
     for (int orderIndex = 0; orderIndex < previousCount; ++orderIndex)
     {
-        const auto orderBellIndex = bellDisplayOrder[static_cast<size_t>(orderIndex)];
+        const auto orderFilterIndex = filterDisplayOrder[static_cast<size_t>(orderIndex)];
 
-        if (orderBellIndex == removedIndex)
+        if (orderFilterIndex == removedIndex)
             continue;
 
-        reorderedOrder.push_back(orderBellIndex > removedIndex ? orderBellIndex - 1
-                                                               : orderBellIndex);
+        reorderedOrder.push_back(orderFilterIndex > removedIndex ? orderFilterIndex - 1
+                                                               : orderFilterIndex);
     }
 
     for (size_t orderIndex = 0; orderIndex < reorderedOrder.size(); ++orderIndex)
-        bellDisplayOrder[orderIndex] = reorderedOrder[orderIndex];
+        filterDisplayOrder[orderIndex] = reorderedOrder[orderIndex];
 
     for (int orderIndex = static_cast<int>(reorderedOrder.size()); orderIndex < previousCount; ++orderIndex)
     {
-        const auto orderBellIndex = bellDisplayOrder[static_cast<size_t>(orderIndex)];
+        const auto orderFilterIndex = filterDisplayOrder[static_cast<size_t>(orderIndex)];
 
-        bellDisplayOrder[static_cast<size_t>(orderIndex)] = orderBellIndex > removedIndex
-            ? orderBellIndex - 1
-            : orderBellIndex;
+        filterDisplayOrder[static_cast<size_t>(orderIndex)] = orderFilterIndex > removedIndex
+            ? orderFilterIndex - 1
+            : orderFilterIndex;
     }
 
-    resetBellSectionStoredValues(previousCount - 1);
+    resetFilterSectionStoredValues(previousCount - 1);
     storeEditorStateToValueTree();
 }

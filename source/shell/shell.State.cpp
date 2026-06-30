@@ -1,19 +1,10 @@
-#include "shell.EditorBellSection.h"
+#include "shell.EditorFilterSection.h"
 #include "shell.ShellState.h"
 
 namespace
 {
-constexpr auto editorBellDisplayOrderStateKey = "editor_bell_display_order";
+constexpr auto editorFilterDisplayOrderStateKey = "editor_filter_display_order";
 constexpr auto editorShellGlobalHostExpandedStateKey = "editor_shell_global_host_expanded";
-constexpr auto editorVisualizerExpandedStateKey = "editor_visualizer_expanded";
-constexpr auto editorVisualizerRangeLowStateKey = "editor_visualizer_range_low";
-constexpr auto editorVisualizerRangeHighStateKey = "editor_visualizer_range_high";
-constexpr auto editorVisualizerCursorEnabledStateKey = "editor_visualizer_cursor_enabled";
-constexpr auto editorVisualizerShowStereoStateKey = "editor_visualizer_show_stereo";
-constexpr auto editorVisualizerShowLeftStateKey = "editor_visualizer_show_left";
-constexpr auto editorVisualizerShowRightStateKey = "editor_visualizer_show_right";
-constexpr auto editorVisualizerShowMidStateKey = "editor_visualizer_show_mid";
-constexpr auto editorVisualizerShowSideStateKey = "editor_visualizer_show_side";
 constexpr auto editorLastCollapsedWidthStateKey = "editor_last_collapsed_width";
 
 juce::Point<int> clampEditorSize(const int width, const int height) noexcept
@@ -24,33 +15,31 @@ juce::Point<int> clampEditorSize(const int width, const int height) noexcept
 
 int clampCollapsedEditorWidth(const int width) noexcept
 {
-    return juce::jlimit(minimumEditorWidth,
-                        juce::jmax(minimumEditorWidth, maximumEditorWidth - minimumVisualizerWidth),
-                        width);
+    return juce::jlimit(minimumEditorWidth, maximumEditorWidth, width);
 }
 
-juce::String encodeBellDisplayOrder(const std::vector<int>& bellDisplayOrder, const int activeCount)
+juce::String encodeFilterDisplayOrder(const std::vector<int>& filterDisplayOrder, const int activeCount)
 {
     juce::StringArray values;
     values.ensureStorageAllocated(juce::jmax(0, activeCount));
 
     for (int orderIndex = 0; orderIndex < activeCount; ++orderIndex)
     {
-        if (! juce::isPositiveAndBelow(orderIndex, static_cast<int>(bellDisplayOrder.size())))
+        if (! juce::isPositiveAndBelow(orderIndex, static_cast<int>(filterDisplayOrder.size())))
             break;
 
-        values.add(juce::String(bellDisplayOrder[static_cast<size_t>(orderIndex)]));
+        values.add(juce::String(filterDisplayOrder[static_cast<size_t>(orderIndex)]));
     }
 
     return values.joinIntoString(",");
 }
 
-std::vector<int> decodeBellDisplayOrder(const juce::String& text, const int activeCount)
+std::vector<int> decodeFilterDisplayOrder(const juce::String& text, const int activeCount)
 {
     std::vector<int> order;
     order.reserve(static_cast<size_t>(juce::jmax(0, activeCount)));
 
-    std::array<bool, VxAudioProcessor::maxBellFilterCount> used {};
+    std::array<bool, VxAudioProcessor::maxEqeFilterCount> used {};
     const auto tokens = juce::StringArray::fromTokens(text, ",", "");
 
     for (const auto& token : tokens)
@@ -63,22 +52,22 @@ std::vector<int> decodeBellDisplayOrder(const juce::String& text, const int acti
         if (! trimmed.containsOnly("-0123456789"))
             continue;
 
-        const auto bellIndex = trimmed.getIntValue();
+        const auto filterIndex = trimmed.getIntValue();
 
-        if (! juce::isPositiveAndBelow(bellIndex, activeCount))
+        if (! juce::isPositiveAndBelow(filterIndex, activeCount))
             continue;
 
-        if (used[static_cast<size_t>(bellIndex)])
+        if (used[static_cast<size_t>(filterIndex)])
             continue;
 
-        used[static_cast<size_t>(bellIndex)] = true;
-        order.push_back(bellIndex);
+        used[static_cast<size_t>(filterIndex)] = true;
+        order.push_back(filterIndex);
     }
 
-    for (int bellIndex = 0; bellIndex < activeCount; ++bellIndex)
+    for (int filterIndex = 0; filterIndex < activeCount; ++filterIndex)
     {
-        if (! used[static_cast<size_t>(bellIndex)])
-            order.push_back(bellIndex);
+        if (! used[static_cast<size_t>(filterIndex)])
+            order.push_back(filterIndex);
     }
 
     return order;
@@ -108,40 +97,21 @@ const EqeModuleProcessor* VxAudioProcessorEditor::getActiveEqeProcessor() const 
 }
 
 
-void VxAudioProcessorEditor::openVisualizerSection()
-{
-    if (! speModuleLoaded)
-        return;
-
-    const auto preservedFilterScrollY = filterViewport.getViewPositionY();
-    const auto clickedExpanded = visualizerExpanded;
-    visualizerExpanded = ! clickedExpanded;
-
-    storeEditorStateToValueTree();
-    updateSectionStates();
-    resized();
-
-    const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
-    filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedFilterScrollY));
-}
-
 void VxAudioProcessorEditor::clearAllFilters()
 {
     auto* eqeProcessor = getActiveEqeProcessor();
 
-    if (eqeProcessor == nullptr || ! eqeProcessor->clearBellFilters())
+    if (eqeProcessor == nullptr || ! eqeProcessor->clearFilters())
         return;
 
-    bellDisplayOrder.clear();
-    bellDisplayOrder.reserve(VxAudioProcessor::maxBellFilterCount);
+    filterDisplayOrder.clear();
+    filterDisplayOrder.reserve(VxAudioProcessor::maxEqeFilterCount);
 
-    for (int bellIndex = 0; bellIndex < VxAudioProcessor::maxBellFilterCount; ++bellIndex)
+    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
     {
-        bellDisplayOrder.push_back(bellIndex);
-        resetBellSectionStoredValues(bellIndex);
+        filterDisplayOrder.push_back(filterIndex);
+        resetFilterSectionStoredValues(filterIndex);
     }
-
-    visualizerExpanded = false;
 
     storeEditorStateToValueTree();
     updateSectionStates();
@@ -177,7 +147,7 @@ void VxAudioProcessorEditor::performRedo()
 
 void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
 {
-    const auto activeCount = getActiveBellCount();
+    const auto activeCount = getActiveFilterCount();
     auto& state = valueTreeState.state;
 
     const auto activeModule = audioProcessor.getActiveModule();
@@ -203,81 +173,39 @@ void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
 
     shellGlobalHostExpanded = static_cast<bool>(state.getProperty(editorShellGlobalHostExpandedStateKey, false));
 
-    visualizerExpanded = state.getProperty(editorVisualizerExpandedStateKey, false);
-    visualizerCursorEnabled = state.getProperty(editorVisualizerCursorEnabledStateKey, true);
-    visualizerShowStereo = state.getProperty(editorVisualizerShowStereoStateKey, true);
-    visualizerShowLeft = state.getProperty(editorVisualizerShowLeftStateKey, true);
-    visualizerShowRight = state.getProperty(editorVisualizerShowRightStateKey, true);
-    visualizerShowMid = state.getProperty(editorVisualizerShowMidStateKey, true);
-    visualizerShowSide = state.getProperty(editorVisualizerShowSideStateKey, true);
-
-    if (! speModuleLoaded)
-    {
-        visualizerExpanded = false;
-    }
-
-    visualizerRangeLowDb = static_cast<float>(state.getProperty(editorVisualizerRangeLowStateKey, -24.0f));
-    visualizerRangeHighDb = static_cast<float>(state.getProperty(editorVisualizerRangeHighStateKey, 24.0f));
-
     lastCollapsedEditorWidth = clampCollapsedEditorWidth(static_cast<int>(state.getProperty(editorLastCollapsedWidthStateKey,
                                                                                             minimumEditorWidth)));
 
-    if (eqeModuleLoaded)
-    {
-        visualizerExpanded = false;
-    }
-
-    if (visualizerRangeHighDb < visualizerRangeLowDb + 6.0f)
-        visualizerRangeHighDb = visualizerRangeLowDb + 6.0f;
-
-    if (visualizerRangeLowControl != nullptr && visualizerRangeHighControl != nullptr)
-    {
-        const juce::ScopedValueSetter<bool> scopedIgnore(suppressVisualizerControlChangeHandlers, true);
-        visualizerRangeLowControl->setValue(visualizerRangeLowDb, false);
-        visualizerRangeHighControl->setValue(visualizerRangeHighDb, false);
-    }
-
-    if (visualizerCursorButton != nullptr)
-    {
-        visualizerCursorButton->setToggleState(visualizerCursorEnabled, juce::dontSendNotification);
-        visualizerCursorButton->setButtonText(visualizerCursorEnabled ? "CURSOR-OFF" : "CURSOR-ON");
-    }
-
-    if (visualizerShowStereoButton != nullptr)
-        visualizerShowStereoButton->setToggleState(visualizerShowStereo, juce::dontSendNotification);
-
-    if (visualizerShowLeftButton != nullptr)
-        visualizerShowLeftButton->setToggleState(visualizerShowLeft, juce::dontSendNotification);
-
-    if (visualizerShowRightButton != nullptr)
-        visualizerShowRightButton->setToggleState(visualizerShowRight, juce::dontSendNotification);
-
-    if (visualizerShowMidButton != nullptr)
-        visualizerShowMidButton->setToggleState(visualizerShowMid, juce::dontSendNotification);
-
-    if (visualizerShowSideButton != nullptr)
-        visualizerShowSideButton->setToggleState(visualizerShowSide, juce::dontSendNotification);
-
-    const auto savedOrder = state.getProperty(editorBellDisplayOrderStateKey).toString().trim();
+    const auto savedOrder = state.getProperty(editorFilterDisplayOrderStateKey).toString().trim();
 
     if (savedOrder.isNotEmpty())
-        bellDisplayOrder = decodeBellDisplayOrder(savedOrder, activeCount);
+        filterDisplayOrder = decodeFilterDisplayOrder(savedOrder, activeCount);
     else
     {
-        bellDisplayOrder.clear();
-        bellDisplayOrder.reserve(VxAudioProcessor::maxBellFilterCount);
+        filterDisplayOrder.clear();
+        filterDisplayOrder.reserve(VxAudioProcessor::maxEqeFilterCount);
 
-        for (int bellIndex = 0; bellIndex < VxAudioProcessor::maxBellFilterCount; ++bellIndex)
-            bellDisplayOrder.push_back(bellIndex);
+        for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
+            filterDisplayOrder.push_back(filterIndex);
     }
 
-    if (static_cast<int>(bellDisplayOrder.size()) < VxAudioProcessor::maxBellFilterCount)
+    if (static_cast<int>(filterDisplayOrder.size()) < VxAudioProcessor::maxEqeFilterCount)
     {
-        const auto previousSize = static_cast<int>(bellDisplayOrder.size());
-        bellDisplayOrder.reserve(VxAudioProcessor::maxBellFilterCount);
+        const auto previousSize = static_cast<int>(filterDisplayOrder.size());
+        filterDisplayOrder.reserve(VxAudioProcessor::maxEqeFilterCount);
 
-        for (int bellIndex = previousSize; bellIndex < VxAudioProcessor::maxBellFilterCount; ++bellIndex)
-            bellDisplayOrder.push_back(bellIndex);
+        for (int filterIndex = previousSize; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
+            filterDisplayOrder.push_back(filterIndex);
+    }
+
+    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
+    {
+        auto* section = filterSections[static_cast<size_t>(filterIndex)].get();
+
+        if (section == nullptr)
+            continue;
+
+        section->expanded = false;
     }
 
     for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
@@ -322,18 +250,9 @@ void VxAudioProcessorEditor::storeEditorStateToValueTree() noexcept
     }
 
     state.setProperty(editorShellGlobalHostExpandedStateKey, shellGlobalHostExpanded, nullptr);
-    state.setProperty(editorVisualizerExpandedStateKey, visualizerExpanded, nullptr);
-    state.setProperty(editorVisualizerRangeLowStateKey, visualizerRangeLowDb, nullptr);
-    state.setProperty(editorVisualizerRangeHighStateKey, visualizerRangeHighDb, nullptr);
-    state.setProperty(editorVisualizerCursorEnabledStateKey, visualizerCursorEnabled, nullptr);
-    state.setProperty(editorVisualizerShowStereoStateKey, visualizerShowStereo, nullptr);
-    state.setProperty(editorVisualizerShowLeftStateKey, visualizerShowLeft, nullptr);
-    state.setProperty(editorVisualizerShowRightStateKey, visualizerShowRight, nullptr);
-    state.setProperty(editorVisualizerShowMidStateKey, visualizerShowMid, nullptr);
-    state.setProperty(editorVisualizerShowSideStateKey, visualizerShowSide, nullptr);
     state.setProperty(editorLastCollapsedWidthStateKey, lastCollapsedEditorWidth, nullptr);
-    state.setProperty(editorBellDisplayOrderStateKey,
-                      encodeBellDisplayOrder(bellDisplayOrder, getActiveBellCount()),
+    state.setProperty(editorFilterDisplayOrderStateKey,
+                      encodeFilterDisplayOrder(filterDisplayOrder, getActiveFilterCount()),
                       nullptr);
 
     for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
@@ -379,15 +298,15 @@ juce::Point<int> VxAudioProcessorEditor::getRestoredEditorSize() const noexcept
     return { initialEditorWidth, initialEditorHeight };
 }
 
-int VxAudioProcessorEditor::getActiveBellCount() const noexcept
+int VxAudioProcessorEditor::getActiveFilterCount() const noexcept
 {
     if (const auto* eqeProcessor = getActiveEqeProcessor())
-        return eqeProcessor->getActiveBellCount();
+        return eqeProcessor->getActiveFilterCount();
 
     return 0;
 }
 
-void VxAudioProcessorEditor::updateEditorWidthForVisualizerVisibility()
+void VxAudioProcessorEditor::updateEditorWidthState()
 {
     const auto restoredWidth = juce::jmax(minimumEditorWidth, getWidth());
     setResizeLimits(minimumEditorWidth,

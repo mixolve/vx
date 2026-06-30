@@ -31,6 +31,8 @@ public:
         const char* disabledLabel = "";
         const char* modeSuffix = "";
         const char* syncSuffix = "";
+        const char* exclusiveGroup = "";
+        int topGapMultiplier = 1;
         int sourceBandIndex = -1;
     };
 

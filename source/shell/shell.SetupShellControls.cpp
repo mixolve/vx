@@ -5,6 +5,7 @@ void VxAudioProcessorEditor::setupShellControls()
     auto resetGlobalClip = [this]
     {
         audioProcessor.resetGlobalClipIndicator();
+        lastClipIndicatorTimeMs = 0;
 
         if (shellGlobalHeader != nullptr)
             shellGlobalHeader->clearTextColourOverride();
@@ -16,7 +17,8 @@ void VxAudioProcessorEditor::setupShellControls()
         shellGlobalHeader->setLongPressAction(resetGlobalClip, 500);
 
     globalBypassButton = std::make_unique<BoxTextButton>(uiAccent);
-    globalBypassButton->setButtonText("BYPASS");
+    globalBypassButton->setButtonText("B");
+    globalBypassButton->setTooltip("CLICK: BYPASS -- LONG PRESS: CLOSE MODULE");
     globalBypassButton->setTextJustification(juce::Justification::centred);
     globalBypassButton->setClickingTogglesState(true);
     globalBypassAttachment = std::make_unique<ButtonAttachment>(valueTreeState,
@@ -26,10 +28,16 @@ void VxAudioProcessorEditor::setupShellControls()
     {
         clearKeyboardFocus(*this);
     };
+    globalBypassButton->setLongPressAction([this]
+    {
+        closeActiveModule();
+        clearKeyboardFocus(*this);
+    }, 500, "C");
     addAndMakeVisible(*globalBypassButton);
 
     clearFiltersButton = std::make_unique<BoxTextButton>(uiAccent);
-    clearFiltersButton->setButtonText("DELETE-ALL");
+    clearFiltersButton->setButtonText("DL");
+    clearFiltersButton->setTooltip("DELETE ALL FILTERS");
     clearFiltersButton->setTextJustification(juce::Justification::centred);
     clearFiltersButton->onClick = [this]
     {
@@ -43,7 +51,8 @@ void VxAudioProcessorEditor::setupShellControls()
     addAndMakeVisible(*clearFiltersButton);
 
     undoButton = std::make_unique<BoxTextButton>(uiGrey500);
-    undoButton->setButtonText("UNDO");
+    undoButton->setButtonText("U");
+    undoButton->setTooltip("UNDO");
     undoButton->setTextJustification(juce::Justification::centred);
     undoButton->onClick = [this]
     {
@@ -53,7 +62,8 @@ void VxAudioProcessorEditor::setupShellControls()
     addAndMakeVisible(*undoButton);
 
     redoButton = std::make_unique<BoxTextButton>(uiGrey500);
-    redoButton->setButtonText("REDO");
+    redoButton->setButtonText("R");
+    redoButton->setTooltip("REDO");
     redoButton->setTextJustification(juce::Justification::centred);
     redoButton->onClick = [this]
     {
@@ -81,44 +91,58 @@ void VxAudioProcessorEditor::setupShellControls()
     }
 
     sortPlaceButton = std::make_unique<BoxTextButton>(uiGrey500);
-    sortPlaceButton->setButtonText("SORT.PLACE");
+    sortPlaceButton->setButtonText("SP");
+    sortPlaceButton->setTooltip("SORT BY PLACE");
     sortPlaceButton->setTextJustification(juce::Justification::centred);
     sortPlaceButton->onClick = [this]
     {
-        sortBellSectionsByPlace();
+        sortFilterSectionsByPlace();
         clearKeyboardFocus(*this);
     };
     addAndMakeVisible(*sortPlaceButton);
 
     sortFreqButton = std::make_unique<BoxTextButton>(uiGrey500);
-    sortFreqButton->setButtonText("SORT.FREQ");
+    sortFreqButton->setButtonText("SF");
+    sortFreqButton->setTooltip("SORT BY FREQUENCY");
     sortFreqButton->setTextJustification(juce::Justification::centred);
     sortFreqButton->onClick = [this]
     {
-        sortBellSectionsByFrequency();
+        sortFilterSectionsByFrequency();
         clearKeyboardFocus(*this);
     };
     addAndMakeVisible(*sortFreqButton);
 
     sortDuoButton = std::make_unique<BoxTextButton>(uiGrey500);
-    sortDuoButton->setButtonText("SORT.DUO");
+    sortDuoButton->setButtonText("SD");
+    sortDuoButton->setTooltip("SORT BY PLACE AND FREQUENCY");
     sortDuoButton->setTextJustification(juce::Justification::centred);
     sortDuoButton->onClick = [this]
     {
-        sortBellSectionsByDuo();
+        sortFilterSectionsByDuo();
         clearKeyboardFocus(*this);
     };
     addAndMakeVisible(*sortDuoButton);
 
-    visualizerHeader = std::make_unique<BoxTextButton>(uiAccent);
-    visualizerHeader->setButtonText("VISUALIZER");
-    visualizerHeader->setClickingTogglesState(true);
-    visualizerHeader->onClick = [this]
+}
+
+void VxAudioProcessorEditor::updateTooltipTogglePrompt()
+{
+    if (tooltipWindow != nullptr)
     {
-        openVisualizerSection();
+        tooltipWindow->hideTip();
+        tooltipWindow->setHintsEnabled(tooltipsEnabled);
+        tooltipWindow->setHoverDelayMs(1500);
+    }
+
+    if (shellGlobalHostHeader == nullptr)
+        return;
+
+    shellGlobalHostHeader->setLongPressAction([this]
+    {
+        tooltipsEnabled = ! tooltipsEnabled;
+        updateTooltipTogglePrompt();
         clearKeyboardFocus(*this);
-    };
-    filterContent.addAndMakeVisible(*visualizerHeader);
+    }, 500, tooltipsEnabled ? "OFF" : "ON");
 }
 
 void VxAudioProcessorEditor::clearHostSlot(const int slotIndex)

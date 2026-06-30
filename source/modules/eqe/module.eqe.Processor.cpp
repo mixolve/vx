@@ -1,6 +1,5 @@
 #include "module.eqe.ProcessorSupport.h"
 
-#include <array>
 #include <cmath>
 #include <functional>
 
@@ -12,14 +11,14 @@ void EqeModuleProcessor::prepareToPlay(const double sampleRate, const int sample
     currentSampleRate = sampleRate;
     lastProcessedBlockSize = juce::jmax(1, samplesPerBlock);
     preparedNumChannels = static_cast<int>(maxSupportedChannels);
-    bellProcessBufferA.setSize(preparedNumChannels, juce::jmax(1, samplesPerBlock));
-    bellProcessBufferB.setSize(preparedNumChannels, juce::jmax(1, samplesPerBlock));
+    filterProcessBufferA.setSize(preparedNumChannels, juce::jmax(1, samplesPerBlock));
+    filterProcessBufferB.setSize(preparedNumChannels, juce::jmax(1, samplesPerBlock));
     lrmsWorkBuffer.setSize(1, juce::jmax(1, samplesPerBlock));
     lrmsAuxBuffer.setSize(preparedNumChannels, juce::jmax(1, samplesPerBlock));
 
-    resetBellFilters();
+    resetFilters();
     markEqeFiltersDirty();
-    updateBellFilters();
+    updateFilters();
     eqeFiltersDirty.store(false, std::memory_order_release);
     prepared.store(true, std::memory_order_release);
 }
@@ -29,8 +28,35 @@ void EqeModuleProcessor::releaseResources()
     prepared.store(false, std::memory_order_release);
     const juce::ScopedLock lock(filterProcessLock);
 
-    resetBellFilters();
+    resetFilters();
     currentSampleRate = 0.0;
+}
+
+void EqeModuleProcessor::resetProcessingState() noexcept
+{
+    const juce::ScopedLock lock(filterProcessLock);
+
+    for (auto& bandFilters : bellOrderFilters)
+        for (auto& filter : bandFilters)
+            filter.reset();
+
+    for (auto& bandFilters : shelfOrderFilters)
+        for (auto& filter : bandFilters)
+            filter.reset();
+
+    for (auto& filter : tiltFilters)
+        filter.reset();
+
+    for (auto& filter : cutBlendFilters)
+        filter.reset();
+
+    for (auto& filter : phaseFirFilters)
+        filter.reset();
+
+    filterProcessBufferA.clear();
+    filterProcessBufferB.clear();
+    lrmsWorkBuffer.clear();
+    lrmsAuxBuffer.clear();
 }
 
 void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
@@ -44,11 +70,20 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
         return;
 
     const auto processChannels = juce::jmin(buffer.getNumChannels(), preparedNumChannels);
+    const auto processSamples = buffer.getNumSamples();
+
+    if (processChannels <= 0 || processSamples <= 0)
+        return;
+
+    filterProcessBufferA.setSize(processChannels, processSamples, false, false, true);
+    filterProcessBufferB.setSize(processChannels, processSamples, false, false, true);
+    lrmsWorkBuffer.setSize(1, processSamples, false, false, true);
+    lrmsAuxBuffer.setSize(processChannels, processSamples, false, false, true);
 
     if (eqeFiltersDirty.exchange(false, std::memory_order_acq_rel))
-        updateBellFilters();
+        updateFilters();
 
-    const auto bellCount = getActiveBellCount();
+    const auto filterCount = getActiveFilterCount();
 
     auto processLrmsWrapped = [this, processChannels] (juce::AudioBuffer<float>& targetBuffer,
                                                        const int bandIndex,
@@ -61,10 +96,10 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
         }
 
         const auto mode = filterLrmsParams[static_cast<size_t>(bandIndex)] != nullptr
-            ? juce::jlimit(0, 4, static_cast<int>(std::lround(filterLrmsParams[static_cast<size_t>(bandIndex)]->load(std::memory_order_relaxed))))
+            ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterLrmsParams[static_cast<size_t>(bandIndex)]->load(std::memory_order_relaxed))))
             : 0;
 
-        if (mode == 0)
+        if (mode == 0 || mode == 5)
         {
             processor(targetBuffer, processChannels);
             return;
@@ -125,6 +160,18 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
                 }
                 break;
 
+            case 6:
+                workBuffer.copyFrom(0, 0, targetBuffer, 0, 0, targetBuffer.getNumSamples());
+                processor(workBuffer, 1);
+                targetBuffer.copyFrom(0, 0, workBuffer, 0, 0, targetBuffer.getNumSamples());
+                break;
+
+            case 7:
+                workBuffer.copyFrom(0, 0, targetBuffer, 1, 0, targetBuffer.getNumSamples());
+                processor(workBuffer, 1);
+                targetBuffer.copyFrom(1, 0, workBuffer, 0, 0, targetBuffer.getNumSamples());
+                break;
+
             default:
                 processor(targetBuffer, processChannels);
                 break;
@@ -132,24 +179,80 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
     };
 
     auto processBandBuffer = [this, &processLrmsWrapped] (juce::AudioBuffer<float>& targetBuffer,
-                                                          const int bellIndex)
+                                                          const int filterIndex)
     {
-        const auto bandArrayIndex = static_cast<size_t>(bellIndex);
+        const auto bandArrayIndex = static_cast<size_t>(filterIndex);
         const auto filterType = getFilterTypeForBand(bandArrayIndex);
-        const auto bandBypassed = bellBypassParams[bandArrayIndex] != nullptr
-            && bellBypassParams[bandArrayIndex]->load(std::memory_order_relaxed) >= 0.5f;
+        const auto bandBypassed = filterBypassParams[bandArrayIndex] != nullptr
+            && filterBypassParams[bandArrayIndex]->load(std::memory_order_relaxed) >= 0.5f;
 
         if (bandBypassed)
             return;
 
-        const auto slopeDbPerOct = bellSlopeChoiceParams[bandArrayIndex] != nullptr
-            ? static_cast<double>(EqeModuleProcessor::getBellSlopeValueForChoiceIndex(bellSlopeChoiceParams[bandArrayIndex]->getIndex()))
+        const auto placeChoice = filterLrmsParams[bandArrayIndex] != nullptr
+            ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterLrmsParams[bandArrayIndex]->load(std::memory_order_relaxed))))
+            : 0;
+
+        if (isPhasePlaceChoice(placeChoice) && ! isCutFilterType(filterType))
+        {
+            if (isVolumeFilterType(filterType))
+                return;
+
+            if (filterType == FilterType::bell)
+            {
+                if (filterSlopeChoiceParams[bandArrayIndex] != nullptr
+                    && filterSlopeChoiceParams[bandArrayIndex]->getIndex() == 0)
+                    return;
+
+                if (! phaseFirFilters[bandArrayIndex].active)
+                    return;
+
+                processLrmsWrapped(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
+                {
+                    phaseFirFilters[bandArrayIndex].process(targetBufferToProcess, targetChannels);
+                });
+                return;
+            }
+
+            if (! phaseFirFilters[bandArrayIndex].active)
+                return;
+
+            processLrmsWrapped(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
+            {
+                phaseFirFilters[bandArrayIndex].process(targetBufferToProcess, targetChannels);
+            });
+
+            return;
+        }
+
+        if (isVolumeFilterType(filterType))
+        {
+            const auto gainDb = filterGainParams[bandArrayIndex] != nullptr
+                ? juce::jlimit(-48.0f,
+                               48.0f,
+                               filterGainParams[bandArrayIndex]->load(std::memory_order_relaxed))
+                : 0.0f;
+
+            if (std::abs(gainDb) < 1.0e-6f)
+                return;
+
+            const auto gain = juce::Decibels::decibelsToGain(gainDb);
+            processLrmsWrapped(targetBuffer, static_cast<int>(bandArrayIndex), [gain] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
+            {
+                for (int channel = 0; channel < targetChannels; ++channel)
+                    targetBufferToProcess.applyGain(channel, 0, targetBufferToProcess.getNumSamples(), gain);
+            });
+            return;
+        }
+
+        const auto slopeDbPerOct = filterSlopeChoiceParams[bandArrayIndex] != nullptr
+            ? static_cast<double>(EqeModuleProcessor::getBellSlopeValueForChoiceIndex(filterSlopeChoiceParams[bandArrayIndex]->getIndex()))
             : static_cast<double>(EqeModuleProcessor::fixedSlopeDbPerOct);
 
         if (filterType == FilterType::bell)
         {
-            if (bellSlopeChoiceParams[bandArrayIndex] != nullptr
-                && bellSlopeChoiceParams[bandArrayIndex]->getIndex() == 0)
+            if (filterSlopeChoiceParams[bandArrayIndex] != nullptr
+                && filterSlopeChoiceParams[bandArrayIndex]->getIndex() == 0)
                 return;
 
             if (bellOrderFilters[bandArrayIndex].front().sectionCount <= 0)
@@ -172,24 +275,24 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
 
                 if (lowerOrder > 0)
                 {
-                    bellProcessBufferA.makeCopyOf(targetBufferToProcess, true);
-                    bandFilters[static_cast<size_t>(lowerOrder - 1)].process(bellProcessBufferA, targetChannels);
+                    filterProcessBufferA.makeCopyOf(targetBufferToProcess, true);
+                    bandFilters[static_cast<size_t>(lowerOrder - 1)].process(filterProcessBufferA, targetChannels);
                 }
                 else
                 {
-                    bellProcessBufferA.makeCopyOf(targetBufferToProcess, true);
+                    filterProcessBufferA.makeCopyOf(targetBufferToProcess, true);
                 }
 
-                bellProcessBufferB.makeCopyOf(targetBufferToProcess, true);
+                filterProcessBufferB.makeCopyOf(targetBufferToProcess, true);
 
                 if (upperOrder > 0)
-                    bandFilters[static_cast<size_t>(upperOrder - 1)].process(bellProcessBufferB, targetChannels);
+                    bandFilters[static_cast<size_t>(upperOrder - 1)].process(filterProcessBufferB, targetChannels);
 
                 for (int channel = 0; channel < targetChannels; ++channel)
                 {
                     auto* output = targetBufferToProcess.getWritePointer(channel);
-                    const auto* lower = bellProcessBufferA.getReadPointer(channel);
-                    const auto* upper = bellProcessBufferB.getReadPointer(channel);
+                    const auto* lower = filterProcessBufferA.getReadPointer(channel);
+                    const auto* upper = filterProcessBufferB.getReadPointer(channel);
 
                     for (int sampleIndex = 0; sampleIndex < targetBufferToProcess.getNumSamples(); ++sampleIndex)
                         output[sampleIndex] = static_cast<float>(lower[sampleIndex]
@@ -230,16 +333,16 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
                     return;
                 }
 
-                bellProcessBufferA.makeCopyOf(targetBufferToProcess, true);
-                bellProcessBufferB.makeCopyOf(targetBufferToProcess, true);
-                bandFilters[static_cast<size_t>(lowerOrder - 1)].process(bellProcessBufferA, targetChannels);
-                bandFilters[static_cast<size_t>(upperOrder - 1)].process(bellProcessBufferB, targetChannels);
+                filterProcessBufferA.makeCopyOf(targetBufferToProcess, true);
+                filterProcessBufferB.makeCopyOf(targetBufferToProcess, true);
+                bandFilters[static_cast<size_t>(lowerOrder - 1)].process(filterProcessBufferA, targetChannels);
+                bandFilters[static_cast<size_t>(upperOrder - 1)].process(filterProcessBufferB, targetChannels);
 
                 for (int channel = 0; channel < targetChannels; ++channel)
                 {
                     auto* output = targetBufferToProcess.getWritePointer(channel);
-                    const auto* lower = bellProcessBufferA.getReadPointer(channel);
-                    const auto* upper = bellProcessBufferB.getReadPointer(channel);
+                    const auto* lower = filterProcessBufferA.getReadPointer(channel);
+                    const auto* upper = filterProcessBufferB.getReadPointer(channel);
 
                     for (int sampleIndex = 0; sampleIndex < targetBufferToProcess.getNumSamples(); ++sampleIndex)
                         output[sampleIndex] = static_cast<float>(lower[sampleIndex]
@@ -261,19 +364,37 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
         }
     };
 
-    for (int bellIndex = 0; bellIndex < bellCount; ++bellIndex)
-        processBandBuffer(buffer, bellIndex);
+    for (int filterIndex = 0; filterIndex < filterCount; ++filterIndex)
+        processBandBuffer(buffer, filterIndex);
 }
 
-EqeModuleProcessor::FilterType EqeModuleProcessor::getFilterTypeForBand(const size_t bellIndex) const noexcept
+int EqeModuleProcessor::getLatencySamples() const noexcept
 {
-    if (bellIndex >= filterTypeParams.size() || filterTypeParams[bellIndex] == nullptr)
+    const auto filterCount = getActiveFilterCount();
+
+    for (int filterIndex = 0; filterIndex < filterCount; ++filterIndex)
+    {
+        const auto bandArrayIndex = static_cast<size_t>(filterIndex);
+        const auto placeChoice = filterLrmsParams[bandArrayIndex] != nullptr
+            ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterLrmsParams[bandArrayIndex]->load(std::memory_order_relaxed))))
+            : 0;
+
+        if (isPhasePlaceChoice(placeChoice) && phaseFirFilters[bandArrayIndex].active)
+            return phaseFirLatencySamples;
+    }
+
+    return 0;
+}
+
+EqeModuleProcessor::FilterType EqeModuleProcessor::getFilterTypeForBand(const size_t filterIndex) const noexcept
+{
+    if (filterIndex >= filterTypeParams.size() || filterTypeParams[filterIndex] == nullptr)
         return FilterType::bell;
 
-    return filterTypeFromChoiceIndex(static_cast<int>(std::lround(filterTypeParams[bellIndex]->load(std::memory_order_relaxed))));
+    return filterTypeFromChoiceIndex(static_cast<int>(std::lround(filterTypeParams[filterIndex]->load(std::memory_order_relaxed))));
 }
 
-bool EqeModuleProcessor::filterDesignMatches(const size_t bellIndex,
+bool EqeModuleProcessor::filterDesignMatches(const size_t filterIndex,
                                              const bool active,
                                              const FilterType type,
                                              const float frequency,
@@ -281,7 +402,7 @@ bool EqeModuleProcessor::filterDesignMatches(const size_t bellIndex,
                                              const float slope,
                                              const float gainDb) const noexcept
 {
-    const auto& cachedState = cachedFilterStates[bellIndex];
+    const auto& cachedState = cachedFilterStates[filterIndex];
 
     if (! cachedState.valid)
         return false;
@@ -300,7 +421,7 @@ bool EqeModuleProcessor::filterDesignMatches(const size_t bellIndex,
         && std::abs(cachedState.gainDb - gainDb) < 1.0e-4f;
 }
 
-void EqeModuleProcessor::storeFilterDesignState(const size_t bellIndex,
+void EqeModuleProcessor::storeFilterDesignState(const size_t filterIndex,
                                                 const bool active,
                                                 const FilterType type,
                                                 const float frequency,
@@ -308,7 +429,7 @@ void EqeModuleProcessor::storeFilterDesignState(const size_t bellIndex,
                                                 const float slope,
                                                 const float gainDb) noexcept
 {
-    auto& cachedState = cachedFilterStates[bellIndex];
+    auto& cachedState = cachedFilterStates[filterIndex];
     cachedState.valid = true;
     cachedState.active = active;
     cachedState.type = type;

@@ -9,6 +9,7 @@ float defaultFilterFrequencyForType(const EqeModuleProcessor::FilterType type)
         case EqeModuleProcessor::FilterType::lowCut: return 40.0f;
         case EqeModuleProcessor::FilterType::highCut: return 12000.0f;
         case EqeModuleProcessor::FilterType::tilt: return defaultTiltFrequency;
+        case EqeModuleProcessor::FilterType::volume: return defaultTiltFrequency;
         case EqeModuleProcessor::FilterType::bell:
         default: return 632.0f;
     }

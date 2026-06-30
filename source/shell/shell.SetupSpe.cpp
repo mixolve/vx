@@ -108,29 +108,16 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                              });
         };
 
-        speAttackControl = std::make_unique<ParameterControl>(speState,
-                                                              SpeModuleProcessor::paramAttackId,
-                                                              "ATTACK",
-                                                              0);
-        filterContent.addAndMakeVisible(*speAttackControl);
-
-        speReleaseControl = std::make_unique<ParameterControl>(speState,
-                                                               SpeModuleProcessor::paramReleaseId,
-                                                               "RELEASE",
-                                                               0);
-        filterContent.addAndMakeVisible(*speReleaseControl);
-
-        speKneeControl = std::make_unique<ParameterControl>(speState,
-                                                            SpeModuleProcessor::paramKneeId,
-                                                            "KNEE",
-                                                            2);
-        filterContent.addAndMakeVisible(*speKneeControl);
-
-        speRatioControl = std::make_unique<ParameterControl>(speState,
-                                                             SpeModuleProcessor::paramRatioId,
-                                                             "RATIO",
-                                                             2);
-        filterContent.addAndMakeVisible(*speRatioControl);
+        speFftProcessorHeader = std::make_unique<BoxTextButton>(uiAccent);
+        speFftProcessorHeader->setButtonText("FFT PROCESSOR");
+        speFftProcessorHeader->setClickingTogglesState(false);
+        speFftProcessorHeader->setBorderVisible(false);
+        speFftProcessorHeader->setFillVisible(false);
+        speFftProcessorHeader->setDividerLineVisible(true);
+        speFftProcessorHeader->setPressFillEnabled(false);
+        speFftProcessorHeader->setTextJustification(juce::Justification::centredLeft);
+        speFftProcessorHeader->setInterceptsMouseClicks(false, false);
+        filterContent.addAndMakeVisible(*speFftProcessorHeader);
 
         speDspFftSizeControl = std::make_unique<ParameterControl>(speState,
                                                                   SpeModuleProcessor::paramDspFftSizeId,
@@ -163,6 +150,73 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                                      });
         });
         filterContent.addAndMakeVisible(*speDspFftSizeControl);
+
+        speDspHopDivisorControl = std::make_unique<ParameterControl>(speState,
+                                                                     SpeModuleProcessor::paramDspHopDivisorId,
+                                                                     "HOP-DIV",
+                                                                     0);
+        speDspHopDivisorControl->setValueClickAction([this, showDiscreteChoicePrompt]
+        {
+            auto* activeSpeProcessor = audioProcessor.getSpeModuleProcessor();
+
+            if (activeSpeProcessor == nullptr)
+                return;
+
+            auto& activeSpeState = activeSpeProcessor->getValueTreeState();
+            auto* hopDivisorParameter = activeSpeState.getRawParameterValue(SpeModuleProcessor::paramDspHopDivisorId);
+
+            if (speDspHopDivisorControl == nullptr || hopDivisorParameter == nullptr)
+                return;
+
+            const juce::StringArray options { "/2", "/4", "/8", "/16", "/32" };
+            const auto currentIndex = juce::roundToInt(hopDivisorParameter->load(std::memory_order_relaxed));
+
+            showDiscreteChoicePrompt(*speDspHopDivisorControl,
+                                     speDspHopDivisorControl->getValueBounds(),
+                                     options,
+                                     currentIndex,
+                                     [this] (const int selectedIndex)
+                                     {
+                                         if (speDspHopDivisorControl != nullptr)
+                                             speDspHopDivisorControl->setValue(static_cast<double>(selectedIndex), true);
+                                     });
+        });
+        filterContent.addAndMakeVisible(*speDspHopDivisorControl);
+
+        speDynamicProcessorHeader = std::make_unique<BoxTextButton>(uiAccent);
+        speDynamicProcessorHeader->setButtonText("DYNAMIC PROCESSOR");
+        speDynamicProcessorHeader->setClickingTogglesState(false);
+        speDynamicProcessorHeader->setBorderVisible(false);
+        speDynamicProcessorHeader->setFillVisible(false);
+        speDynamicProcessorHeader->setDividerLineVisible(true);
+        speDynamicProcessorHeader->setPressFillEnabled(false);
+        speDynamicProcessorHeader->setTextJustification(juce::Justification::centredLeft);
+        speDynamicProcessorHeader->setInterceptsMouseClicks(false, false);
+        filterContent.addAndMakeVisible(*speDynamicProcessorHeader);
+
+        speAttackControl = std::make_unique<ParameterControl>(speState,
+                                                              SpeModuleProcessor::paramAttackId,
+                                                              "ATTACK",
+                                                              0);
+        filterContent.addAndMakeVisible(*speAttackControl);
+
+        speReleaseControl = std::make_unique<ParameterControl>(speState,
+                                                               SpeModuleProcessor::paramReleaseId,
+                                                               "RELEASE",
+                                                               0);
+        filterContent.addAndMakeVisible(*speReleaseControl);
+
+        speKneeControl = std::make_unique<ParameterControl>(speState,
+                                                            SpeModuleProcessor::paramKneeId,
+                                                            "KNEE",
+                                                            2);
+        filterContent.addAndMakeVisible(*speKneeControl);
+
+        speRatioControl = std::make_unique<ParameterControl>(speState,
+                                                             SpeModuleProcessor::paramRatioId,
+                                                             "RATIO",
+                                                             2);
+        filterContent.addAndMakeVisible(*speRatioControl);
 
         speDspSlopeControl = std::make_unique<ParameterControl>(speState,
                                                                 SpeModuleProcessor::paramDspSlopeId,
@@ -232,6 +286,135 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         };
         filterContent.addAndMakeVisible(*speDualMonoLinkButton);
 
+        spePhaseProcessorHeader = std::make_unique<BoxTextButton>(uiAccent);
+        spePhaseProcessorHeader->setButtonText("PHASE PROCESSOR");
+        spePhaseProcessorHeader->setClickingTogglesState(false);
+        spePhaseProcessorHeader->setBorderVisible(false);
+        spePhaseProcessorHeader->setFillVisible(false);
+        spePhaseProcessorHeader->setDividerLineVisible(true);
+        spePhaseProcessorHeader->setPressFillEnabled(false);
+        spePhaseProcessorHeader->setTextJustification(juce::Justification::centredLeft);
+        spePhaseProcessorHeader->setInterceptsMouseClicks(false, false);
+        filterContent.addAndMakeVisible(*spePhaseProcessorHeader);
+
+        spePhaseAddButton = std::make_unique<BoxTextButton>(uiGrey500);
+        spePhaseAddButton->setButtonText("AD");
+        spePhaseAddButton->setTooltip("ADD PHASE FILTER");
+        spePhaseAddButton->onClick = [this]
+        {
+            const auto preservedScrollY = filterViewport.getViewPositionY();
+            auto* activeSpeProcessor = audioProcessor.getSpeModuleProcessor();
+
+            if (activeSpeProcessor != nullptr && activeSpeProcessor->addPhaseFilter())
+            {
+                enforceSingleExpandedSpePhaseFilter(getActiveSpePhaseFilterCount() - 1);
+                updateSectionStates();
+                resized();
+                const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+                filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                scheduleHistorySnapshot();
+            }
+
+            clearKeyboardFocus(*this);
+        };
+        filterContent.addAndMakeVisible(*spePhaseAddButton);
+
+        for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        {
+            spePhaseRemoveButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiGrey500);
+            spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]->setButtonText("D");
+            spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]->setTooltip("DELETE PHASE FILTER");
+            spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]->onClick = [this, filterIndex]
+            {
+                const auto preservedScrollY = filterViewport.getViewPositionY();
+                auto* activeSpeProcessor = audioProcessor.getSpeModuleProcessor();
+
+                if (activeSpeProcessor != nullptr && activeSpeProcessor->removePhaseFilter(filterIndex))
+                {
+                    enforceSingleExpandedSpePhaseFilter(-1);
+                    updateSectionStates();
+                    resized();
+                    const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+                    filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                    scheduleHistorySnapshot();
+                }
+
+                clearKeyboardFocus(*this);
+            };
+            filterContent.addAndMakeVisible(*spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]);
+
+            spePhaseHeaderButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiAccent);
+            spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setButtonText({});
+            spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setTextJustification(juce::Justification::centred);
+            spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setClickingTogglesState(true);
+            spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setCancelClickOnLeave(true);
+            spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->onClick = [this, filterIndex]
+            {
+                const auto preservedScrollY = filterViewport.getViewPositionY();
+                enforceSingleExpandedSpePhaseFilter(spePhaseExpanded[static_cast<size_t>(filterIndex)] ? -1 : filterIndex);
+                updateSectionStates();
+                resized();
+                const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+                filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                clearKeyboardFocus(*this);
+            };
+            filterContent.addAndMakeVisible(*spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]);
+
+            spePhaseTypeControls[static_cast<size_t>(filterIndex)] = std::make_unique<ChoiceControl>(
+                speState,
+                SpeModuleProcessor::getPhaseFilterTypeParamId(filterIndex),
+                "TYPE",
+                std::vector<int> { 0, 1, 2, 3, 4 });
+            spePhaseTypeControls[static_cast<size_t>(filterIndex)]->onValueChanged = [this]
+            {
+                updateSectionStates();
+            };
+            filterContent.addAndMakeVisible(*spePhaseTypeControls[static_cast<size_t>(filterIndex)]);
+
+            spePhasePlaceControls[static_cast<size_t>(filterIndex)] = std::make_unique<ChoiceControl>(
+                speState,
+                SpeModuleProcessor::getPhaseFilterPlaceParamId(filterIndex),
+                "PLACE",
+                std::vector<int> { 0, 1, 2 });
+            spePhasePlaceControls[static_cast<size_t>(filterIndex)]->onValueChanged = [this]
+            {
+                updateSectionStates();
+            };
+            filterContent.addAndMakeVisible(*spePhasePlaceControls[static_cast<size_t>(filterIndex)]);
+
+            spePhaseSlopeControls[static_cast<size_t>(filterIndex)] = std::make_unique<ChoiceControl>(
+                speState,
+                SpeModuleProcessor::getPhaseFilterSlopeParamId(filterIndex),
+                "ORDER",
+                std::vector<int> { 0, 1, 2, 3, 4, 5 });
+            filterContent.addAndMakeVisible(*spePhaseSlopeControls[static_cast<size_t>(filterIndex)]);
+
+            spePhaseFrequencyControls[static_cast<size_t>(filterIndex)] = std::make_unique<ParameterControl>(
+                speState,
+                SpeModuleProcessor::getPhaseFilterFrequencyParamId(filterIndex),
+                "FREQ",
+                2);
+            spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->onValueChanged = [this]
+            {
+                updateSectionStates();
+            };
+            filterContent.addAndMakeVisible(*spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]);
+
+            spePhaseBandwidthControls[static_cast<size_t>(filterIndex)] = std::make_unique<ParameterControl>(
+                speState,
+                SpeModuleProcessor::getPhaseFilterBandwidthParamId(filterIndex),
+                "BW",
+                2);
+            filterContent.addAndMakeVisible(*spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]);
+
+            spePhaseImpactControls[static_cast<size_t>(filterIndex)] = std::make_unique<ParameterControl>(
+                speState,
+                SpeModuleProcessor::getPhaseFilterImpactParamId(filterIndex),
+                "IMPACT",
+                0);
+            filterContent.addAndMakeVisible(*spePhaseImpactControls[static_cast<size_t>(filterIndex)]);
+        }
+
         speAnalyserFftSizeControl = std::make_unique<LocalParameterControl>("FFT-SIZE",
                                                                             0,
                                                                             0.0,
@@ -269,7 +452,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                                              speAnalyserFftSizeControl->setValue(static_cast<double>(selectedIndex), true);
                                      });
         });
-        filterContent.addAndMakeVisible(*speAnalyserFftSizeControl);
+        speAnalyserContent.addAndMakeVisible(*speAnalyserFftSizeControl);
 
         speAnalyserOverlapControl = std::make_unique<LocalParameterControl>("OVERLAP",
                                                                             0,
@@ -308,7 +491,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                                              speAnalyserOverlapControl->setValue(static_cast<double>(selectedIndex), true);
                                      });
         });
-        filterContent.addAndMakeVisible(*speAnalyserOverlapControl);
+        speAnalyserContent.addAndMakeVisible(*speAnalyserOverlapControl);
 
         speAnalyserLeftControl = std::make_unique<LocalParameterControl>("LEFT",
                                                                          0,
@@ -328,7 +511,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                                                    static_cast<float>(speAnalyserLeftControl->getValue()));
             refreshSpeAnalyserState();
         };
-        filterContent.addAndMakeVisible(*speAnalyserLeftControl);
+        speAnalyserContent.addAndMakeVisible(*speAnalyserLeftControl);
 
         speAnalyserRightControl = std::make_unique<LocalParameterControl>("RIGHT",
                                                                           0,
@@ -348,7 +531,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                                                    static_cast<float>(speAnalyserRightControl->getValue()));
             refreshSpeAnalyserState();
         };
-        filterContent.addAndMakeVisible(*speAnalyserRightControl);
+        speAnalyserContent.addAndMakeVisible(*speAnalyserRightControl);
 
         speAnalyserRangeLowControl = std::make_unique<LocalParameterControl>("LOW",
                                                                              2,
@@ -365,7 +548,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                                                    static_cast<float>(speAnalyserRangeLowControl->getValue()));
             refreshSpeAnalyserState();
         };
-        filterContent.addAndMakeVisible(*speAnalyserRangeLowControl);
+        speAnalyserContent.addAndMakeVisible(*speAnalyserRangeLowControl);
 
         speAnalyserRangeHighControl = std::make_unique<LocalParameterControl>("HIGH",
                                                                               2,
@@ -382,7 +565,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                                                    static_cast<float>(speAnalyserRangeHighControl->getValue()));
             refreshSpeAnalyserState();
         };
-        filterContent.addAndMakeVisible(*speAnalyserRangeHighControl);
+        speAnalyserContent.addAndMakeVisible(*speAnalyserRangeHighControl);
 
         speAnalyserSlopeControl = std::make_unique<LocalParameterControl>("SLOPE",
                                                                           2,
@@ -399,7 +582,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                                                    static_cast<float>(speAnalyserSlopeControl->getValue()));
             refreshSpeAnalyserState();
         };
-        filterContent.addAndMakeVisible(*speAnalyserSlopeControl);
+        speAnalyserContent.addAndMakeVisible(*speAnalyserSlopeControl);
 
         speAnalyserTimeControl = std::make_unique<LocalParameterControl>("TIME",
                                                                          0,
@@ -416,7 +599,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                                                    static_cast<float>(speAnalyserTimeControl->getValue()));
             refreshSpeAnalyserState();
         };
-        filterContent.addAndMakeVisible(*speAnalyserTimeControl);
+        speAnalyserContent.addAndMakeVisible(*speAnalyserTimeControl);
 
         refreshSpeAnalyserControls(speProcessor);
 

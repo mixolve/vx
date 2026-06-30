@@ -98,5 +98,7 @@ private:
     juce::Slider slider;
     std::unique_ptr<ValueBoxComponent> valueBox;
     juce::String overrideText;
+    std::function<void()> valueClickAction;
     std::function<double(const juce::String&)> textToValueParser;
+    bool interactionEnabled = true;
 };

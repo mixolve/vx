@@ -65,29 +65,29 @@ juce::String EqeModuleProcessor::getFilterLrmsParamId(const int filterIndex)
     return "filter_" + juce::String(filterIndex + 1) + "_lrms";
 }
 
-juce::String EqeModuleProcessor::getBellFrequencyParamId(const int bellIndex)
+juce::String EqeModuleProcessor::getFilterFrequencyParamId(const int filterIndex)
 {
-    return makeFilterParameterId("frequency", bellIndex);
+    return makeFilterParameterId("frequency", filterIndex);
 }
 
-juce::String EqeModuleProcessor::getBellBandwidthParamId(const int bellIndex)
+juce::String EqeModuleProcessor::getFilterBandwidthParamId(const int filterIndex)
 {
-    return makeFilterParameterId("bandwidth", bellIndex);
+    return makeFilterParameterId("bandwidth", filterIndex);
 }
 
-juce::String EqeModuleProcessor::getBellSlopeParamId(const int bellIndex)
+juce::String EqeModuleProcessor::getFilterSlopeParamId(const int filterIndex)
 {
-    return makeFilterParameterId("slope", bellIndex);
+    return makeFilterParameterId("slope", filterIndex);
 }
 
-juce::String EqeModuleProcessor::getBellGainParamId(const int bellIndex)
+juce::String EqeModuleProcessor::getFilterGainParamId(const int filterIndex)
 {
-    return makeFilterParameterId("gain", bellIndex);
+    return makeFilterParameterId("gain", filterIndex);
 }
 
-juce::String EqeModuleProcessor::getBellBypassParamId(const int bellIndex)
+juce::String EqeModuleProcessor::getFilterBypassParamId(const int filterIndex)
 {
-    return makeFilterParameterId("bypass", bellIndex);
+    return makeFilterParameterId("bypass", filterIndex);
 }
 
 juce::String EqeModuleProcessor::getFilterHeaderText(const FilterType type, const int filterIndex)
@@ -101,31 +101,44 @@ namespace
 {
 juce::String filterLrmsDisplayPrefix(const int choiceIndex)
 {
-    switch (juce::jlimit(0, 4, choiceIndex))
+    switch (juce::jlimit(0, 7, choiceIndex))
     {
         case 0: return "LR";
         case 1: return "LL";
         case 2: return "RR";
         case 3: return "MM";
         case 4: return "SS";
+        case 5: return "PHS";
+        case 6: return "PHL";
+        case 7: return "PHR";
         default: return "LR";
     }
 }
+
 }
 
-juce::String EqeModuleProcessor::getBellHeaderText(const int bellIndex, const int displayIndex) const noexcept
+juce::String EqeModuleProcessor::getFilterHeaderText(const int filterIndex, const int displayIndex) const noexcept
 {
-    if (! juce::isPositiveAndBelow(bellIndex, static_cast<int>(filterTypeParams.size())))
+    if (! juce::isPositiveAndBelow(filterIndex, static_cast<int>(filterTypeParams.size())))
         return {};
 
-    const auto bandIndex = static_cast<size_t>(bellIndex);
+    const auto bandIndex = static_cast<size_t>(filterIndex);
     const auto filterType = getFilterTypeForBand(bandIndex);
     const auto lrmsChoice = filterLrmsParams[bandIndex] != nullptr
-        ? juce::jlimit(0, 4, static_cast<int>(std::lround(filterLrmsParams[bandIndex]->load(std::memory_order_relaxed))))
+        ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterLrmsParams[bandIndex]->load(std::memory_order_relaxed))))
         : 0;
-    const auto frequency = bellFrequencyParams[bandIndex] != nullptr
-        ? bellFrequencyParams[bandIndex]->load(std::memory_order_relaxed)
+    const auto frequency = filterFrequencyParams[bandIndex] != nullptr
+        ? filterFrequencyParams[bandIndex]->load(std::memory_order_relaxed)
         : defaultTiltFrequency;
+
+    if (filterType == FilterType::volume)
+    {
+        return juce::String::formatted("%02d-%s-%s",
+                                       displayIndex + 1,
+                                       filterTypeDisplayPrefix(filterType).toRawUTF8(),
+                                       filterLrmsDisplayPrefix(lrmsChoice).toRawUTF8())
+            + "-00000";
+    }
 
     return juce::String::formatted("%02d-%s-%s-%05d",
                                    displayIndex + 1,
@@ -138,6 +151,9 @@ juce::StringArray getBellSlopeDisplayChoicesForType(const EqeModuleProcessor::Fi
 {
     if (type == EqeModuleProcessor::FilterType::bell)
         return { "OFF", "02", "04", "08", "16", "++" };
+
+    if (type == EqeModuleProcessor::FilterType::volume)
+        return { "OFF", "OFF", "OFF", "OFF", "OFF", "OFF" };
 
     return { "01", "02", "04", "08", "16", "++" };
 }
@@ -152,6 +168,7 @@ EqeModuleProcessor::FilterType EqeModuleProcessor::filterTypeFromChoiceIndex(con
         case 3: return FilterType::tilt;
         case 4: return FilterType::highShelf;
         case 5: return FilterType::highCut;
+        case 6: return FilterType::volume;
         default: return FilterType::bell;
     }
 }
@@ -166,6 +183,7 @@ int EqeModuleProcessor::choiceIndexFromFilterType(const FilterType type) noexcep
         case FilterType::tilt: return 3;
         case FilterType::highShelf: return 4;
         case FilterType::highCut: return 5;
+        case FilterType::volume: return 6;
         default: return 2;
     }
 }

@@ -11,8 +11,11 @@ juce::Slider* focusedParameterValueSlider = nullptr;
 
 void focusParameterTitleButton(BoxTextButton* button, juce::Slider* valueSlider)
 {
-    if (button == nullptr)
+    if (button == nullptr || valueSlider == nullptr)
+    {
+        shell_parameter_focus::clearFocus();
         return;
+    }
 
     if (focusedParameterTitleButton != nullptr && focusedParameterTitleButton != button)
         focusedParameterTitleButton->setAlwaysAccentOutline(false);
@@ -33,6 +36,13 @@ void clearFocusedParameterTitleButton(BoxTextButton* button, juce::Slider* value
     focusedParameterTitleButton->setAlwaysAccentOutline(false);
     focusedParameterTitleButton = nullptr;
     focusedParameterValueSlider = nullptr;
+}
+
+bool canUseFocusedPotentiometer(juce::RangedAudioParameter* parameter, const std::function<void()>& valueClickAction) noexcept
+{
+    return parameter != nullptr
+        && valueClickAction == nullptr
+        && dynamic_cast<juce::AudioParameterChoice*>(parameter) == nullptr;
 }
 }
 
@@ -105,12 +115,28 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     };
     titleButton->onClick = [this]
     {
-        focusParameterTitleButton(titleButton.get(), &slider);
+        if (valueClickAction != nullptr)
+        {
+            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+            clearKeyboardFocus(*this);
+            return;
+        }
+
+        if (interactionEnabled && canUseFocusedPotentiometer(parameter, valueClickAction))
+            focusParameterTitleButton(titleButton.get(), &slider);
+        else
+            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+
         clearKeyboardFocus(*this);
     };
     titleButton->setLongPressAction([this]
     {
-        focusParameterTitleButton(titleButton.get(), &slider);
+        if (! interactionEnabled)
+        {
+            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+            clearKeyboardFocus(*this);
+            return;
+        }
 
         if (onTitleClick)
         {
@@ -196,6 +222,11 @@ int ParameterControl::getPreferredHeight() const noexcept
     return rowHeight;
 }
 
+double ParameterControl::getValue() const noexcept
+{
+    return slider.getValue();
+}
+
 void ParameterControl::detach() noexcept
 {
     attachment.reset();
@@ -210,6 +241,12 @@ void ParameterControl::rebind(juce::AudioProcessorValueTreeState& state)
 
     if (parameter != nullptr)
         slider.setDoubleClickReturnValue(true, parameter->convertFrom0to1(parameter->getDefaultValue()));
+
+    if (! canUseFocusedPotentiometer(parameter, valueClickAction))
+        clearFocusedParameterTitleButton(titleButton.get(), &slider);
+
+    if (titleButton != nullptr)
+        titleButton->setPressFillEnabled(interactionEnabled && canUseFocusedPotentiometer(parameter, valueClickAction));
 
     attachment = std::make_unique<Attachment>(state, parameterId, slider);
     repaint();
@@ -253,14 +290,30 @@ void ParameterControl::clearOverrideText()
 
 void ParameterControl::setInteractionEnabled(const bool shouldEnable)
 {
+    interactionEnabled = shouldEnable;
+
+    if (! interactionEnabled || ! canUseFocusedPotentiometer(parameter, valueClickAction))
+        clearFocusedParameterTitleButton(titleButton.get(), &slider);
+
+    if (titleButton != nullptr)
+        titleButton->setPressFillEnabled(shouldEnable && canUseFocusedPotentiometer(parameter, valueClickAction));
+
     if (valueBox != nullptr)
         valueBox->setInteractionEnabled(shouldEnable);
 }
 
 void ParameterControl::setValueClickAction(std::function<void()> action)
 {
+    valueClickAction = std::move(action);
+
     if (valueBox != nullptr)
-        valueBox->setCustomPromptAction(std::move(action));
+        valueBox->setCustomPromptAction(valueClickAction);
+
+    if (! canUseFocusedPotentiometer(parameter, valueClickAction))
+        clearFocusedParameterTitleButton(titleButton.get(), &slider);
+
+    if (titleButton != nullptr)
+        titleButton->setPressFillEnabled(interactionEnabled && canUseFocusedPotentiometer(parameter, valueClickAction));
 }
 
 void ParameterControl::setTitleWidthOverride(const int width) noexcept
@@ -350,6 +403,7 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
     titleButton = std::make_unique<BoxTextButton>(parameterTitleFocusColour);
     titleButton->setButtonText(titleText);
     titleButton->setTextJustification(juce::Justification::centred);
+    titleButton->setPressFillEnabled(false);
     titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
     {
         if (! modifiers.isCtrlDown() && ! modifiers.isCommandDown())
@@ -368,13 +422,10 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
     };
     titleButton->onClick = [this]
     {
-        focusParameterTitleButton(titleButton.get(), nullptr);
         clearKeyboardFocus(*this);
     };
     titleButton->setLongPressAction([this]
     {
-        focusParameterTitleButton(titleButton.get(), nullptr);
-
         if (onTitleClick)
         {
             onTitleClick();
@@ -604,7 +655,10 @@ void ChoiceControl::setChoiceEnabled(const int choiceIndex, const bool shouldEna
 void ChoiceControl::setTitleMouseEnabled(const bool shouldEnable)
 {
     if (titleButton != nullptr)
+    {
         titleButton->setInterceptsMouseClicks(shouldEnable, shouldEnable);
+        titleButton->setPressFillEnabled(false);
+    }
 }
 
 void ChoiceControl::setTitleLongPressAction(std::function<void()> action, const int delayMs)
@@ -682,12 +736,30 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
     titleButton->setTextJustification(juce::Justification::centred);
     titleButton->onClick = [this]
     {
-        focusParameterTitleButton(titleButton.get(), &slider);
+        if (valueClickAction != nullptr)
+        {
+            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+            valueClickAction();
+            clearKeyboardFocus(*this);
+            return;
+        }
+
+        if (interactionEnabled && valueClickAction == nullptr)
+            focusParameterTitleButton(titleButton.get(), &slider);
+        else
+            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+
         clearKeyboardFocus(*this);
     };
     titleButton->setLongPressAction([this]
     {
-        focusParameterTitleButton(titleButton.get(), &slider);
+        if (! interactionEnabled)
+        {
+            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+            clearKeyboardFocus(*this);
+            return;
+        }
+
         setValue(defaultValue, true);
         clearKeyboardFocus(*this);
     });
@@ -815,14 +887,27 @@ void LocalParameterControl::clearOverrideText()
 
 void LocalParameterControl::setInteractionEnabled(const bool shouldEnable)
 {
+    interactionEnabled = shouldEnable;
+
+    if (! interactionEnabled || valueClickAction != nullptr)
+        clearFocusedParameterTitleButton(titleButton.get(), &slider);
+
+    if (titleButton != nullptr)
+        titleButton->setPressFillEnabled(shouldEnable);
+
     if (valueBox != nullptr)
         valueBox->setInteractionEnabled(shouldEnable);
 }
 
 void LocalParameterControl::setValueClickAction(std::function<void()> action)
 {
+    valueClickAction = std::move(action);
+
     if (valueBox != nullptr)
-        valueBox->setCustomPromptAction(std::move(action));
+        valueBox->setCustomPromptAction(valueClickAction);
+
+    if (valueClickAction != nullptr)
+        clearFocusedParameterTitleButton(titleButton.get(), &slider);
 }
 
 juce::Rectangle<int> LocalParameterControl::getValueBounds() const noexcept

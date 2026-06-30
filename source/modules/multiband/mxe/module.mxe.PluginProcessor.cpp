@@ -33,6 +33,11 @@ void MxeAudioProcessor::releaseResources()
 {
 }
 
+void MxeAudioProcessor::reset()
+{
+    multibandProcessor.reset();
+}
+
 bool MxeAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
     const auto mainInput = layouts.getMainInputChannelSet();

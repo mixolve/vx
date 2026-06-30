@@ -16,35 +16,16 @@ void VxAudioProcessor::prepareToPlay(const double sampleRate, const int samplesP
     lastProcessedBlockSize = juce::jmax(1, samplesPerBlock);
     preparedNumChannels = juce::jlimit(1, static_cast<int>(maxSupportedChannels), getTotalNumOutputChannels());
 
-    for (auto& eqeModuleProcessor : eqeModuleProcessors)
-    {
-        if (eqeModuleProcessor != nullptr)
-            eqeModuleProcessor->prepareToPlay(sampleRate, samplesPerBlock);
-    }
-
-    for (auto& speModuleProcessor : speModuleProcessors)
-    {
-        if (speModuleProcessor != nullptr)
-            speModuleProcessor->prepareToPlay(sampleRate, samplesPerBlock);
-    }
-
-    for (auto& mieModuleProcessor : mieModuleProcessors)
-    {
-        if (mieModuleProcessor != nullptr)
-            mieModuleProcessor->prepareToPlay(sampleRate, samplesPerBlock);
-    }
-
-    for (auto& mxeModuleProcessor : mxeModuleProcessors)
-    {
-        if (mxeModuleProcessor != nullptr)
-            mxeModuleProcessor->prepareToPlay(sampleRate, samplesPerBlock);
-    }
-
-    for (auto& tseModuleProcessor : tseModuleProcessors)
-    {
-        if (tseModuleProcessor != nullptr)
-            tseModuleProcessor->prepareToPlay(sampleRate, samplesPerBlock);
-    }
+    if (eqeModuleProcessor != nullptr)
+        eqeModuleProcessor->prepareToPlay(sampleRate, samplesPerBlock);
+    if (speModuleProcessor != nullptr)
+        speModuleProcessor->prepareToPlay(sampleRate, samplesPerBlock);
+    if (mieModuleProcessor != nullptr)
+        mieModuleProcessor->prepareToPlay(sampleRate, samplesPerBlock);
+    if (mxeModuleProcessor != nullptr)
+        mxeModuleProcessor->prepareToPlay(sampleRate, samplesPerBlock);
+    if (tseModuleProcessor != nullptr)
+        tseModuleProcessor->prepareToPlay(sampleRate, samplesPerBlock);
 
     updateShellLatency();
     processingPrepared.store(true, std::memory_order_release);
@@ -55,38 +36,37 @@ void VxAudioProcessor::releaseResources()
     processingPrepared.store(false, std::memory_order_release);
     const juce::ScopedLock lock(processingLock);
 
-    for (auto& eqeModuleProcessor : eqeModuleProcessors)
-    {
-        if (eqeModuleProcessor != nullptr)
-            eqeModuleProcessor->releaseResources();
-    }
-
-    for (auto& speModuleProcessor : speModuleProcessors)
-    {
-        if (speModuleProcessor != nullptr)
-            speModuleProcessor->releaseResources();
-    }
-
-    for (auto& mieModuleProcessor : mieModuleProcessors)
-    {
-        if (mieModuleProcessor != nullptr)
-            mieModuleProcessor->releaseResources();
-    }
-
-    for (auto& mxeModuleProcessor : mxeModuleProcessors)
-    {
-        if (mxeModuleProcessor != nullptr)
-            mxeModuleProcessor->releaseResources();
-    }
-
-    for (auto& tseModuleProcessor : tseModuleProcessors)
-    {
-        if (tseModuleProcessor != nullptr)
-            tseModuleProcessor->releaseResources();
-    }
+    if (eqeModuleProcessor != nullptr)
+        eqeModuleProcessor->releaseResources();
+    if (speModuleProcessor != nullptr)
+        speModuleProcessor->releaseResources();
+    if (mieModuleProcessor != nullptr)
+        mieModuleProcessor->releaseResources();
+    if (mxeModuleProcessor != nullptr)
+        mxeModuleProcessor->releaseResources();
+    if (tseModuleProcessor != nullptr)
+        tseModuleProcessor->releaseResources();
 
     setLatencySamples(0);
     currentSampleRate = 0.0;
+}
+
+void VxAudioProcessor::reset()
+{
+    const juce::ScopedLock lock(processingLock);
+
+    if (eqeModuleProcessor != nullptr)
+        eqeModuleProcessor->resetProcessingState();
+    if (speModuleProcessor != nullptr)
+        speModuleProcessor->releaseResources();
+    if (mieModuleProcessor != nullptr)
+        mieModuleProcessor->reset();
+    if (mxeModuleProcessor != nullptr)
+        mxeModuleProcessor->reset();
+    if (tseModuleProcessor != nullptr)
+        tseModuleProcessor->releaseResources();
+
+    globalClipIndicator.store(0.0f, std::memory_order_relaxed);
 }
 
 int VxAudioProcessor::getLoadedModulesLatencySamples() const noexcept
@@ -96,26 +76,30 @@ int VxAudioProcessor::getLoadedModulesLatencySamples() const noexcept
     switch (module)
     {
         case ActiveModule::spe:
-            if (const auto* processor = getSpeModuleProcessor(0))
+            if (const auto* processor = getSpeModuleProcessor())
                 return processor->getLatencySamples();
             break;
 
         case ActiveModule::mie:
-            if (const auto* processor = getMieModuleProcessor(0))
+            if (const auto* processor = getMieModuleProcessor())
                 return processor->getModuleLatencySamples();
             break;
 
         case ActiveModule::mxe:
-            if (const auto* processor = getMxeModuleProcessor(0))
+            if (const auto* processor = getMxeModuleProcessor())
                 return processor->getModuleLatencySamples();
             break;
 
         case ActiveModule::tse:
-            if (const auto* processor = getTseModuleProcessor(0))
+            if (const auto* processor = getTseModuleProcessor())
                 return processor->getLatencySamples();
             break;
 
         case ActiveModule::eqe:
+            if (const auto* processor = getEqeModuleProcessor())
+                return processor->getLatencySamples();
+            break;
+
         case ActiveModule::none:
             break;
     }
@@ -201,22 +185,22 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     switch (active)
     {
         case ActiveModule::spe:
-            if (auto* processor = getSpeModuleProcessor(0))
+            if (auto* processor = getSpeModuleProcessor())
                 processor->refreshLatencyState();
             break;
 
         case ActiveModule::mie:
-            if (auto* processor = getMieModuleProcessor(0))
+            if (auto* processor = getMieModuleProcessor())
                 processor->syncParameters();
             break;
 
         case ActiveModule::mxe:
-            if (auto* processor = getMxeModuleProcessor(0))
+            if (auto* processor = getMxeModuleProcessor())
                 processor->syncParameters();
             break;
 
         case ActiveModule::tse:
-            if (auto* processor = getTseModuleProcessor(0))
+            if (auto* processor = getTseModuleProcessor())
                 processor->refreshLatencyState();
             break;
 
@@ -230,17 +214,17 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
     switch (active)
     {
         case ActiveModule::eqe:
-            if (auto* eqeModuleProcessor = getEqeModuleProcessor(0))
-                eqeModuleProcessor->processBlock(buffer);
+            if (auto* eqeProcessor = getEqeModuleProcessor())
+                eqeProcessor->processBlock(buffer);
             break;
 
         case ActiveModule::spe:
-            if (auto* processor = getSpeModuleProcessor(0))
+            if (auto* processor = getSpeModuleProcessor())
                 processor->processBlock(buffer);
             break;
 
         case ActiveModule::mie:
-            if (auto* processor = getMieModuleProcessor(0))
+            if (auto* processor = getMieModuleProcessor())
             {
                 juce::MidiBuffer mieMidiBuffer;
                 processor->processBlock(buffer, mieMidiBuffer);
@@ -248,7 +232,7 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
             break;
 
         case ActiveModule::mxe:
-            if (auto* processor = getMxeModuleProcessor(0))
+            if (auto* processor = getMxeModuleProcessor())
             {
                 juce::MidiBuffer mxeMidiBuffer;
                 processor->processBlock(buffer, mxeMidiBuffer);
@@ -256,7 +240,7 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
             break;
 
         case ActiveModule::tse:
-            if (auto* processor = getTseModuleProcessor(0))
+            if (auto* processor = getTseModuleProcessor())
                 processor->processBlock(buffer);
             break;
 
@@ -266,31 +250,4 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
 
     applyShellGlobalOutputStage();
     updateShellLatency();
-}
-
-void VxAudioProcessor::copyVisualiserResponse(std::array<float, visualizerScopeSize>& stereoDb,
-                                               std::array<float, visualizerScopeSize>& leftDb,
-                                               std::array<float, visualizerScopeSize>& rightDb,
-                                               std::array<float, visualizerScopeSize>& midDb,
-                                               std::array<float, visualizerScopeSize>& sideDb,
-                                               double& sampleRateOut) noexcept
-{
-    if (auto* eqeModuleProcessor = getActiveEqeModuleProcessor())
-    {
-        eqeModuleProcessor->copyVisualiserResponse(stereoDb, leftDb, rightDb, midDb, sideDb, sampleRateOut);
-        return;
-    }
-
-    sampleRateOut = currentSampleRate;
-    stereoDb.fill(0.0f);
-    leftDb.fill(0.0f);
-    rightDb.fill(0.0f);
-    midDb.fill(0.0f);
-    sideDb.fill(0.0f);
-}
-
-void VxAudioProcessor::setActiveBellCount(const int newCount) noexcept
-{
-    if (auto* eqeModuleProcessor = getActiveEqeModuleProcessor())
-        eqeModuleProcessor->setActiveBellCount(newCount);
 }

@@ -10,6 +10,7 @@
 
 class BoxTextButton;
 class ChoiceControl;
+class DelayedTooltipWindow;
 class LocalParameterControl;
 class ParameterControl;
 
@@ -30,25 +31,27 @@ public:
 
 private:
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+    static constexpr int spePhaseFilterControlCount = 16;
 
     class VxLookAndFeel;
     struct PresetsSection;
-    struct BellSection;
+    struct FilterSection;
 
     void openShellGlobalHostSection();
+    void updateTooltipTogglePrompt();
     void showModulePicker();
+    void closeActiveModule();
     void loadEqeModule();
     void loadSpeModule();
     void loadMieModule();
     void loadMxeModule();
     void loadTseModule();
-    void openVisualizerSection();
-    void selectBellSection(int bellIndex);
+    void selectFilterSection(int filterIndex);
     void refreshFilterPresetList(const juce::String& preferredSelection = {});
     void reloadFilterPresetFromProcessor();
     void addFilterPreset();
     void saveFilterPreset();
-    bool renameFilterPreset(const juce::String& oldPresetName, const juce::String& newPresetName);
+    bool renameFilterPreset(const juce::String& sourcePresetName, const juce::String& newPresetName);
     void setDefaultFilterPreset();
     void deleteSelectedFilterPreset();
 
@@ -69,30 +72,32 @@ public:
                           juce::Justification itemJustification,
                           std::function<void(int)> onSelect,
                           std::function<void()> onClose = {},
-                          std::function<void()> onDismiss = {});
+                          std::function<void()> onDismiss = {},
+                          juce::StringArray itemTooltips = {});
     juce::Rectangle<int> getInfoPromptAnchorBounds() const noexcept;
     juce::Rectangle<int> getInfoPromptVisibleBounds() const noexcept;
 private:
     void dismissTextPrompt();
     void timerCallback() override;
-    void normalizeSlopeForType(int bellIndex);
-    void sortBellSectionsByPlace();
-    void sortBellSectionsByFrequency();
-    void sortBellSectionsByDuo();
+    void normalizeSlopeForType(int filterIndex);
+    void sortFilterSectionsByPlace();
+    void sortFilterSectionsByFrequency();
+    void sortFilterSectionsByDuo();
     void clearAllFilters();
     void performUndo();
     void performRedo();
-    void applyBellSortOrder(const std::vector<int>& orderedIndices);
-    void moveBellSection(int sourceIndex, int destinationIndex);
+    void applyFilterSortOrder(const std::vector<int>& orderedIndices);
+    void moveFilterSection(int sourceIndex, int destinationIndex);
+    void enforceSingleExpandedFilterSection(int preferredFilterIndex = -1);
     void restoreEditorStateFromValueTree();
     void storeEditorStateToValueTree() noexcept;
     juce::Point<int> getRestoredEditorSize() const noexcept;
-    juce::Rectangle<int> getBellSectionBounds(int bellIndex) const;
-    void resetBellSectionStoredValues(int bellIndex);
-    void removeBellSectionStoredValues(int removedIndex, int previousCount);
+    juce::Rectangle<int> getFilterSectionBounds(int filterIndex) const;
+    void resetFilterSectionStoredValues(int filterIndex);
+    void removeFilterSectionStoredValues(int removedIndex, int previousCount);
     void updateSectionStates();
-    void updateEditorWidthForVisualizerVisibility();
-    void refreshVisualizerResponse();
+    void updateEditorWidthState();
+    void refreshSpeAnalyserResponse();
     void syncFocusedParameterControl();
     double getFocusedParameterControlValueForTarget() const noexcept;
     double getFocusedParameterTargetValueForControl() const noexcept;
@@ -105,10 +110,16 @@ private:
     void registerObservedModuleParameterListeners(juce::AudioProcessorValueTreeState& moduleValueTreeState);
     void refreshModuleStateListeners();
     void clearModuleStateListeners();
+    int getActiveSpePhaseFilterCount() const noexcept;
+    bool shouldEnableSpePhaseOrder(int filterIndex) const noexcept;
+    bool shouldEnableSpePhaseFrequency(int filterIndex) const noexcept;
+    bool shouldEnableSpePhaseBandwidth(int filterIndex) const noexcept;
+    bool shouldShowSpePhaseImpact(int filterIndex) const noexcept;
+    void enforceSingleExpandedSpePhaseFilter(int preferredFilterIndex = -1);
+    juce::String getSpePhaseFilterHeaderText(int filterIndex) const;
     void detachModuleEditorBindings();
     void rebindActiveModuleEditors();
     void setupShellControls();
-    void setupVisualizerControls();
     void setupPresetControls();
     void setupSpeControls(juce::AudioProcessorValueTreeState& speState,
                           SpeModuleProcessor& speProcessor);
@@ -125,17 +136,18 @@ private:
     int getSpeMainContentHeight() const;
     int getSpeAnalyserContentHeight() const;
     int getSpeSectionContentHeight() const;
-    int getActiveBellCount() const noexcept;
-    void updateVisualizerPanelBounds();
+    int getActiveFilterCount() const noexcept;
+    void resetAnalyserPanelBounds();
     void layoutShellGlobalSection(juce::Rectangle<int>& bounds, int editorInsetX);
     void layoutFooter(juce::Rectangle<int>& bounds, int editorInsetX);
-    void layoutModuleTabRows(juce::Rectangle<int>& bounds, int editorInsetX);
+    void layoutModuleTabButton(juce::Rectangle<int>& bounds, int editorInsetX);
     void finalizeLayout() noexcept;
     void layoutNoModuleState(juce::Rectangle<int>& bounds);
     void layoutModuleEditorContent(juce::Rectangle<int>& bounds);
     void layoutSpeModuleSections(juce::Rectangle<int>& bounds, int editorInsetX);
     void layoutEqeModuleSections(juce::Rectangle<int>& bounds, int editorInsetX);
-    void rebuildModuleTabRows();
+    void refreshModuleTabButton();
+    void updateTooltipBoundsConstraint() noexcept;
     void clearHostSlot(int slotIndex);
     void refreshHostSlotButtons();
 
@@ -150,18 +162,15 @@ private:
     std::vector<juce::ValueTree> observedModuleStates;
     std::vector<ObservedModuleParameterListeners> observedModuleParameterListeners;
     std::unique_ptr<VxLookAndFeel> lookAndFeel;
+    std::unique_ptr<DelayedTooltipWindow> tooltipWindow;
     std::unique_ptr<BoxTextButton> shellGlobalHeader;
     std::unique_ptr<BoxTextButton> shellGlobalHostHeader;
     std::unique_ptr<BoxTextButton> moduleAddButton;
-    struct ModuleTabRow
-    {
-        std::unique_ptr<BoxTextButton> tabButton;
-        int slotIndex = -1;
-    };
-    std::vector<std::unique_ptr<ModuleTabRow>> moduleTabRows;
-    std::unique_ptr<BoxTextButton> visualizerHeader;
+    std::unique_ptr<BoxTextButton> moduleTabButton;
     std::unique_ptr<BoxTextButton> addFilterButton;
     std::unique_ptr<PresetsSection> presetsSection;
+    std::unique_ptr<BoxTextButton> speFftProcessorHeader;
+    std::unique_ptr<BoxTextButton> speDynamicProcessorHeader;
     std::unique_ptr<ParameterControl> speAttackControl;
     std::unique_ptr<ParameterControl> speReleaseControl;
     std::unique_ptr<ParameterControl> speKneeControl;
@@ -178,6 +187,18 @@ private:
     std::unique_ptr<ParameterControl> speDualMonoRightAdaptiveOffsetControl;
     std::unique_ptr<BoxTextButton> speDualMonoLinkButton;
     std::unique_ptr<ButtonAttachment> speDualMonoLinkAttachment;
+    std::unique_ptr<BoxTextButton> spePhaseProcessorHeader;
+    std::unique_ptr<ParameterControl> speDspHopDivisorControl;
+    std::unique_ptr<BoxTextButton> spePhaseAddButton;
+    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> spePhaseRemoveButtons;
+    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> spePhaseHeaderButtons;
+    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> spePhaseTypeControls;
+    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> spePhasePlaceControls;
+    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> spePhaseSlopeControls;
+    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> spePhaseFrequencyControls;
+    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> spePhaseBandwidthControls;
+    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> spePhaseImpactControls;
+    std::array<bool, spePhaseFilterControlCount> spePhaseExpanded {};
     std::unique_ptr<LocalParameterControl> speAnalyserFftSizeControl;
     std::unique_ptr<LocalParameterControl> speAnalyserOverlapControl;
     std::unique_ptr<LocalParameterControl> speAnalyserLeftControl;
@@ -186,14 +207,6 @@ private:
     std::unique_ptr<LocalParameterControl> speAnalyserRangeHighControl;
     std::unique_ptr<LocalParameterControl> speAnalyserSlopeControl;
     std::unique_ptr<LocalParameterControl> speAnalyserTimeControl;
-    std::unique_ptr<LocalParameterControl> visualizerRangeLowControl;
-    std::unique_ptr<LocalParameterControl> visualizerRangeHighControl;
-    std::unique_ptr<BoxTextButton> visualizerCursorButton;
-    std::unique_ptr<BoxTextButton> visualizerShowStereoButton;
-    std::unique_ptr<BoxTextButton> visualizerShowLeftButton;
-    std::unique_ptr<BoxTextButton> visualizerShowRightButton;
-    std::unique_ptr<BoxTextButton> visualizerShowMidButton;
-    std::unique_ptr<BoxTextButton> visualizerShowSideButton;
     std::unique_ptr<BoxTextButton> globalBypassButton;
     std::unique_ptr<ButtonAttachment> globalBypassAttachment;
     std::unique_ptr<BoxTextButton> clearFiltersButton;
@@ -203,14 +216,15 @@ private:
     std::unique_ptr<BoxTextButton> sortFreqButton;
     std::unique_ptr<BoxTextButton> sortDuoButton;
     std::array<std::unique_ptr<BoxTextButton>, VxAudioProcessor::hostAutomationSlotCount> hostSlotButtons;
-    std::array<std::unique_ptr<BellSection>, VxAudioProcessor::maxBellFilterCount> bellSections;
+    std::array<std::unique_ptr<FilterSection>, VxAudioProcessor::maxEqeFilterCount> filterSections;
     juce::Viewport shellGlobalHostViewport;
     juce::Component shellGlobalHostContent;
+    juce::Viewport speAnalyserViewport;
+    juce::Component speAnalyserContent;
     juce::Viewport filterViewport;
     juce::Component filterContent;
     std::unique_ptr<juce::Slider> focusedParameterControl;
     std::unique_ptr<BoxTextButton> footerTab;
-    std::unique_ptr<juce::Component> visualizerComponent;
     std::unique_ptr<juce::Component> speAnalyserComponent;
     std::unique_ptr<juce::Component> textPromptOverlay;
     std::unique_ptr<juce::Component> mieModuleEditor;
@@ -222,19 +236,10 @@ private:
     bool mxeModuleLoaded = false;
     bool tseModuleLoaded = false;
     bool shellGlobalHostExpanded = false;
-    bool visualizerExpanded = false;
-    bool visualizerCursorEnabled = true;
-    bool visualizerShowStereo = true;
-    bool visualizerShowLeft = true;
-    bool visualizerShowRight = true;
-    bool visualizerShowMid = true;
-    bool visualizerShowSide = true;
+    bool tooltipsEnabled = true;
     int lastCollapsedEditorWidth = 0;
-    float visualizerRangeLowDb = -24.0f;
-    float visualizerRangeHighDb = 24.0f;
-    std::vector<int> bellDisplayOrder;
-    bool suppressBellSectionValueChangeHandlers = false;
-    bool suppressVisualizerControlChangeHandlers = false;
+    std::vector<int> filterDisplayOrder;
+    bool suppressFilterSectionValueChangeHandlers = false;
     bool suppressSpeAnalyserControlChangeHandlers = false;
     bool suppressFocusedParameterControlChangeHandlers = false;
     bool suppressHostSlotAutomationSync = false;
@@ -246,6 +251,7 @@ private:
     std::atomic<bool> pendingHistorySnapshot { false };
     std::atomic<uint32_t> lastHistoryChangeTimeMs { 0 };
     juce::Slider* focusedParameterTargetSlider = nullptr;
+    uint32_t lastClipIndicatorTimeMs = 0;
 
     struct HostSlotAssignment
     {
@@ -254,8 +260,8 @@ private:
     };
     std::array<HostSlotAssignment, VxAudioProcessor::hostAutomationSlotCount> hostSlotAssignments;
 
-    int getBellIndexForOrderPosition(int orderIndex) const noexcept;
-    int getBellOrderPositionForIndex(int bellIndex) const noexcept;
+    int getFilterIndexForOrderPosition(int orderIndex) const noexcept;
+    int getFilterOrderPositionForIndex(int filterIndex) const noexcept;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VxAudioProcessorEditor)
 };

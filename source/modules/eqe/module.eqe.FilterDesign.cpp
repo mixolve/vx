@@ -76,6 +76,76 @@ void writeButterworthParametricEqSection(Section& section,
         (betaSquared - (2.0 * si * beta) + 1.0) / denominator
     };
 }
+
+float phaseBrickwallAwareOrder(const float slope) noexcept
+{
+    return slope > 96.0f ? 128.0f
+                         : juce::jmax(1.0f, slope / 6.0f);
+}
+
+float logisticShelfShape(const float octaveOffset, const float steepness) noexcept
+{
+    return 1.0f / (1.0f + std::exp(juce::jlimit(-80.0f, 80.0f, octaveOffset * steepness)));
+}
+
+float phaseShapeForType(const EqeModuleProcessor::FilterType filterType,
+                        const float binFrequency,
+                        const float centreFrequency,
+                        const float bandwidth,
+                        const float slope) noexcept
+{
+    const auto safeFrequency = juce::jlimit(static_cast<float>(minimumVisibleFilterFrequency),
+                                            static_cast<float>(maximumVisibleFilterFrequency),
+                                            centreFrequency);
+    const auto safeBandwidth = juce::jlimit(0.05f, 8.0f, bandwidth);
+    const auto octaveOffset = std::log2(juce::jmax(static_cast<float>(minimumVisibleFilterFrequency), binFrequency) / safeFrequency);
+    const auto phaseOrder = phaseBrickwallAwareOrder(slope);
+
+    switch (filterType)
+    {
+        case EqeModuleProcessor::FilterType::lowShelf:
+            return logisticShelfShape(octaveOffset, phaseOrder);
+
+        case EqeModuleProcessor::FilterType::bell:
+        {
+            const auto sigma = juce::jmax(0.025f, safeBandwidth);
+            const auto exponent = juce::jlimit(1.0f, 128.0f, phaseOrder);
+            return std::exp(-0.5f * std::pow(std::abs(octaveOffset) / sigma, exponent));
+        }
+
+        case EqeModuleProcessor::FilterType::tilt:
+        {
+            const auto lowOctaveOffset = std::log2(static_cast<float>(minimumVisibleFilterFrequency) / safeFrequency);
+            const auto highOctaveOffset = std::log2(static_cast<float>(maximumVisibleFilterFrequency) / safeFrequency);
+            const auto octaveRange = juce::jmax(1.0e-6f, highOctaveOffset - lowOctaveOffset);
+            return juce::jlimit(0.0f, 1.0f, (octaveOffset - lowOctaveOffset) / octaveRange);
+        }
+
+        case EqeModuleProcessor::FilterType::highShelf:
+            return logisticShelfShape(-octaveOffset, phaseOrder);
+
+        case EqeModuleProcessor::FilterType::lowCut:
+        case EqeModuleProcessor::FilterType::highCut:
+        case EqeModuleProcessor::FilterType::volume:
+            break;
+    }
+
+    return 0.0f;
+}
+
+double phaseAmountRadiansForType(const EqeModuleProcessor::FilterType filterType,
+                                 const double gainDb) noexcept
+{
+    if (filterType == EqeModuleProcessor::FilterType::lowCut
+        || filterType == EqeModuleProcessor::FilterType::highCut)
+    {
+        return 0.0;
+    }
+
+    return juce::jlimit(-juce::MathConstants<double>::pi,
+                        juce::MathConstants<double>::pi,
+                        (gainDb / 12.0) * (juce::MathConstants<double>::pi * 0.5));
+}
 }
 
 void EqeModuleProcessor::setBellIdentityResponse(const size_t bellIndex) noexcept
@@ -98,6 +168,11 @@ void EqeModuleProcessor::setCutIdentityResponse(const size_t bellIndex) noexcept
 void EqeModuleProcessor::setTiltIdentityResponse(const size_t bellIndex) noexcept
 {
     tiltFilters[bellIndex].setIdentity();
+}
+
+void EqeModuleProcessor::setPhaseIdentityResponse(const size_t bellIndex) noexcept
+{
+    phaseFirFilters[bellIndex].setIdentity();
 }
 
 double EqeModuleProcessor::evaluateCascadeMagnitudeAt(const BiquadCascade& filter, const double frequency) const noexcept
@@ -284,6 +359,7 @@ void EqeModuleProcessor::updateShelfOrderFilterRaw(BiquadCascade& filter,
     for (int sectionIndex = filter.stageCount; sectionIndex < static_cast<int>(filter.sections.size()); ++sectionIndex)
         filter.sections[static_cast<size_t>(sectionIndex)].setIdentity();
 
+    filter.reset();
 }
 
 void EqeModuleProcessor::updateCutOrderFilterRaw(BiquadCascade& filter,
@@ -425,6 +501,56 @@ void EqeModuleProcessor::updateTiltFilter(BiquadCascade& filter,
     }
 
     filter.reset();
+}
+
+void EqeModuleProcessor::updatePhaseFirFilter(PhaseFirFilter& target,
+                                             const FilterType filterType,
+                                             const double frequency,
+                                             const double octaveBandwidth,
+                                             const double slope,
+                                             const double gainDb) noexcept
+{
+    target.setIdentity();
+
+    if (currentSampleRate <= 0.0 || isVolumeFilterType(filterType) || isCutFilterType(filterType))
+        return;
+
+    const auto phaseAmountRadians = phaseAmountRadiansForType(filterType, gainDb);
+
+    if (std::abs(phaseAmountRadians) <= 1.0e-6)
+        return;
+
+    std::array<juce::dsp::Complex<float>, phaseFirSize> spectrum {};
+
+    for (int bin = 0; bin <= phaseFirSize / 2; ++bin)
+    {
+        const auto binFrequency = static_cast<float>((static_cast<double>(bin) * currentSampleRate)
+                                                     / static_cast<double>(phaseFirSize));
+        const auto shape = phaseShapeForType(filterType,
+                                             binFrequency,
+                                             static_cast<float>(frequency),
+                                             static_cast<float>(octaveBandwidth),
+                                             static_cast<float>(slope));
+        const auto phaseRadians = (bin == 0 || bin == phaseFirSize / 2)
+            ? 0.0f
+            : static_cast<float>(phaseAmountRadians) * shape;
+        spectrum[static_cast<size_t>(bin)] = { std::cos(phaseRadians), std::sin(phaseRadians) };
+
+        if (bin > 0 && bin < phaseFirSize / 2)
+            spectrum[static_cast<size_t>(phaseFirSize - bin)] = std::conj(spectrum[static_cast<size_t>(bin)]);
+    }
+
+    phaseFirFft.perform(spectrum.data(), spectrum.data(), true);
+
+    for (int tapIndex = 0; tapIndex < phaseFirSize; ++tapIndex)
+    {
+        const auto sourceIndex = (tapIndex - phaseFirLatencySamples + phaseFirSize) % phaseFirSize;
+        target.taps[static_cast<size_t>(tapIndex)] = spectrum[static_cast<size_t>(sourceIndex)].real()
+                                                     / static_cast<float>(phaseFirSize);
+    }
+
+    target.active = true;
+    target.reset();
 }
 
 void EqeModuleProcessor::updateInterpolatedCascadeFilter(BiquadCascade& target,

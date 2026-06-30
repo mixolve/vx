@@ -209,6 +209,165 @@ void SpeModuleProcessor::SpectralCompressor::processFrame(int channelsToUse,
             if (bin > 0 && bin < (fftSize / 2))
                 frequencyData[static_cast<size_t>(fftSize - bin)] *= gain;
         }
+
+        if (channelsToUse >= 2)
+        {
+            static constexpr auto eps = 1.0e-12f;
+            auto& leftFrequencyData = channelStates[0].frequencyData;
+            auto& rightFrequencyData = channelStates[1].frequencyData;
+            auto leftBin = leftFrequencyData[static_cast<size_t>(bin)];
+            auto rightBin = rightFrequencyData[static_cast<size_t>(bin)];
+            const auto adjustFollower = [] (const juce::dsp::Complex<float> referenceBin,
+                                            const juce::dsp::Complex<float> followerBin,
+                                            const float amount) -> juce::dsp::Complex<float>
+            {
+                static constexpr auto localEps = 1.0e-12f;
+                const auto referenceMagnitude = std::abs(referenceBin);
+                const auto followerMagnitude = std::abs(followerBin);
+                const auto followerDenominator = referenceMagnitude * followerMagnitude;
+
+                const auto absoluteAmount = std::abs(amount);
+
+                if (followerDenominator <= localEps || absoluteAmount <= localEps)
+                    return followerBin;
+
+                const auto referenceReal = referenceBin.real();
+                const auto referenceImag = referenceBin.imag();
+                const auto followerReal = followerBin.real();
+                const auto followerImag = followerBin.imag();
+                auto correlation = ((referenceReal * followerReal) + (referenceImag * followerImag)) / followerDenominator;
+                correlation = juce::jlimit(-1.0f, 1.0f, correlation);
+
+                const auto currentPhase = std::acos(correlation);
+                const auto targetPhase = amount >= 0.0f
+                    ? currentPhase * (1.0f - absoluteAmount)
+                    : currentPhase + ((juce::MathConstants<float>::pi - currentPhase) * absoluteAmount);
+                const auto targetCorrelation = std::cos(targetPhase);
+
+                if (std::abs(targetCorrelation - correlation) <= localEps)
+                    return followerBin;
+
+                const auto referenceUnitReal = referenceReal / referenceMagnitude;
+                const auto referenceUnitImag = referenceImag / referenceMagnitude;
+                const auto parallelReal = correlation * followerMagnitude * referenceUnitReal;
+                const auto parallelImag = correlation * followerMagnitude * referenceUnitImag;
+                auto orthogonalReal = followerReal - parallelReal;
+                auto orthogonalImag = followerImag - parallelImag;
+                const auto orthogonalMagnitude = std::sqrt((orthogonalReal * orthogonalReal)
+                                                         + (orthogonalImag * orthogonalImag));
+                const auto newParallelMagnitude = targetCorrelation * followerMagnitude;
+                const auto newOrthogonalMagnitude = std::sqrt(juce::jmax(0.0f, 1.0f - (targetCorrelation * targetCorrelation)))
+                                                  * followerMagnitude;
+
+                if (orthogonalMagnitude > localEps)
+                {
+                    orthogonalReal /= orthogonalMagnitude;
+                    orthogonalImag /= orthogonalMagnitude;
+                }
+                else
+                {
+                    orthogonalReal = -referenceUnitImag;
+                    orthogonalImag = referenceUnitReal;
+                }
+
+                return {
+                    (newParallelMagnitude * referenceUnitReal) + (newOrthogonalMagnitude * orthogonalReal),
+                    (newParallelMagnitude * referenceUnitImag) + (newOrthogonalMagnitude * orthogonalImag)
+                };
+            };
+
+            for (auto phaseFilterIndex = 0; phaseFilterIndex < settings.phaseFilterCount; ++phaseFilterIndex)
+            {
+                const auto& phaseFilter = settings.phaseFilters[static_cast<size_t>(phaseFilterIndex)];
+                const auto phaseFilterType = juce::jlimit(0, 4, phaseFilter.type);
+                const auto phaseAmount = juce::jlimit(-1.0f, 1.0f, phaseFilter.impactPercent * 0.01f);
+
+                if (std::abs(phaseAmount) <= eps)
+                    continue;
+
+                const auto phaseSlope = [] (const int choiceIndex) noexcept
+                {
+                    switch (juce::jlimit(0, 5, choiceIndex))
+                    {
+                        case 0: return 6.0f;
+                        case 1: return 12.0f;
+                        case 2: return 24.0f;
+                        case 3: return 48.0f;
+                        case 4: return 96.0f;
+                        case 5: return 96.1f;
+                        default: return 12.0f;
+                    }
+                } (phaseFilter.slope);
+
+                const auto filterShape = [binFrequency,
+                                          frequency = phaseFilter.frequency,
+                                          bandwidth = phaseFilter.bandwidth,
+                                          slope = phaseSlope,
+                                          type = phaseFilterType] () noexcept
+                {
+                    const auto safeFrequency = juce::jlimit(analyserMinFrequency, analyserMaxFrequency, frequency);
+                    const auto safeBandwidth = juce::jlimit(0.05f, 5.0f, bandwidth);
+                    const auto octaveOffset = std::log2(juce::jmax(analyserMinFrequency, binFrequency) / safeFrequency);
+                    const auto fixedSteepness = juce::jmax(0.5f, slope / 6.0f);
+
+                    switch (juce::jlimit(0, 4, type))
+                    {
+                        case 0: return 1.0f / (1.0f + std::exp(octaveOffset * fixedSteepness));
+                        case 1:
+                        {
+                            const auto orderScale = juce::jlimit(0.125f, 2.0f, 12.0f / juce::jmax(6.0f, slope));
+                            const auto sigma = juce::jmax(0.025f, safeBandwidth * orderScale);
+                            return std::exp(-0.5f * (octaveOffset * octaveOffset) / (sigma * sigma));
+                        }
+                        case 2:
+                        {
+                            const auto minFrequency = analyserMinFrequency;
+                            const auto maxFrequency = analyserMaxFrequency;
+                            const auto lowOctaveOffset = std::log2(minFrequency / safeFrequency);
+                            const auto highOctaveOffset = std::log2(maxFrequency / safeFrequency);
+                            const auto octaveRange = juce::jmax(1.0e-6f, highOctaveOffset - lowOctaveOffset);
+                            return juce::jlimit(0.0f, 1.0f, (octaveOffset - lowOctaveOffset) / octaveRange);
+                        }
+                        case 3: return 1.0f / (1.0f + std::exp(-octaveOffset * fixedSteepness));
+                        case 4: return 1.0f;
+                        default: return 0.0f;
+                    }
+                }();
+
+                const auto phaseImpact = juce::jlimit(-1.0f, 1.0f, phaseAmount * filterShape);
+
+                if (std::abs(phaseImpact) <= eps || (std::abs(leftBin) * std::abs(rightBin)) <= eps)
+                    continue;
+
+                const auto phasePlace = juce::jlimit(0, 2, phaseFilter.place);
+
+                if (phasePlace == 1)
+                {
+                    leftBin = adjustFollower(rightBin, leftBin, phaseImpact);
+                }
+                else if (phasePlace == 2)
+                {
+                    const auto halfImpact = phaseImpact * 0.5f;
+                    const auto referenceLeftBin = leftBin;
+                    const auto referenceRightBin = rightBin;
+                    leftBin = adjustFollower(referenceRightBin, referenceLeftBin, halfImpact);
+                    rightBin = adjustFollower(referenceLeftBin, referenceRightBin, halfImpact);
+                }
+                else
+                {
+                    rightBin = adjustFollower(leftBin, rightBin, phaseImpact);
+                }
+            }
+
+            leftFrequencyData[static_cast<size_t>(bin)] = leftBin;
+            rightFrequencyData[static_cast<size_t>(bin)] = rightBin;
+
+            if (bin > 0 && bin < (fftSize / 2))
+            {
+                leftFrequencyData[static_cast<size_t>(fftSize - bin)] = std::conj(leftBin);
+                rightFrequencyData[static_cast<size_t>(fftSize - bin)] = std::conj(rightBin);
+            }
+        }
     }
 
     const auto processedBinCount = juce::jmax(1, (fftSize / 2) + 1);

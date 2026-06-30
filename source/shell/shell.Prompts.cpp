@@ -580,16 +580,18 @@ public:
     FloatingChoicePrompt(juce::Rectangle<int> anchorBoundsIn,
                          juce::StringArray choicesIn,
                          int selectedIndexIn,
-                     std::vector<bool> itemEnabledStatesIn,
+                         std::vector<bool> itemEnabledStatesIn,
                          juce::Justification itemJustificationIn,
                          SelectCallback selectCallback,
                          DismissCallback dismissCallback,
-                         CloseCallback closeCallback)
+                         CloseCallback closeCallback,
+                         juce::StringArray itemTooltipsIn)
         : anchorBounds(std::move(anchorBoundsIn)),
           choices(std::move(choicesIn)),
           selectedIndex(selectedIndexIn),
-            itemEnabledStates(std::move(itemEnabledStatesIn)),
+          itemEnabledStates(std::move(itemEnabledStatesIn)),
           itemJustification(itemJustificationIn),
+          itemTooltips(std::move(itemTooltipsIn)),
           onSelect(std::move(selectCallback)),
           onDismiss(std::move(dismissCallback)),
           onClose(std::move(closeCallback))
@@ -614,6 +616,8 @@ public:
         {
             auto button = std::make_unique<BoxTextButton>(uiAccent);
             button->setButtonText(choices[index]);
+            if (juce::isPositiveAndBelow(index, itemTooltips.size()))
+                button->setTooltip(itemTooltips[index]);
             button->setTextJustification(itemJustification);
             button->setAlwaysAccentOutline(index == selectedIndex);
             const auto isEnabled = itemEnabled(index);
@@ -781,6 +785,7 @@ private:
     juce::Viewport choiceViewport;
     juce::Component choiceContent;
     std::vector<std::unique_ptr<BoxTextButton>> itemButtons;
+    juce::StringArray itemTooltips;
     SelectCallback onSelect;
     DismissCallback onDismiss;
     CloseCallback onClose;
@@ -970,6 +975,7 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
     dismissTextPrompt();
 
     const auto preservedFilterScrollY = filterViewport.getViewPositionY();
+    const auto preservedSpeAnalyserScrollY = speAnalyserViewport.getViewPositionY();
 
     auto* prompt = new FloatingTextPrompt(currentText,
                                           std::move(onCommit),
@@ -977,7 +983,21 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
                                           std::move(onDismiss),
                                           [this, closeCallback = std::move(onClose)]
                                           {
+                                              const auto closePreservedFilterScrollY = filterViewport.getViewPositionY();
+                                              const auto closePreservedSpeAnalyserScrollY = speAnalyserViewport.getViewPositionY();
                                               dismissTextPrompt();
+
+                                              if (filterViewport.isVisible())
+                                              {
+                                                  const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+                                                  filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedFilterScrollY));
+                                              }
+
+                                              if (speAnalyserViewport.isVisible())
+                                              {
+                                                  const auto maxOffset = juce::jmax(0, speAnalyserContent.getHeight() - speAnalyserViewport.getHeight());
+                                                  speAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedSpeAnalyserScrollY));
+                                              }
 
                                               if (closeCallback)
                                                   closeCallback();
@@ -991,6 +1011,12 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
     {
         const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
         filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedFilterScrollY));
+    }
+
+    if (speAnalyserViewport.isVisible())
+    {
+        const auto maxOffset = juce::jmax(0, speAnalyserContent.getHeight() - speAnalyserViewport.getHeight());
+        speAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedSpeAnalyserScrollY));
     }
 
     prompt->grabEditorFocus();
@@ -1010,8 +1036,12 @@ void VxAudioProcessorEditor::showChoicePrompt(const juce::Rectangle<int>& anchor
                                                const juce::Justification itemJustification,
                                                std::function<void(int)> onSelect,
                                                std::function<void()> onClose,
-                                               std::function<void()> onDismiss)
+                                               std::function<void()> onDismiss,
+                                               juce::StringArray itemTooltips)
 {
+    const auto preservedFilterScrollY = filterViewport.getViewPositionY();
+    const auto preservedSpeAnalyserScrollY = speAnalyserViewport.getViewPositionY();
+
     dismissTextPrompt();
 
     auto* prompt = new FloatingChoicePrompt(anchorBounds,
@@ -1023,15 +1053,43 @@ void VxAudioProcessorEditor::showChoicePrompt(const juce::Rectangle<int>& anchor
                                             std::move(onDismiss),
                                             [this, closeCallback = std::move(onClose)]
                                             {
-                                                dismissTextPrompt();
+                                                const auto closePreservedFilterScrollY = filterViewport.getViewPositionY();
+                                                const auto closePreservedSpeAnalyserScrollY = speAnalyserViewport.getViewPositionY();
+                                               dismissTextPrompt();
 
-                                                if (closeCallback)
-                                                    closeCallback();
-                                            });
+                                               if (filterViewport.isVisible())
+                                               {
+                                                   const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+                                                   filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedFilterScrollY));
+                                               }
+
+                                               if (speAnalyserViewport.isVisible())
+                                               {
+                                                   const auto maxOffset = juce::jmax(0, speAnalyserContent.getHeight() - speAnalyserViewport.getHeight());
+                                                   speAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedSpeAnalyserScrollY));
+                                               }
+
+                                               if (closeCallback)
+                                                   closeCallback();
+                                           },
+                                           std::move(itemTooltips));
 
     textPromptOverlay.reset(prompt);
     addAndMakeVisible(*textPromptOverlay);
     resized();
+
+    if (filterViewport.isVisible())
+    {
+        const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+        filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedFilterScrollY));
+    }
+
+    if (speAnalyserViewport.isVisible())
+    {
+        const auto maxOffset = juce::jmax(0, speAnalyserContent.getHeight() - speAnalyserViewport.getHeight());
+        speAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedSpeAnalyserScrollY));
+    }
+
     prompt->toFront(true);
 }
 

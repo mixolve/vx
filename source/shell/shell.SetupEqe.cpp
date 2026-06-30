@@ -1,4 +1,4 @@
-#include "shell.EditorBellSection.h"
+#include "shell.EditorFilterSection.h"
 #include "../modules/eqe/module.eqe.ProcessorSupport.h"
 
 #include <utility>
@@ -7,9 +7,9 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
 {
     juce::ignoreUnused(initialEqeState);
 
-    for (int bellIndex = 0; bellIndex < VxAudioProcessor::maxBellFilterCount; ++bellIndex)
+    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
     {
-        auto section = std::make_unique<BellSection>(initialEqeState, bellIndex);
+        auto section = std::make_unique<FilterSection>(initialEqeState, filterIndex);
         for (const auto filterType : VxAudioProcessor::filterTypePresetOrder)
         {
             section->setStoredValues(filterType,
@@ -20,161 +20,173 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
                                      false);
         }
         section->captureCurrentValuesForCurrentType(true);
-        section->moveUpButton->onClick = [this, bellIndex]
+        section->moveUpButton->onClick = [this, filterIndex]
         {
-            const auto orderPosition = getBellOrderPositionForIndex(bellIndex);
+            const auto orderPosition = getFilterOrderPositionForIndex(filterIndex);
 
             if (orderPosition > 0)
-                moveBellSection(orderPosition, orderPosition - 1);
+                moveFilterSection(orderPosition, orderPosition - 1);
 
             clearKeyboardFocus(*this);
         };
-        section->moveDownButton->onClick = [this, bellIndex]
+        section->moveDownButton->onClick = [this, filterIndex]
         {
-            const auto orderPosition = getBellOrderPositionForIndex(bellIndex);
+            const auto orderPosition = getFilterOrderPositionForIndex(filterIndex);
 
-            if (orderPosition >= 0 && orderPosition + 1 < getActiveBellCount())
-                moveBellSection(orderPosition, orderPosition + 1);
+            if (orderPosition >= 0 && orderPosition + 1 < getActiveFilterCount())
+                moveFilterSection(orderPosition, orderPosition + 1);
 
             clearKeyboardFocus(*this);
         };
-        section->typeControl->setTitleMouseEnabled(false);
-        section->lrmsControl->onTitleClick = [this, bellIndex]
+        section->lrmsControl->onTitleClick = [this, filterIndex]
         {
-            auto* bellSection = bellSections[static_cast<size_t>(bellIndex)].get();
+            auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get();
 
-            if (bellSection == nullptr)
+            if (filterSection == nullptr)
                 return;
 
-            bellSection->lrmsControl->setSelectedChoiceIndex(0, true);
+            filterSection->lrmsControl->setSelectedChoiceIndex(0, true);
         };
-        section->frequencyControl->onTitleClick = [this, bellIndex]
+        section->frequencyControl->onTitleClick = [this, filterIndex]
         {
-            auto* bellSection = bellSections[static_cast<size_t>(bellIndex)].get();
+            auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get();
 
-            if (bellSection == nullptr)
+            if (filterSection == nullptr)
                 return;
 
-            const auto filterType = bellSection->getFilterType();
-            bellSection->frequencyControl->setValue(defaultFilterFrequencyForType(filterType), true);
+            const auto filterType = filterSection->getFilterType();
+            filterSection->frequencyControl->setValue(defaultFilterFrequencyForType(filterType), true);
         };
-        section->bandwidthControl->onTitleClick = [this, bellIndex]
+        section->bandwidthControl->onTitleClick = [this, filterIndex]
         {
-            auto* bellSection = bellSections[static_cast<size_t>(bellIndex)].get();
+            auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get();
 
-            if (bellSection == nullptr)
+            if (filterSection == nullptr)
                 return;
 
-            const auto filterType = bellSection->getFilterType();
-            bellSection->bandwidthControl->setValue(defaultFilterBandwidthForType(filterType), true);
+            const auto filterType = filterSection->getFilterType();
+            filterSection->bandwidthControl->setValue(defaultFilterBandwidthForType(filterType), true);
         };
-        section->slopeControl->onTitleClick = [this, bellIndex]
+        section->slopeControl->onTitleClick = [this, filterIndex]
         {
-            auto* bellSection = bellSections[static_cast<size_t>(bellIndex)].get();
+            auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get();
 
-            if (bellSection == nullptr)
+            if (filterSection == nullptr)
                 return;
 
-            const auto filterType = bellSection->getFilterType();
-            bellSection->slopeControl->setSelectedChoiceIndex(
+            const auto filterType = filterSection->getFilterType();
+            filterSection->slopeControl->setSelectedChoiceIndex(
                 EqeModuleProcessor::getBellSlopeChoiceIndexForValue(defaultFilterSlopeForType(filterType)),
                 true);
         };
-        section->gainControl->onTitleClick = [this, bellIndex]
+        section->gainControl->onTitleClick = [this, filterIndex]
         {
-            auto* bellSection = bellSections[static_cast<size_t>(bellIndex)].get();
+            auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get();
 
-            if (bellSection == nullptr)
+            if (filterSection == nullptr)
                 return;
 
-            bellSection->gainControl->setValue(0.0, true);
+            filterSection->gainControl->setValue(0.0, true);
         };
-        section->typeControl->onValueChanged = [this, bellIndex]
+        section->typeControl->onValueChanged = [this, filterIndex]
         {
-            if (suppressBellSectionValueChangeHandlers)
+            if (suppressFilterSectionValueChangeHandlers)
                 return;
 
-            auto* bellSection = bellSections[static_cast<size_t>(bellIndex)].get();
+            auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get();
 
-            if (bellSection == nullptr)
+            if (filterSection == nullptr)
                 return;
 
-            const auto newType = bellSection->getFilterType();
-            bellSection->lastFilterType = newType;
-            bellSection->slopeControl->setChoices(getBellSlopeDisplayChoicesForType(newType));
-            bellSection->slopeControl->setChoiceEnabled(0, newType != EqeModuleProcessor::FilterType::bell);
-            bellSection->captureCurrentValuesForCurrentType();
+            const auto newType = filterSection->getFilterType();
+            filterSection->lastFilterType = newType;
+            filterSection->slopeControl->setChoices(getBellSlopeDisplayChoicesForType(newType));
+            filterSection->slopeControl->setChoiceEnabled(0, newType != EqeModuleProcessor::FilterType::bell);
+            filterSection->updatePlaceChoicesForType(true);
+            filterSection->captureCurrentValuesForCurrentType();
             updateSectionStates();
             resized();
         };
-        section->frequencyControl->onValueChanged = [this, bellIndex]
+        section->frequencyControl->onValueChanged = [this, filterIndex]
         {
-            if (suppressBellSectionValueChangeHandlers)
+            if (suppressFilterSectionValueChangeHandlers)
                 return;
 
-            if (auto* bellSection = bellSections[static_cast<size_t>(bellIndex)].get())
+            if (auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get())
             {
-                bellSection->captureCurrentValuesForCurrentType();
+                filterSection->captureCurrentValuesForCurrentType();
 
                 updateSectionStates();
             }
         };
-        section->lrmsControl->onValueChanged = [this, bellIndex]
+        section->lrmsControl->onValueChanged = [this, filterIndex]
         {
-            if (suppressBellSectionValueChangeHandlers)
+            if (suppressFilterSectionValueChangeHandlers)
                 return;
 
-            if (auto* bellSection = bellSections[static_cast<size_t>(bellIndex)].get())
+            if (auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get())
             {
-                bellSection->captureCurrentValuesForCurrentType();
+                filterSection->captureCurrentValuesForCurrentType();
                 updateSectionStates();
             }
         };
-        section->bandwidthControl->onValueChanged = [this, bellIndex]
+        section->bandwidthControl->onValueChanged = [this, filterIndex]
         {
-            if (suppressBellSectionValueChangeHandlers)
+            if (suppressFilterSectionValueChangeHandlers)
                 return;
 
-            if (auto* bellSection = bellSections[static_cast<size_t>(bellIndex)].get())
-                bellSection->captureCurrentValuesForCurrentType();
+            if (auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get())
+                filterSection->captureCurrentValuesForCurrentType();
 
             updateSectionStates();
         };
-        section->slopeControl->onValueChanged = [this, bellIndex]
+        section->slopeControl->onValueChanged = [this, filterIndex]
         {
-            if (suppressBellSectionValueChangeHandlers)
+            if (suppressFilterSectionValueChangeHandlers)
                 return;
 
-            normalizeSlopeForType(bellIndex);
+            normalizeSlopeForType(filterIndex);
 
-            if (auto* bellSection = bellSections[static_cast<size_t>(bellIndex)].get())
-                bellSection->captureCurrentValuesForCurrentType();
+            if (auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get())
+                filterSection->captureCurrentValuesForCurrentType();
 
             updateSectionStates();
         };
         section->gainControl->onValueChanged = [this]
         {
-            if (suppressBellSectionValueChangeHandlers)
+            if (suppressFilterSectionValueChangeHandlers)
                 return;
 
             updateSectionStates();
         };
-        section->header->setInterceptsMouseClicks(false, false);
+        section->header->onClick = [this, filterIndex]
+        {
+            auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get();
+
+            if (filterSection == nullptr)
+                return;
+
+            enforceSingleExpandedFilterSection(filterSection->expanded ? -1 : filterIndex);
+            storeEditorStateToValueTree();
+            updateSectionStates();
+            resized();
+            clearKeyboardFocus(*this);
+        };
         section->bypassButton->onClick = [this]
         {
             updateSectionStates();
             clearKeyboardFocus(*this);
         };
-        section->deleteButton->onClick = [this, bellIndex]
+        section->bypassButton->setLongPressAction([this, filterIndex]
         {
-            const juce::ScopedValueSetter<bool> suppressHandlers(suppressBellSectionValueChangeHandlers, true);
+            const juce::ScopedValueSetter<bool> suppressHandlers(suppressFilterSectionValueChangeHandlers, true);
             auto* eqeProcessor = getActiveEqeProcessor();
-            const auto previousCount = getActiveBellCount();
+            const auto previousCount = getActiveFilterCount();
 
-            if (eqeProcessor != nullptr && eqeProcessor->removeBellFilter(bellIndex))
+            if (eqeProcessor != nullptr && eqeProcessor->removeFilter(filterIndex))
             {
-                removeBellSectionStoredValues(bellIndex, previousCount);
-                visualizerExpanded = false;
+                removeFilterSectionStoredValues(filterIndex, previousCount);
+                enforceSingleExpandedFilterSection();
 
                 storeEditorStateToValueTree();
 
@@ -183,7 +195,7 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
             }
 
             clearKeyboardFocus(*this);
-        };
+        }, 500, "D");
 
         filterContent.addAndMakeVisible(*section->moveUpButton);
         filterContent.addAndMakeVisible(*section->header);
@@ -195,27 +207,27 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
         filterContent.addAndMakeVisible(*section->slopeControl);
         filterContent.addAndMakeVisible(*section->gainControl);
         filterContent.addAndMakeVisible(*section->bypassButton);
-        filterContent.addAndMakeVisible(*section->deleteButton);
-        bellSections[static_cast<size_t>(bellIndex)] = std::move(section);
+        filterSections[static_cast<size_t>(filterIndex)] = std::move(section);
 
-        normalizeSlopeForType(bellIndex);
+        normalizeSlopeForType(filterIndex);
     }
 
     addFilterButton = std::make_unique<BoxTextButton>(uiGrey500);
-    addFilterButton->setButtonText("ADD-FILTER");
+    addFilterButton->setButtonText("AD");
+    addFilterButton->setTooltip("ADD FILTER");
     addFilterButton->onClick = [this]
     {
-        const juce::ScopedValueSetter<bool> suppressHandlers(suppressBellSectionValueChangeHandlers, true);
+        const juce::ScopedValueSetter<bool> suppressHandlers(suppressFilterSectionValueChangeHandlers, true);
         auto* eqeProcessor = getActiveEqeProcessor();
 
-        if (eqeProcessor != nullptr && eqeProcessor->addBellFilter())
+        if (eqeProcessor != nullptr && eqeProcessor->addFilter())
         {
-            const auto newBellIndex = getActiveBellCount() - 1;
-            bellDisplayOrder[static_cast<size_t>(newBellIndex)] = newBellIndex;
-            resetBellSectionStoredValues(getActiveBellCount() - 1);
-            visualizerExpanded = false;
+            const auto newFilterIndex = getActiveFilterCount() - 1;
+            filterDisplayOrder[static_cast<size_t>(newFilterIndex)] = newFilterIndex;
+            resetFilterSectionStoredValues(getActiveFilterCount() - 1);
+            enforceSingleExpandedFilterSection(newFilterIndex);
             storeEditorStateToValueTree();
-            selectBellSection(newBellIndex);
+            selectFilterSection(newFilterIndex);
         }
 
         clearKeyboardFocus(*this);

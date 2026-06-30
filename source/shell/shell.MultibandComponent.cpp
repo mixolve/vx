@@ -144,9 +144,9 @@ public:
         auto height = rowHeight;
 
         for (const auto& row : rows)
-            height += verticalGap + row->getPreferredHeight();
+            height += row->getTopGap() + row->getPreferredHeight();
 
-        return height;
+        return height + moduleContentBottomGap;
     }
 
     void resized() override
@@ -154,15 +154,12 @@ public:
         auto bounds = getLocalBounds();
         soloButton.setBounds(bounds.removeFromTop(rowHeight));
 
-        if (! bounds.isEmpty())
-            bounds.removeFromTop(verticalGap);
-
         for (auto& row : rows)
         {
-            row->setBounds(bounds.removeFromTop(row->getPreferredHeight()));
-
             if (! bounds.isEmpty())
-                bounds.removeFromTop(verticalGap);
+                bounds.removeFromTop(juce::jmin(row->getTopGap(), bounds.getHeight()));
+
+            row->setBounds(bounds.removeFromTop(row->getPreferredHeight()));
         }
     }
 
@@ -171,6 +168,9 @@ private:
     {
         virtual int getPreferredHeight() const = 0;
         virtual void refreshExternalState() {}
+        int getTopGap() const noexcept { return juce::jmax(0, topGapMultiplier) * verticalGap; }
+
+        int topGapMultiplier = 1;
     };
 
     struct ParameterRow final : public RowBase
@@ -186,6 +186,7 @@ private:
                 parameterIdToReset,
                 spec.label,
                 spec.decimals);
+            topGapMultiplier = spec.topGapMultiplier;
             addAndMakeVisible(*control);
         }
 
@@ -204,20 +205,27 @@ private:
 
     struct ToggleRow final : public RowBase
     {
-        ToggleRow(MultibandModuleComponent& ownerIn,
+        ToggleRow(BandPageComponent& pageIn,
+                  MultibandModuleComponent& ownerIn,
                   juce::String parameterId,
                   const BandControlSpec& spec)
-            : owner(ownerIn),
+            : page(pageIn),
+              owner(ownerIn),
               parameterIdToToggle(std::move(parameterId)),
+              exclusiveGroup(spec.exclusiveGroup != nullptr ? spec.exclusiveGroup : ""),
               enabledLabel(spec.enabledLabel != nullptr && juce::String(spec.enabledLabel).isNotEmpty() ? spec.enabledLabel : spec.label),
               disabledLabel(spec.disabledLabel != nullptr && juce::String(spec.disabledLabel).isNotEmpty() ? spec.disabledLabel : spec.label)
         {
             button = makeTextButton(spec.label);
+            topGapMultiplier = spec.topGapMultiplier;
             button->setClickingTogglesState(true);
             attachment = std::make_unique<ButtonAttachment>(owner.valueTreeState, parameterIdToToggle, *button);
             button->onStateChange = [this] { updateLabel(); };
             button->onClick = [this]
             {
+                if (button != nullptr && button->getToggleState() && exclusiveGroup.isNotEmpty())
+                    page.clearExclusiveToggleGroup(parameterIdToToggle, exclusiveGroup);
+
                 updateLabel();
                 owner.clearFocus();
             };
@@ -244,8 +252,10 @@ private:
                 button->setButtonText(button->getToggleState() ? disabledLabel : enabledLabel);
         }
 
+        BandPageComponent& page;
         MultibandModuleComponent& owner;
         juce::String parameterIdToToggle;
+        juce::String exclusiveGroup;
         juce::String enabledLabel;
         juce::String disabledLabel;
         std::unique_ptr<BoxTextButton> button;
@@ -269,6 +279,7 @@ private:
                 valueParameterIdToEdit,
                 spec.label,
                 spec.decimals);
+            topGapMultiplier = spec.topGapMultiplier;
             addAndMakeVisible(*control);
 
             modeButton = makeTimeModeButton();
@@ -416,7 +427,7 @@ private:
         {
             if (spec.kind == ControlKind::toggle)
             {
-                auto row = std::make_unique<ToggleRow>(owner, getBandParameterId(spec), spec);
+                auto row = std::make_unique<ToggleRow>(*this, owner, getBandParameterId(spec), spec);
                 addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
                 continue;
@@ -440,6 +451,26 @@ private:
             auto row = std::make_unique<ParameterRow>(owner, getBandParameterId(spec), spec);
             addAndMakeVisible(*row);
             rows.push_back(std::move(row));
+        }
+    }
+
+    void clearExclusiveToggleGroup(const juce::String& activeParameterId, const juce::String& exclusiveGroup)
+    {
+        if (exclusiveGroup.isEmpty())
+            return;
+
+        for (auto& row : rows)
+        {
+            auto* toggleRow = dynamic_cast<ToggleRow*>(row.get());
+
+            if (toggleRow == nullptr
+                || toggleRow->exclusiveGroup != exclusiveGroup
+                || toggleRow->parameterIdToToggle == activeParameterId)
+            {
+                continue;
+            }
+
+            owner.setParameterPlainValue(toggleRow->parameterIdToToggle, 0.0f);
         }
     }
 
@@ -550,7 +581,7 @@ public:
         if (owner.config.showAutoSolo)
             height += verticalGap + rowHeight;
 
-        return height;
+        return height + moduleContentBottomGap;
     }
 
     void refreshExternalState()

@@ -1,4 +1,7 @@
 #include "shell.EditorParameterControls.h"
+#include "../modules/spe/module.spe.SpeProcessor.h"
+
+#include <array>
 
 void VxAudioProcessorEditor::loadSpeModule()
 {
@@ -12,11 +15,9 @@ void VxAudioProcessorEditor::loadSpeModule()
     tseModuleLoaded = false;
 
     shellGlobalHostExpanded = false;
-    visualizerExpanded = false;
-
     rebindActiveModuleEditors();
-    updateEditorWidthForVisualizerVisibility();
-    rebuildModuleTabRows();
+    updateEditorWidthState();
+    refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
     resized();
@@ -28,7 +29,7 @@ int VxAudioProcessorEditor::getSpeMainContentHeight() const
     if (! speModuleLoaded)
         return 0;
 
-    auto sumHeights = [] (std::initializer_list<int> heights)
+    auto sumHeights = [] (const std::vector<int>& heights)
     {
         auto totalHeight = 0;
 
@@ -38,20 +39,120 @@ int VxAudioProcessorEditor::getSpeMainContentHeight() const
         return totalHeight + (verticalGap * juce::jmax(0, static_cast<int>(heights.size()) - 1));
     };
 
-    return sumHeights({ speAttackControl != nullptr ? speAttackControl->getPreferredHeight() : 0,
-                        speReleaseControl != nullptr ? speReleaseControl->getPreferredHeight() : 0,
-                        speKneeControl != nullptr ? speKneeControl->getPreferredHeight() : 0,
-                        speRatioControl != nullptr ? speRatioControl->getPreferredHeight() : 0,
-                        speDspFftSizeControl != nullptr ? speDspFftSizeControl->getPreferredHeight() : 0,
-                        speDspSlopeControl != nullptr ? speDspSlopeControl->getPreferredHeight() : 0,
-                        speDualMonoLeftThresholdControl != nullptr ? speDualMonoLeftThresholdControl->getPreferredHeight() : 0,
-                        speDualMonoLeftAdaptiveControl != nullptr ? speDualMonoLeftAdaptiveControl->getPreferredHeight() : 0,
-                        speDualMonoLeftAdaptiveOffsetControl != nullptr ? speDualMonoLeftAdaptiveOffsetControl->getPreferredHeight() : 0,
-                        speDualMonoRightThresholdControl != nullptr ? speDualMonoRightThresholdControl->getPreferredHeight() : 0,
-                        speDualMonoRightAdaptiveControl != nullptr ? speDualMonoRightAdaptiveControl->getPreferredHeight() : 0,
-                        speDualMonoRightAdaptiveOffsetControl != nullptr ? speDualMonoRightAdaptiveOffsetControl->getPreferredHeight() : 0,
-                        rowHeight,
-                        rowHeight });
+    std::vector<int> heights {
+        rowHeight,
+        speDspFftSizeControl != nullptr ? speDspFftSizeControl->getPreferredHeight() : 0,
+        speDspHopDivisorControl != nullptr ? speDspHopDivisorControl->getPreferredHeight() : 0,
+        rowHeight,
+        speAttackControl != nullptr ? speAttackControl->getPreferredHeight() : 0,
+        speReleaseControl != nullptr ? speReleaseControl->getPreferredHeight() : 0,
+        speKneeControl != nullptr ? speKneeControl->getPreferredHeight() : 0,
+        speRatioControl != nullptr ? speRatioControl->getPreferredHeight() : 0,
+        speDspSlopeControl != nullptr ? speDspSlopeControl->getPreferredHeight() : 0,
+        speDualMonoLeftThresholdControl != nullptr ? speDualMonoLeftThresholdControl->getPreferredHeight() : 0,
+        speDualMonoLeftAdaptiveControl != nullptr ? speDualMonoLeftAdaptiveControl->getPreferredHeight() : 0,
+        speDualMonoLeftAdaptiveOffsetControl != nullptr ? speDualMonoLeftAdaptiveOffsetControl->getPreferredHeight() : 0,
+        speDualMonoRightThresholdControl != nullptr ? speDualMonoRightThresholdControl->getPreferredHeight() : 0,
+        speDualMonoRightAdaptiveControl != nullptr ? speDualMonoRightAdaptiveControl->getPreferredHeight() : 0,
+        speDualMonoRightAdaptiveOffsetControl != nullptr ? speDualMonoRightAdaptiveOffsetControl->getPreferredHeight() : 0,
+        rowHeight,
+        rowHeight
+    };
+
+    const auto activePhaseFilterCount = getActiveSpePhaseFilterCount();
+    for (auto filterIndex = 0; filterIndex < activePhaseFilterCount; ++filterIndex)
+    {
+        heights.push_back(rowHeight);
+
+        if (spePhaseExpanded[static_cast<size_t>(filterIndex)])
+        {
+            heights.push_back(spePhaseTypeControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhaseTypeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(spePhasePlaceControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhasePlaceControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(spePhaseSlopeControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhaseSlopeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(spePhaseFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(spePhaseBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(spePhaseImpactControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhaseImpactControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+        }
+    }
+
+    heights.push_back(0);
+    heights.push_back(rowHeight);
+    return sumHeights(heights);
+}
+
+int VxAudioProcessorEditor::getActiveSpePhaseFilterCount() const noexcept
+{
+    if (const auto* speProcessor = audioProcessor.getSpeModuleProcessor())
+        return speProcessor->getActivePhaseFilterCount();
+
+    return 0;
+}
+
+bool VxAudioProcessorEditor::shouldEnableSpePhaseOrder(const int filterIndex) const noexcept
+{
+    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
+        return false;
+
+    const auto* typeControl = spePhaseTypeControls[static_cast<size_t>(filterIndex)].get();
+    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
+    return typeIndex != 2 && typeIndex != 4;
+}
+
+bool VxAudioProcessorEditor::shouldEnableSpePhaseFrequency(const int filterIndex) const noexcept
+{
+    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
+        return false;
+
+    const auto* typeControl = spePhaseTypeControls[static_cast<size_t>(filterIndex)].get();
+    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
+    return typeIndex != 4;
+}
+
+bool VxAudioProcessorEditor::shouldEnableSpePhaseBandwidth(const int filterIndex) const noexcept
+{
+    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
+        return false;
+
+    const auto* typeControl = spePhaseTypeControls[static_cast<size_t>(filterIndex)].get();
+    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
+    return typeIndex == 1;
+}
+
+bool VxAudioProcessorEditor::shouldShowSpePhaseImpact(const int filterIndex) const noexcept
+{
+    return juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount);
+}
+
+void VxAudioProcessorEditor::enforceSingleExpandedSpePhaseFilter(const int preferredFilterIndex)
+{
+    const auto activeCount = getActiveSpePhaseFilterCount();
+    const auto targetFilterIndex = juce::isPositiveAndBelow(preferredFilterIndex, activeCount) ? preferredFilterIndex : -1;
+
+    for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        spePhaseExpanded[static_cast<size_t>(filterIndex)] = filterIndex == targetFilterIndex;
+}
+
+juce::String VxAudioProcessorEditor::getSpePhaseFilterHeaderText(const int filterIndex) const
+{
+    static constexpr std::array<const char*, 5> typeNames { "LSH", "BEL", "FTL", "HSH", "FUL" };
+    static constexpr std::array<const char*, 3> placeNames { "RTL", "LTR", "50" };
+
+    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
+        return {};
+
+    const auto* typeControl = spePhaseTypeControls[static_cast<size_t>(filterIndex)].get();
+    const auto* placeControl = spePhasePlaceControls[static_cast<size_t>(filterIndex)].get();
+    const auto* frequencyControl = spePhaseFrequencyControls[static_cast<size_t>(filterIndex)].get();
+
+    const auto typeIndex = typeControl != nullptr ? juce::jlimit(0, static_cast<int>(typeNames.size()) - 1, typeControl->getSelectedChoiceIndex()) : 1;
+    const auto placeIndex = placeControl != nullptr ? juce::jlimit(0, static_cast<int>(placeNames.size()) - 1, placeControl->getSelectedChoiceIndex()) : 0;
+    const auto frequency = frequencyControl != nullptr ? juce::roundToInt(frequencyControl->getValue()) : 632;
+
+    return juce::String::formatted("%02d-%s-%s-%05d",
+                                   filterIndex + 1,
+                                   typeNames[static_cast<size_t>(typeIndex)],
+                                   placeNames[static_cast<size_t>(placeIndex)],
+                                   juce::jlimit(0, 99999, frequency));
 }
 
 int VxAudioProcessorEditor::getSpeAnalyserContentHeight() const
@@ -84,10 +185,5 @@ int VxAudioProcessorEditor::getSpeSectionContentHeight() const
     if (! speModuleLoaded)
         return 0;
 
-    auto contentHeight = getSpeMainContentHeight() + verticalGap + rowHeight;
-
-    if (visualizerExpanded)
-        contentHeight += verticalGap + getSpeAnalyserContentHeight();
-
-    return contentHeight + verticalGap;
+    return getSpeMainContentHeight() + moduleContentBottomGap;
 }

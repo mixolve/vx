@@ -38,14 +38,9 @@ juce::String makeFilterParameterId(const char* suffix, const int filterIndex)
     return "filter_" + juce::String(filterIndex + 1) + "_" + suffix;
 }
 
-juce::String makeBellParameterName(const char* suffix, const int bellIndex)
+int clampActiveFilterCount(const int filterCount)
 {
-    return makeEqeFilterName(bellIndex, suffix);
-}
-
-int clampActiveBellCount(const int bellCount)
-{
-    return juce::jlimit(0, EqeModuleProcessor::maxBellFilterCount, bellCount);
+    return juce::jlimit(0, EqeModuleProcessor::maxFilterCount, filterCount);
 }
 
 juce::String filterTypeDisplayPrefix(const EqeModuleProcessor::FilterType type)
@@ -57,6 +52,7 @@ juce::String filterTypeDisplayPrefix(const EqeModuleProcessor::FilterType type)
         case EqeModuleProcessor::FilterType::highCut: return "HCT";
         case EqeModuleProcessor::FilterType::highShelf: return "HSH";
         case EqeModuleProcessor::FilterType::tilt: return "FTL";
+        case EqeModuleProcessor::FilterType::volume: return "VOL";
         case EqeModuleProcessor::FilterType::bell:
         default: return "BEL";
     }

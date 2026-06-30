@@ -13,6 +13,9 @@ bool drawChannelTokenHighlight(juce::Graphics& graphics,
                                const juce::Font& font,
                                const juce::Justification justification)
 {
+    if (! text.containsChar('.'))
+        return false;
+
     juce::AttributedString attributed;
     attributed.setJustification(justification);
 
@@ -86,6 +89,29 @@ void BoxTextButton::setAlwaysAccentOutline(const bool shouldAlwaysAccent)
     repaint();
 }
 
+void BoxTextButton::setPressFillEnabled(const bool shouldEnable) noexcept
+{
+    pressFillEnabled = shouldEnable;
+}
+
+void BoxTextButton::setFillVisible(const bool shouldShow) noexcept
+{
+    if (fillVisible == shouldShow)
+        return;
+
+    fillVisible = shouldShow;
+    repaint();
+}
+
+void BoxTextButton::setDividerLineVisible(const bool shouldShow) noexcept
+{
+    if (dividerLineVisible == shouldShow)
+        return;
+
+    dividerLineVisible = shouldShow;
+    repaint();
+}
+
 void BoxTextButton::setTextJustification(const juce::Justification justification) noexcept
 {
     textJustification = justification;
@@ -152,14 +178,17 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
 {
     juce::ignoreUnused(shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
 
-    const auto buttonDown = manualInteractionEnabled ? manualPointerDown
-                                                     : pressHighlight;
+    const auto buttonDown = pressFillEnabled
+        && (manualInteractionEnabled ? manualPointerDown : pressHighlight);
     const auto accentActive = alwaysAccentOutline || getToggleState();
     const auto fill = buttonDown ? uiGrey700 : uiGrey800;
     const auto outline = accentActive ? accentColour : uiGrey500;
 
-    graphics.setColour(fill);
-    graphics.fillRect(getLocalBounds());
+    if (fillVisible)
+    {
+        graphics.setColour(fill);
+        graphics.fillRect(getLocalBounds());
+    }
 
     if (borderVisible)
     {
@@ -170,6 +199,17 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
     const auto textColour = isEnabled()
         ? (hasTextColourOverride ? textColourOverride : uiWhite)
         : uiGrey500;
+    const auto drawBottomDivider = [&graphics, this]
+    {
+        if (! dividerLineVisible)
+            return;
+
+        const auto bounds = getLocalBounds().toFloat();
+        constexpr auto dividerThickness = 2.0f;
+        graphics.setColour(uiGrey500);
+        graphics.fillRect(bounds.withY(bounds.getBottom() - dividerThickness).withHeight(dividerThickness));
+    };
+
     graphics.setColour(textColour);
     if (arrowDirection == ArrowDirection::none)
     {
@@ -181,9 +221,13 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
             const auto textBounds = getLocalBounds().reduced(6, 0);
 
             if (drawChannelTokenHighlight(graphics, getButtonText(), textBounds, font, textJustification))
+            {
+                drawBottomDivider();
                 return;
+            }
 
             graphics.drawFittedText(getButtonText(), textBounds, textJustification, 1, 1.0f);
+            drawBottomDivider();
             return;
         }
 
@@ -217,6 +261,7 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
                                 juce::Justification::centredLeft,
                                 1,
                                 1.0f);
+        drawBottomDivider();
         return;
     }
 
@@ -251,6 +296,7 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
     }
 
     graphics.strokePath(arrowPath, juce::PathStrokeType(1.8f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    drawBottomDivider();
 }
 
 void BoxTextButton::mouseDown(const juce::MouseEvent& event)

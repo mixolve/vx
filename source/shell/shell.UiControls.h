@@ -117,6 +117,9 @@ public:
 
     void setManualInteractionEnabled(bool shouldEnable) noexcept;
     void setAlwaysAccentOutline(bool shouldAlwaysAccent);
+    void setPressFillEnabled(bool shouldEnable) noexcept;
+    void setFillVisible(bool shouldShow) noexcept;
+    void setDividerLineVisible(bool shouldShow) noexcept;
     void setTextJustification(juce::Justification justification) noexcept;
     void setArrowDirection(ArrowDirection direction) noexcept;
     void setBorderVisible(bool shouldShow) noexcept;
@@ -142,6 +145,9 @@ public:
 private:
     juce::Colour accentColour;
     bool alwaysAccentOutline = false;
+    bool pressFillEnabled = true;
+    bool fillVisible = true;
+    bool dividerLineVisible = false;
     bool manualInteractionEnabled = false;
     bool manualPointerDown = false;
     bool manualDragActive = false;

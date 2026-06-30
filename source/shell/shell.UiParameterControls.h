@@ -17,6 +17,7 @@ public:
     ~ParameterControl() override;
 
     int getPreferredHeight() const noexcept;
+    double getValue() const noexcept;
     void detach() noexcept;
     void rebind(juce::AudioProcessorValueTreeState& state);
     void setValue(double value, bool sendNotification);
@@ -44,5 +45,7 @@ private:
     std::unique_ptr<ValueBoxComponent> valueBox;
     std::unique_ptr<Attachment> attachment;
     juce::String overrideText;
+    std::function<void()> valueClickAction;
     int titleWidthOverride = -1;
+    bool interactionEnabled = true;
 };

@@ -19,27 +19,27 @@ public:
         tilt,
         highShelf,
         highCut,
+        volume,
     };
 
-    inline static constexpr auto activeBellCountStateKey = "active_bell_count";
+    inline static constexpr auto activeFilterCountStateKey = "active_filter_count";
     inline static constexpr float fixedSlopeDbPerOct = 12.0f;
     inline static constexpr auto filterPresetLastSelectedStateKey = "filter_preset_last_selected";
     inline static constexpr auto filterPresetDefaultSelectedStateKey = "filter_preset_default_selected";
-    static constexpr int maxBellFilterCount = 64;
-    static constexpr int visualizerScopeSize = 1024;
+    static constexpr int maxFilterCount = 64;
 
     static juce::String getFilterTypeParamId(int filterIndex);
     static juce::String getFilterLrmsParamId(int filterIndex);
-    static juce::String getBellFrequencyParamId(int bellIndex);
-    static juce::String getBellBandwidthParamId(int bellIndex);
-    static juce::String getBellSlopeParamId(int bellIndex);
-    static juce::String getBellGainParamId(int bellIndex);
-    static juce::String getBellBypassParamId(int bellIndex);
+    static juce::String getFilterFrequencyParamId(int filterIndex);
+    static juce::String getFilterBandwidthParamId(int filterIndex);
+    static juce::String getFilterSlopeParamId(int filterIndex);
+    static juce::String getFilterGainParamId(int filterIndex);
+    static juce::String getFilterBypassParamId(int filterIndex);
     static juce::StringArray getBellSlopeChoices() noexcept;
     static float getBellSlopeValueForChoiceIndex(int choiceIndex) noexcept;
     static int getBellSlopeChoiceIndexForValue(float slope) noexcept;
     static juce::String getFilterHeaderText(FilterType type, int filterIndex);
-    juce::String getBellHeaderText(int bellIndex, int displayIndex) const noexcept;
+    juce::String getFilterHeaderText(int filterIndex, int displayIndex) const noexcept;
     static FilterType filterTypeFromChoiceIndex(int choiceIndex) noexcept;
     static int choiceIndexFromFilterType(FilterType type) noexcept;
     static void appendEqeParameters(std::vector<std::unique_ptr<juce::RangedAudioParameter>>& parameterLayout);
@@ -49,7 +49,9 @@ public:
 
     void prepareToPlay(double sampleRate, int samplesPerBlock);
     void releaseResources();
+    void resetProcessingState() noexcept;
     void processBlock(juce::AudioBuffer<float>& buffer);
+    int getLatencySamples() const noexcept;
 
     void getStateInformation(juce::MemoryBlock& destData);
     void setStateInformation(const void* data, int sizeInBytes);
@@ -57,28 +59,21 @@ public:
     juce::AudioProcessorValueTreeState& getValueTreeState() noexcept;
     const juce::AudioProcessorValueTreeState& getValueTreeState() const noexcept;
 
-    int getActiveBellCount() const noexcept;
-    bool addBellFilter() noexcept;
-    bool removeBellFilter(int bellIndex) noexcept;
-    bool clearBellFilters() noexcept;
-    bool moveBellFilter(int sourceIndex, int destinationIndex) noexcept;
+    int getActiveFilterCount() const noexcept;
+    bool addFilter() noexcept;
+    bool removeFilter(int filterIndex) noexcept;
+    bool clearFilters() noexcept;
+    bool moveFilter(int sourceIndex, int destinationIndex) noexcept;
     juce::String getDefaultFilterPresetName() const;
     juce::String getLastFilterPresetName() const;
     juce::StringArray getFilterPresetNames() const;
     bool saveFilterPreset(const juce::String& presetName);
-    bool renameFilterPreset(const juce::String& oldPresetName, const juce::String& newPresetName);
+    bool renameFilterPreset(const juce::String& sourcePresetName, const juce::String& newPresetName);
     bool setDefaultFilterPreset(const juce::String& presetName);
     bool loadInitialFilterPreset() noexcept;
     bool loadFilterPreset(const juce::String& presetName) noexcept;
     bool deleteFilterPreset(const juce::String& presetName);
-    void copyVisualiserResponse(std::array<float, visualizerScopeSize>& stereoDb,
-                                std::array<float, visualizerScopeSize>& leftDb,
-                                std::array<float, visualizerScopeSize>& rightDb,
-                                std::array<float, visualizerScopeSize>& midDb,
-                                std::array<float, visualizerScopeSize>& sideDb,
-                                double& sampleRateOut) noexcept;
     void markEqeFiltersDirty() noexcept;
-    void setActiveBellCount(int newCount) noexcept;
 
 private:
     class InternalParameterHost final : public juce::AudioProcessor
@@ -108,6 +103,9 @@ private:
     static constexpr size_t maxBellOrder = 128;
     static constexpr size_t maxShelfOrder = 128;
     static constexpr size_t maxBellFourthOrderSections = maxBellOrder;
+    static constexpr int phaseFirOrder = 10;
+    static constexpr int phaseFirSize = 1 << phaseFirOrder;
+    static constexpr int phaseFirLatencySamples = phaseFirSize / 2;
 
     struct SecondOrderSection
     {
@@ -151,6 +149,18 @@ private:
         std::array<SecondOrderSection, maxShelfOrder> sections;
     };
 
+    struct PhaseFirFilter
+    {
+        void reset() noexcept;
+        void setIdentity() noexcept;
+        void process(juce::AudioBuffer<float>& buffer, int numChannels) noexcept;
+
+        bool active = false;
+        std::array<float, phaseFirSize> taps {};
+        std::array<std::array<float, phaseFirSize>, maxSupportedChannels> state {};
+        int writeIndex = 0;
+    };
+
     struct FilterDesignState
     {
         bool valid = false;
@@ -167,30 +177,38 @@ private:
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     void registerParameterListeners();
     void unregisterParameterListeners();
-    FilterType getFilterTypeForBand(size_t bellIndex) const noexcept;
-    bool filterDesignMatches(size_t bellIndex,
+    FilterType getFilterTypeForBand(size_t filterIndex) const noexcept;
+    bool filterDesignMatches(size_t filterIndex,
                              bool active,
                              FilterType type,
                              float frequency,
                              float bandwidth,
                              float slope,
                              float gainDb) const noexcept;
-    void storeFilterDesignState(size_t bellIndex,
+    void storeFilterDesignState(size_t filterIndex,
                                 bool active,
                                 FilterType type,
                                 float frequency,
                                 float bandwidth,
                                 float slope,
                                 float gainDb) noexcept;
-    void resetBellFilters() noexcept;
-    void setBellIdentityResponse(size_t bellIndex) noexcept;
-    void setShelfIdentityResponse(size_t bellIndex) noexcept;
-    void setCutIdentityResponse(size_t bellIndex) noexcept;
-    void setTiltIdentityResponse(size_t bellIndex) noexcept;
+    void setActiveFilterCount(int newCount) noexcept;
+    void resetFilters() noexcept;
+    void setBellIdentityResponse(size_t filterIndex) noexcept;
+    void setShelfIdentityResponse(size_t filterIndex) noexcept;
+    void setCutIdentityResponse(size_t filterIndex) noexcept;
+    void setTiltIdentityResponse(size_t filterIndex) noexcept;
+    void setPhaseIdentityResponse(size_t filterIndex) noexcept;
     void updateBellOrderFilter(BellOrderFilter& filter, int order, double frequency, double octaveBandwidth, double gain) noexcept;
     void updateShelfOrderFilterRaw(BiquadCascade& filter, FilterType filterType, int order, double frequency, double octaveBandwidth, double gain) noexcept;
     void updateCutOrderFilterRaw(BiquadCascade& filter, FilterType filterType, int order, double frequency, double octaveBandwidth) noexcept;
     void updateTiltFilter(BiquadCascade& filter, double frequency, double gainDb) noexcept;
+    void updatePhaseFirFilter(PhaseFirFilter& target,
+                              FilterType filterType,
+                              double frequency,
+                              double octaveBandwidth,
+                              double slope,
+                              double gainDb) noexcept;
     std::complex<double> evaluateBellResponseAt(const BellOrderFilter& filter, double frequency) const noexcept;
     std::complex<double> evaluateCascadeResponseAt(const BiquadCascade& filter, double frequency) const noexcept;
     double evaluateCascadeMagnitudeAt(const BiquadCascade& filter, double frequency) const noexcept;
@@ -203,36 +221,38 @@ private:
                              double frequency,
                              double octaveBandwidth,
                              double slope) noexcept;
-    void rebuildCutBlendFilter(size_t bellIndex,
+    void rebuildCutBlendFilter(size_t filterIndex,
                                FilterType filterType,
                                double frequency,
                                double octaveBandwidth,
                                double slope) noexcept;
-    void updateBellFilters();
+    void updateFilters();
 
     InternalParameterHost internalParameterHost;
     juce::AudioProcessorValueTreeState parameters;
     mutable juce::CriticalSection filterProcessLock;
-    std::array<std::atomic<float>*, maxBellFilterCount> filterTypeParams {};
-    std::array<std::atomic<float>*, maxBellFilterCount> filterLrmsParams {};
-    std::array<std::atomic<float>*, maxBellFilterCount> bellFrequencyParams {};
-    std::array<std::atomic<float>*, maxBellFilterCount> bellBandwidthParams {};
-    std::array<juce::AudioParameterChoice*, maxBellFilterCount> bellSlopeChoiceParams {};
-    std::array<std::atomic<float>*, maxBellFilterCount> bellGainParams {};
-    std::array<std::atomic<float>*, maxBellFilterCount> bellBypassParams {};
-    std::array<std::array<BellOrderFilter, maxBellOrder>, maxBellFilterCount> bellOrderFilters;
-    std::array<std::array<BiquadCascade, maxShelfOrder>, maxBellFilterCount> shelfOrderFilters;
-    std::array<BiquadCascade, maxBellFilterCount> tiltFilters;
-    std::array<BiquadCascade, maxBellFilterCount> cutBlendFilters;
-    std::array<FilterDesignState, maxBellFilterCount> cachedFilterStates {};
-    juce::AudioBuffer<float> bellProcessBufferA;
-    juce::AudioBuffer<float> bellProcessBufferB;
+    std::array<std::atomic<float>*, maxFilterCount> filterTypeParams {};
+    std::array<std::atomic<float>*, maxFilterCount> filterLrmsParams {};
+    std::array<std::atomic<float>*, maxFilterCount> filterFrequencyParams {};
+    std::array<std::atomic<float>*, maxFilterCount> filterBandwidthParams {};
+    std::array<juce::AudioParameterChoice*, maxFilterCount> filterSlopeChoiceParams {};
+    std::array<std::atomic<float>*, maxFilterCount> filterGainParams {};
+    std::array<std::atomic<float>*, maxFilterCount> filterBypassParams {};
+    std::array<std::array<BellOrderFilter, maxBellOrder>, maxFilterCount> bellOrderFilters;
+    std::array<std::array<BiquadCascade, maxShelfOrder>, maxFilterCount> shelfOrderFilters;
+    std::array<BiquadCascade, maxFilterCount> tiltFilters;
+    std::array<BiquadCascade, maxFilterCount> cutBlendFilters;
+    std::array<PhaseFirFilter, maxFilterCount> phaseFirFilters;
+    juce::dsp::FFT phaseFirFft { phaseFirOrder };
+    std::array<FilterDesignState, maxFilterCount> cachedFilterStates {};
+    juce::AudioBuffer<float> filterProcessBufferA;
+    juce::AudioBuffer<float> filterProcessBufferB;
     juce::AudioBuffer<float> lrmsWorkBuffer;
     juce::AudioBuffer<float> lrmsAuxBuffer;
     int preparedNumChannels = 2;
     int lastProcessedBlockSize = 0;
     double currentSampleRate = 0.0;
-    std::atomic<int> activeBellCount { 0 };
+    std::atomic<int> activeFilterCount { 0 };
     std::atomic<bool> eqeFiltersDirty { true };
     std::atomic<bool> prepared { false };
 

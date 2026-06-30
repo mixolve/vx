@@ -1,4 +1,4 @@
-#include "shell.EditorBellSection.h"
+#include "shell.EditorFilterSection.h"
 #include "shell.EditorPresetSections.h"
 #include "shell.MultibandComponent.h"
 
@@ -51,6 +51,7 @@ VxAudioProcessorEditor::~VxAudioProcessorEditor()
     unregisterParameterListeners();
     storeEditorStateToValueTree();
     stopTimer();
+    tooltipWindow.reset();
     setLookAndFeel(nullptr);
 }
 
@@ -60,10 +61,18 @@ void VxAudioProcessorEditor::timerCallback()
     syncFocusedParameterControl();
 
     const auto clipValue = audioProcessor.getGlobalClipIndicator();
+    const auto now = juce::Time::getMillisecondCounter();
 
     if (shellGlobalHeader != nullptr)
     {
         if (clipValue > 0.5f)
+            lastClipIndicatorTimeMs = now;
+
+        constexpr uint32_t clipIndicatorHoldMs = 500;
+        const auto showClipIndicator = lastClipIndicatorTimeMs != 0
+            && now - lastClipIndicatorTimeMs < clipIndicatorHoldMs;
+
+        if (showClipIndicator)
             shellGlobalHeader->setTextColourOverride(juce::Colour(0xffff9999));
         else
             shellGlobalHeader->clearTextColourOverride();
@@ -75,7 +84,7 @@ void VxAudioProcessorEditor::timerCallback()
     if (auto* mxeEditor = dynamic_cast<MultibandModuleComponent*>(mxeModuleEditor.get()))
         mxeEditor->refreshExternalState();
 
-    refreshVisualizerResponse();
+    refreshSpeAnalyserResponse();
 }
 
 double VxAudioProcessorEditor::getFocusedParameterControlValueForTarget() const noexcept
@@ -106,6 +115,7 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
     if (nextTarget != focusedParameterTargetSlider)
     {
         const auto preservedFilterScrollY = filterViewport.getViewPositionY();
+        const auto preservedSpeAnalyserScrollY = speAnalyserViewport.getViewPositionY();
 
         focusedParameterTargetSlider = nextTarget;
 
@@ -131,6 +141,9 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
 
         const auto filterMaxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
         filterViewport.setViewPosition(0, juce::jlimit(0, filterMaxOffset, preservedFilterScrollY));
+
+        const auto analyserMaxOffset = juce::jmax(0, speAnalyserContent.getHeight() - speAnalyserViewport.getHeight());
+        speAnalyserViewport.setViewPosition(0, juce::jlimit(0, analyserMaxOffset, preservedSpeAnalyserScrollY));
     }
 
     if (focusedParameterTargetSlider == nullptr || focusedParameterControl->isMouseButtonDown())
@@ -156,6 +169,12 @@ void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const
     if (shellGlobalHostViewport.getBounds().contains(event.getPosition()))
     {
         if (scrollViewportWithWheel(shellGlobalHostViewport, shellGlobalHostContent.getHeight(), wheel))
+            return;
+    }
+
+    if (speAnalyserViewport.getBounds().contains(event.getPosition()))
+    {
+        if (scrollViewportWithWheel(speAnalyserViewport, speAnalyserContent.getHeight(), wheel))
             return;
     }
 
