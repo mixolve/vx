@@ -44,6 +44,7 @@ public:
         juce::UndoManager* undoManager = nullptr;
         std::function<void()> markParametersDirty;
         std::function<bool()> refreshExternalState;
+        std::function<bool(const juce::String&, const juce::String&, float)> assignHostSlot;
         std::function<juce::String(size_t, const char*)> makeBandParameterId;
         std::function<juce::String(const char*)> makeFullbandParameterId;
         std::function<juce::String(size_t)> makeSoloParameterId;

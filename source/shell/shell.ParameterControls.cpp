@@ -99,19 +99,21 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     titleButton->setTextJustification(juce::Justification::centred);
     titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
     {
-        if (! modifiers.isCtrlDown() && ! modifiers.isCommandDown())
-            return;
+        if (! modifiers.isCtrlDown())
+            return false;
 
         if (parameter == nullptr)
-            return;
+            return false;
 
         if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
         {
             auto* rangedParameter = static_cast<juce::RangedAudioParameter*>(parameter);
-            owner->handleHostSlotAssignRequest(parameterId,
-                                               titleButton != nullptr ? titleButton->getButtonText() : parameterId,
-                                               rangedParameter != nullptr ? rangedParameter->getValue() : 0.0f);
+            return owner->handleHostSlotAssignRequest(parameterId,
+                                                      titleButton != nullptr ? titleButton->getButtonText() : parameterId,
+                                                      rangedParameter != nullptr ? rangedParameter->getValue() : 0.0f);
         }
+
+        return false;
     };
     titleButton->onClick = [this]
     {
@@ -163,6 +165,9 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     };
     slider.valueFromTextFunction = [this] (const juce::String& text)
     {
+        if (customTextParser != nullptr)
+            return customTextParser(text);
+
         if (auto* choiceParameter = dynamic_cast<juce::AudioParameterChoice*>(parameter))
             return findNearestChoiceIndex(parseNumericInput(text), choiceParameter->choices, text);
 
@@ -198,6 +203,9 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     };
     valueBox->textToValueParser = [this] (const juce::String& text)
     {
+        if (customTextParser != nullptr)
+            return customTextParser(text);
+
         if (auto* choiceParameter = dynamic_cast<juce::AudioParameterChoice*>(parameter))
             return findNearestChoiceIndex(parseNumericInput(text), choiceParameter->choices, text);
 
@@ -322,6 +330,44 @@ void ParameterControl::setTitleWidthOverride(const int width) noexcept
     resized();
 }
 
+void ParameterControl::setTitleText(const juce::String& text)
+{
+    if (titleButton == nullptr || titleButton->getButtonText() == text)
+        return;
+
+    titleButton->setButtonText(text);
+    titleButton->repaint();
+}
+
+void ParameterControl::setValueTextTransform(std::function<juce::String(double)> displayFormatter,
+                                             std::function<juce::String(double)> editorFormatter,
+                                             std::function<double(const juce::String&)> textParser)
+{
+    customDisplayFormatter = std::move(displayFormatter);
+    customEditorFormatter = std::move(editorFormatter);
+    customTextParser = std::move(textParser);
+
+    if (valueBox != nullptr)
+        valueBox->repaint();
+
+    repaint();
+}
+
+void ParameterControl::clearValueTextTransform()
+{
+    if (customDisplayFormatter == nullptr && customEditorFormatter == nullptr && customTextParser == nullptr)
+        return;
+
+    customDisplayFormatter = nullptr;
+    customEditorFormatter = nullptr;
+    customTextParser = nullptr;
+
+    if (valueBox != nullptr)
+        valueBox->repaint();
+
+    repaint();
+}
+
 juce::Rectangle<int> ParameterControl::getValueBounds() const noexcept
 {
     return valueBox != nullptr ? valueBox->getBounds() : juce::Rectangle<int>();
@@ -352,6 +398,9 @@ juce::String ParameterControl::formatDisplayValue(const double value) const
     if (overrideText.isNotEmpty())
         return overrideText;
 
+    if (customDisplayFormatter != nullptr)
+        return customDisplayFormatter(value);
+
     if (parameter == nullptr)
         return formatFixedDecimalValue(value, editorDecimals);
 
@@ -376,6 +425,9 @@ juce::String ParameterControl::formatEditorValue() const
 {
     if (overrideText.isNotEmpty())
         return overrideText;
+
+    if (customEditorFormatter != nullptr)
+        return customEditorFormatter(slider.getValue());
 
     if (parameter != nullptr && dynamic_cast<juce::AudioParameterChoice*>(parameter) != nullptr)
         return parameter->getText(parameter->convertTo0to1(static_cast<float>(slider.getValue())), 64).trim();
@@ -406,19 +458,21 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
     titleButton->setPressFillEnabled(false);
     titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
     {
-        if (! modifiers.isCtrlDown() && ! modifiers.isCommandDown())
-            return;
+        if (! modifiers.isCtrlDown())
+            return false;
 
         if (parameter == nullptr)
-            return;
+            return false;
 
         if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
         {
             auto* rangedParameter = static_cast<juce::RangedAudioParameter*>(parameter);
-            owner->handleHostSlotAssignRequest(parameterId,
-                                               titleButton != nullptr ? titleButton->getButtonText() : parameterId,
-                                               rangedParameter != nullptr ? rangedParameter->getValue() : 0.0f);
+            return owner->handleHostSlotAssignRequest(parameterId,
+                                                      titleButton != nullptr ? titleButton->getButtonText() : parameterId,
+                                                      rangedParameter != nullptr ? rangedParameter->getValue() : 0.0f);
         }
+
+        return false;
     };
     titleButton->onClick = [this]
     {

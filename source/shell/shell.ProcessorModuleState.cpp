@@ -96,6 +96,7 @@ bool VxAudioProcessor::loadModule(const ActiveModule module)
         return false;
 
     const ScopedProcessingSuspend suspendGuard(*this);
+    clearActiveModuleStateListeners();
     const auto wasProcessingPrepared = processingPrepared.exchange(false, std::memory_order_acq_rel);
     const auto restoreProcessingPrepared = [this, wasProcessingPrepared]
     {
@@ -126,7 +127,9 @@ bool VxAudioProcessor::loadModule(const ActiveModule module)
             eqe->loadInitialFilterPreset();
 
     setActiveModule(module);
+    registerActiveModuleStateListeners();
     updateShellLatency();
+    notifyHostOfStateChange();
     restoreProcessingPrepared();
     return true;
 }
@@ -139,6 +142,7 @@ bool VxAudioProcessor::clearLoadedModule()
         return false;
 
     const ScopedProcessingSuspend suspendGuard(*this);
+    clearActiveModuleStateListeners();
     eqeModuleProcessor.reset();
     speModuleProcessor.reset();
     mieModuleProcessor.reset();
@@ -146,7 +150,79 @@ bool VxAudioProcessor::clearLoadedModule()
     tseModuleProcessor.reset();
     setActiveModule(ActiveModule::none);
     updateShellLatency();
+    notifyHostOfStateChange();
     return true;
+}
+
+void VxAudioProcessor::registerActiveModuleStateListeners()
+{
+    clearActiveModuleStateListeners();
+
+    auto observeModule = [this] (auto* processor)
+    {
+        if (processor == nullptr)
+            return;
+
+        observedModuleValueTreeState = &processor->getValueTreeState();
+    };
+
+    switch (getActiveModule())
+    {
+        case ActiveModule::eqe: observeModule(getEqeModuleProcessor()); break;
+        case ActiveModule::spe: observeModule(getSpeModuleProcessor()); break;
+        case ActiveModule::mie: observeModule(getMieModuleProcessor()); break;
+        case ActiveModule::mxe: observeModule(getMxeModuleProcessor()); break;
+        case ActiveModule::tse: observeModule(getTseModuleProcessor()); break;
+        case ActiveModule::none: break;
+    }
+
+    if (observedModuleValueTreeState == nullptr)
+        return;
+
+    observedModuleParameterIds.reserve(static_cast<size_t>(observedModuleValueTreeState->state.getNumChildren()));
+
+    for (const auto parameterState : observedModuleValueTreeState->state)
+    {
+        const auto parameterId = parameterState.getProperty("id").toString();
+
+        if (parameterId.isEmpty())
+            continue;
+
+        observedModuleValueTreeState->addParameterListener(parameterId, this);
+        observedModuleParameterIds.push_back(parameterId);
+    }
+
+    observedModuleState = observedModuleValueTreeState->state;
+
+    if (observedModuleState.isValid())
+        observedModuleState.addListener(this);
+}
+
+void VxAudioProcessor::clearActiveModuleStateListeners()
+{
+    if (observedModuleValueTreeState != nullptr)
+    {
+        for (const auto& parameterId : observedModuleParameterIds)
+            observedModuleValueTreeState->removeParameterListener(parameterId, this);
+    }
+
+    observedModuleValueTreeState = nullptr;
+    observedModuleParameterIds.clear();
+
+    if (observedModuleState.isValid())
+        observedModuleState.removeListener(this);
+
+    observedModuleState = {};
+}
+
+void VxAudioProcessor::parameterChanged(const juce::String&, float)
+{
+    notifyHostOfStateChange();
+}
+
+void VxAudioProcessor::valueTreePropertyChanged(juce::ValueTree&, const juce::Identifier&)
+{
+    notifyHostOfStateChange();
 }
 
 bool VxAudioProcessor::isModuleLoaded() const noexcept
@@ -321,6 +397,7 @@ void VxAudioProcessor::restoreLoadedModuleFromStateText(const juce::String& text
     if (publishActiveModule)
         suspendGuard = std::make_unique<ScopedProcessingSuspend>(*this);
 
+    clearActiveModuleStateListeners();
     eqeModuleProcessor.reset();
     speModuleProcessor.reset();
     mieModuleProcessor.reset();
@@ -353,7 +430,10 @@ void VxAudioProcessor::restoreLoadedModuleFromStateText(const juce::String& text
     if (created)
     {
         if (publishActiveModule)
+        {
             setActiveModule(module);
+            registerActiveModuleStateListeners();
+        }
     }
     else
     {

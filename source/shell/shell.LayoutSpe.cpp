@@ -20,7 +20,9 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
         || speDualMonoRightAdaptiveOffsetControl == nullptr
         || speDynamicProcessorHeader == nullptr
         || spePhaseProcessorHeader == nullptr
+        || speAmplitudeProcessorHeader == nullptr
         || spePhaseAddButton == nullptr
+        || speAmplitudeAddButton == nullptr
         || speDualMonoLinkButton == nullptr
         || speDeltaButton == nullptr)
         return;
@@ -129,6 +131,7 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
     const auto activePhaseFilterCount = getActiveSpePhaseFilterCount();
     for (auto filterIndex = 0; filterIndex < activePhaseFilterCount; ++filterIndex)
     {
+        auto* bypassButton = spePhaseBypassButtons[static_cast<size_t>(filterIndex)].get();
         auto* removeButton = spePhaseRemoveButtons[static_cast<size_t>(filterIndex)].get();
         auto* headerButton = spePhaseHeaderButtons[static_cast<size_t>(filterIndex)].get();
         auto* typeControl = spePhaseTypeControls[static_cast<size_t>(filterIndex)].get();
@@ -138,7 +141,8 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
         auto* bandwidthControl = spePhaseBandwidthControls[static_cast<size_t>(filterIndex)].get();
         auto* impactControl = spePhaseImpactControls[static_cast<size_t>(filterIndex)].get();
 
-        if (removeButton == nullptr
+        if (bypassButton == nullptr
+            || removeButton == nullptr
             || headerButton == nullptr
             || typeControl == nullptr
             || placeChoiceControl == nullptr
@@ -152,8 +156,11 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
         headerBounds.removeFromLeft(editorInsetX);
         headerBounds.removeFromRight(editorInsetX);
 
+        auto bypassBounds = headerBounds.removeFromLeft(rowHeight);
+        headerBounds.removeFromLeft(parameterGap);
         auto removeBounds = headerBounds.removeFromLeft(rowHeight);
         headerBounds.removeFromLeft(parameterGap);
+        bypassButton->setBounds(bypassBounds);
         removeButton->setBounds(removeBounds);
         headerButton->setBounds(headerBounds);
 
@@ -161,6 +168,66 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
             mainBounds.removeFromTop(verticalGap);
 
         if (! spePhaseExpanded[static_cast<size_t>(filterIndex)])
+            continue;
+
+        placeControl(mainBounds, *typeControl);
+        placeControl(mainBounds, *placeChoiceControl);
+        placeControl(mainBounds, *slopeControl);
+        placeControl(mainBounds, *frequencyControl);
+        placeControl(mainBounds, *bandwidthControl);
+        placeControl(mainBounds, *impactControl);
+    }
+
+    auto amplitudeHeaderBounds = mainBounds.removeFromTop(rowHeight);
+    amplitudeHeaderBounds.removeFromLeft(editorInsetX);
+    amplitudeHeaderBounds.removeFromRight(editorInsetX);
+    speAmplitudeProcessorHeader->setBounds(amplitudeHeaderBounds);
+
+    if (! mainBounds.isEmpty())
+        mainBounds.removeFromTop(verticalGap);
+
+    placeButton(mainBounds, *speAmplitudeAddButton);
+
+    const auto activeAmplitudeFilterCount = getActiveSpeAmplitudeFilterCount();
+    for (auto filterIndex = 0; filterIndex < activeAmplitudeFilterCount; ++filterIndex)
+    {
+        auto* bypassButton = speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)].get();
+        auto* removeButton = speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)].get();
+        auto* headerButton = speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)].get();
+        auto* typeControl = speAmplitudeTypeControls[static_cast<size_t>(filterIndex)].get();
+        auto* placeChoiceControl = speAmplitudePlaceControls[static_cast<size_t>(filterIndex)].get();
+        auto* slopeControl = speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)].get();
+        auto* frequencyControl = speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)].get();
+        auto* bandwidthControl = speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)].get();
+        auto* impactControl = speAmplitudeImpactControls[static_cast<size_t>(filterIndex)].get();
+
+        if (bypassButton == nullptr
+            || removeButton == nullptr
+            || headerButton == nullptr
+            || typeControl == nullptr
+            || placeChoiceControl == nullptr
+            || slopeControl == nullptr
+            || frequencyControl == nullptr
+            || bandwidthControl == nullptr
+            || impactControl == nullptr)
+            continue;
+
+        auto headerBounds = mainBounds.removeFromTop(rowHeight);
+        headerBounds.removeFromLeft(editorInsetX);
+        headerBounds.removeFromRight(editorInsetX);
+
+        auto bypassBounds = headerBounds.removeFromLeft(rowHeight);
+        headerBounds.removeFromLeft(parameterGap);
+        auto removeBounds = headerBounds.removeFromLeft(rowHeight);
+        headerBounds.removeFromLeft(parameterGap);
+        bypassButton->setBounds(bypassBounds);
+        removeButton->setBounds(removeBounds);
+        headerButton->setBounds(headerBounds);
+
+        if (! mainBounds.isEmpty())
+            mainBounds.removeFromTop(verticalGap);
+
+        if (! speAmplitudeExpanded[static_cast<size_t>(filterIndex)])
             continue;
 
         placeControl(mainBounds, *typeControl);

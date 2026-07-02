@@ -104,8 +104,11 @@ private:
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     void valueTreePropertyChanged(juce::ValueTree& treeWhosePropertyHasChanged,
                                   const juce::Identifier& property) override;
+    void valueTreeRedirected(juce::ValueTree& treeWhichHasBeenChanged) override;
+    void resyncEditorFromProcessorState();
     void registerParameterListeners();
     void unregisterParameterListeners();
+    juce::RangedAudioParameter* findHostAssignableParameter(const juce::String& parameterId) const noexcept;
     void syncHostSlotAssignmentValue(int slotIndex, float normalizedValue);
     void registerObservedModuleParameterListeners(juce::AudioProcessorValueTreeState& moduleValueTreeState);
     void refreshModuleStateListeners();
@@ -117,6 +120,13 @@ private:
     bool shouldShowSpePhaseImpact(int filterIndex) const noexcept;
     void enforceSingleExpandedSpePhaseFilter(int preferredFilterIndex = -1);
     juce::String getSpePhaseFilterHeaderText(int filterIndex) const;
+    int getActiveSpeAmplitudeFilterCount() const noexcept;
+    bool shouldEnableSpeAmplitudeOrder(int filterIndex) const noexcept;
+    bool shouldEnableSpeAmplitudeFrequency(int filterIndex) const noexcept;
+    bool shouldEnableSpeAmplitudeBandwidth(int filterIndex) const noexcept;
+    bool shouldShowSpeAmplitudeImpact(int filterIndex) const noexcept;
+    void enforceSingleExpandedSpeAmplitudeFilter(int preferredFilterIndex = -1);
+    juce::String getSpeAmplitudeFilterHeaderText(int filterIndex) const;
     void detachModuleEditorBindings();
     void rebindActiveModuleEditors();
     void setupShellControls();
@@ -188,8 +198,11 @@ private:
     std::unique_ptr<BoxTextButton> speDualMonoLinkButton;
     std::unique_ptr<ButtonAttachment> speDualMonoLinkAttachment;
     std::unique_ptr<BoxTextButton> spePhaseProcessorHeader;
+    std::unique_ptr<BoxTextButton> speAmplitudeProcessorHeader;
     std::unique_ptr<ParameterControl> speDspHopDivisorControl;
     std::unique_ptr<BoxTextButton> spePhaseAddButton;
+    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> spePhaseBypassButtons;
+    std::array<std::unique_ptr<ButtonAttachment>, spePhaseFilterControlCount> spePhaseBypassAttachments;
     std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> spePhaseRemoveButtons;
     std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> spePhaseHeaderButtons;
     std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> spePhaseTypeControls;
@@ -199,6 +212,18 @@ private:
     std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> spePhaseBandwidthControls;
     std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> spePhaseImpactControls;
     std::array<bool, spePhaseFilterControlCount> spePhaseExpanded {};
+    std::unique_ptr<BoxTextButton> speAmplitudeAddButton;
+    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> speAmplitudeBypassButtons;
+    std::array<std::unique_ptr<ButtonAttachment>, spePhaseFilterControlCount> speAmplitudeBypassAttachments;
+    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> speAmplitudeRemoveButtons;
+    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> speAmplitudeHeaderButtons;
+    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> speAmplitudeTypeControls;
+    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> speAmplitudePlaceControls;
+    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> speAmplitudeSlopeControls;
+    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> speAmplitudeFrequencyControls;
+    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> speAmplitudeBandwidthControls;
+    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> speAmplitudeImpactControls;
+    std::array<bool, spePhaseFilterControlCount> speAmplitudeExpanded {};
     std::unique_ptr<LocalParameterControl> speAnalyserFftSizeControl;
     std::unique_ptr<LocalParameterControl> speAnalyserOverlapControl;
     std::unique_ptr<LocalParameterControl> speAnalyserLeftControl;
@@ -245,6 +270,7 @@ private:
     bool suppressHostSlotAutomationSync = false;
     bool suppressEditorSizeStateSave = true;
     bool suppressHistorySnapshots = false;
+    bool shellStateListenerRegistered = false;
     juce::MemoryBlock committedHistorySnapshot;
     std::vector<juce::MemoryBlock> undoHistory;
     std::vector<juce::MemoryBlock> redoHistory;

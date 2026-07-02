@@ -174,6 +174,13 @@ void BoxTextButton::setLongPressAction(std::function<void()> action, const int d
     longPressPromptText = std::move(promptText);
 }
 
+void BoxTextButton::flashHostAssignmentOutline()
+{
+    hostAssignmentFlashActive = true;
+    repaint();
+    startTimer(500);
+}
+
 void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
 {
     juce::ignoreUnused(shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
@@ -182,7 +189,8 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
         && (manualInteractionEnabled ? manualPointerDown : pressHighlight);
     const auto accentActive = alwaysAccentOutline || getToggleState();
     const auto fill = buttonDown ? uiGrey700 : uiGrey800;
-    const auto outline = accentActive ? accentColour : uiGrey500;
+    const auto outline = hostAssignmentFlashActive ? juce::Colour { 0xFF99CCCC }
+                                                   : (accentActive ? accentColour : uiGrey500);
 
     if (fillVisible)
     {
@@ -413,8 +421,13 @@ void BoxTextButton::mouseUp(const juce::MouseEvent& event)
 
         if (contains(event.getPosition()))
         {
-            if (onClickWithModifiers)
-                onClickWithModifiers(event.mods);
+            if (onClickWithModifiers && event.mods.isCtrlDown())
+            {
+                if (onClickWithModifiers(event.mods))
+                    flashHostAssignmentOutline();
+
+                return;
+            }
 
             triggerClick();
         }
@@ -473,6 +486,13 @@ void BoxTextButton::mouseExit(const juce::MouseEvent&)
 void BoxTextButton::timerCallback()
 {
     stopTimer();
+
+    if (hostAssignmentFlashActive)
+    {
+        hostAssignmentFlashActive = false;
+        repaint();
+        return;
+    }
 
     if (! pointerDown || ! pressHighlight || ! longPressEligible || dragActive || manualInteractionEnabled)
         return;

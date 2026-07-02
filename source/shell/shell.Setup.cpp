@@ -284,6 +284,18 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
                 spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->rebind(speState);
             if (spePhaseImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
                 spePhaseImpactControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (speAmplitudeTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
+                speAmplitudeTypeControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (speAmplitudePlaceControls[static_cast<size_t>(filterIndex)] != nullptr)
+                speAmplitudePlaceControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)] != nullptr)
+                speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr)
+                speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr)
+                speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]->rebind(speState);
+            if (speAmplitudeImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
+                speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]->rebind(speState);
         }
         refreshSpeAnalyserControls(speProcessor);
     };
@@ -298,6 +310,20 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
             speDualMonoLinkAttachment = std::make_unique<ButtonAttachment>(speState,
                                                                            SpeModuleProcessor::paramDualMonoLinkId,
                                                                            *speDualMonoLinkButton);
+        for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        {
+            if (spePhaseBypassButtons[static_cast<size_t>(filterIndex)] != nullptr)
+                spePhaseBypassAttachments[static_cast<size_t>(filterIndex)] = std::make_unique<ButtonAttachment>(
+                    speState,
+                    SpeModuleProcessor::getPhaseFilterBypassParamId(filterIndex),
+                    *spePhaseBypassButtons[static_cast<size_t>(filterIndex)]);
+
+            if (speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)] != nullptr)
+                speAmplitudeBypassAttachments[static_cast<size_t>(filterIndex)] = std::make_unique<ButtonAttachment>(
+                    speState,
+                    SpeModuleProcessor::getAmplitudeFilterBypassParamId(filterIndex),
+                    *speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]);
+        }
     };
 
     auto rebuildSpeAnalyser = [this] (SpeModuleProcessor& speProcessor)
@@ -365,7 +391,14 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (currentMxeEditor == nullptr || currentMxeEditor->getProcessorIdentity() != mxeProcessor)
         {
             shell_setup_support::removeOwnedChild(*this, mxeModuleEditor);
-            mxeModuleEditor = std::make_unique<MultibandModuleComponent>(makeMxeMultibandConfig(*mxeProcessor));
+            auto config = makeMxeMultibandConfig(*mxeProcessor);
+            config.assignHostSlot = [this] (const juce::String& parameterId,
+                                            const juce::String& parameterName,
+                                            const float normalizedValue)
+            {
+                return handleHostSlotAssignRequest(parameterId, parameterName, normalizedValue);
+            };
+            mxeModuleEditor = std::make_unique<MultibandModuleComponent>(std::move(config));
             addAndMakeVisible(*mxeModuleEditor);
         }
 
@@ -390,7 +423,14 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (currentMieEditor == nullptr || currentMieEditor->getProcessorIdentity() != mieProcessor)
         {
             shell_setup_support::removeOwnedChild(*this, mieModuleEditor);
-            mieModuleEditor = std::make_unique<MultibandModuleComponent>(makeMieMultibandConfig(*mieProcessor));
+            auto config = makeMieMultibandConfig(*mieProcessor);
+            config.assignHostSlot = [this] (const juce::String& parameterId,
+                                            const juce::String& parameterName,
+                                            const float normalizedValue)
+            {
+                return handleHostSlotAssignRequest(parameterId, parameterName, normalizedValue);
+            };
+            mieModuleEditor = std::make_unique<MultibandModuleComponent>(std::move(config));
             addAndMakeVisible(*mieModuleEditor);
         }
 
@@ -415,9 +455,14 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (currentTseEditor == nullptr || currentTseEditor->getProcessorIdentity() != tseProcessor)
         {
             shell_setup_support::removeOwnedChild(*this, tseModuleEditor);
-            tseModuleEditor = std::make_unique<MultibandModuleComponent>(makeTseMultibandConfig(*tseProcessor,
-                                                                                                *this,
-                                                                                                tseModuleEditor));
+            auto config = makeTseMultibandConfig(*tseProcessor, *this, tseModuleEditor);
+            config.assignHostSlot = [this] (const juce::String& parameterId,
+                                            const juce::String& parameterName,
+                                            const float normalizedValue)
+            {
+                return handleHostSlotAssignRequest(parameterId, parameterName, normalizedValue);
+            };
+            tseModuleEditor = std::make_unique<MultibandModuleComponent>(std::move(config));
             addAndMakeVisible(*tseModuleEditor);
         }
 

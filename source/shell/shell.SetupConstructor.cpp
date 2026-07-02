@@ -233,6 +233,12 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     };
     addAndMakeVisible(*moduleAddButton);
 
+    eqeModuleLoaded = audioProcessor.isEqeModuleLoaded();
+    speModuleLoaded = audioProcessor.isSpeModuleLoaded();
+    mieModuleLoaded = audioProcessor.isMieModuleLoaded();
+    mxeModuleLoaded = audioProcessor.isMxeModuleLoaded();
+    tseModuleLoaded = audioProcessor.isTseModuleLoaded();
+
     if (auto* speProcessor = audioProcessor.getSpeModuleProcessor())
     {
         auto& speState = speProcessor->getValueTreeState();

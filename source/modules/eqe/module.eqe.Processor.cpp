@@ -207,20 +207,20 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
                 if (! phaseFirFilters[bandArrayIndex].active)
                     return;
 
-                processLrmsWrapped(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
-                {
-                    phaseFirFilters[bandArrayIndex].process(targetBufferToProcess, targetChannels);
-                });
+                phaseFirFilters[bandArrayIndex].processWithChannelMask(targetBuffer,
+                                                                       juce::jmin(targetBuffer.getNumChannels(), preparedNumChannels),
+                                                                       placeChoice != 7,
+                                                                       placeChoice != 6);
                 return;
             }
 
             if (! phaseFirFilters[bandArrayIndex].active)
                 return;
 
-            processLrmsWrapped(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
-            {
-                phaseFirFilters[bandArrayIndex].process(targetBufferToProcess, targetChannels);
-            });
+            phaseFirFilters[bandArrayIndex].processWithChannelMask(targetBuffer,
+                                                                   juce::jmin(targetBuffer.getNumChannels(), preparedNumChannels),
+                                                                   placeChoice != 7,
+                                                                   placeChoice != 6);
 
             return;
         }

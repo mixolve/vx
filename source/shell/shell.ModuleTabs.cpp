@@ -65,6 +65,8 @@ void VxAudioProcessorEditor::closeActiveModule()
     tseModuleLoaded = false;
 
     shellGlobalHostExpanded = false;
+    for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
+        clearHostSlot(slotIndex);
 
     filterViewport.setVisible(false);
     filterViewport.setBounds({});

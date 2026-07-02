@@ -11,7 +11,9 @@ class MieAudioProcessor;
 class MxeAudioProcessor;
 class TseModuleProcessor;
 
-class VxAudioProcessor final : public juce::AudioProcessor
+class VxAudioProcessor final : public juce::AudioProcessor,
+                               private juce::AudioProcessorValueTreeState::Listener,
+                               private juce::ValueTree::Listener
 {
 public:
     using FilterType = EqeModuleProcessor::FilterType;
@@ -116,6 +118,7 @@ public:
     const TseModuleProcessor* getTseModuleProcessor() const noexcept;
     juce::Point<int> getLastEditorSize() const noexcept;
     void setLastEditorSize(int width, int height) noexcept;
+    void notifyHostOfStateChange();
 
     float getGlobalClipIndicator() const noexcept
     {
@@ -139,9 +142,17 @@ private:
     int getLoadedModulesLatencySamples() const noexcept;
     void updateShellLatency() noexcept;
     void restoreLoadedModuleFromStateText(const juce::String& text, bool publishActiveModule = true);
+    void registerActiveModuleStateListeners();
+    void clearActiveModuleStateListeners();
+    void parameterChanged(const juce::String& parameterID, float newValue) override;
+    void valueTreePropertyChanged(juce::ValueTree& treeWhosePropertyHasChanged,
+                                  const juce::Identifier& property) override;
 
     juce::AudioProcessorValueTreeState parameters;
     mutable juce::CriticalSection processingLock;
+    juce::AudioProcessorValueTreeState* observedModuleValueTreeState = nullptr;
+    std::vector<juce::String> observedModuleParameterIds;
+    juce::ValueTree observedModuleState;
     std::atomic<float>* globalBypassParam = nullptr;
     std::atomic<float> globalClipIndicator { 0.0f };
     std::unique_ptr<EqeModuleProcessor> eqeModuleProcessor;
@@ -153,6 +164,7 @@ private:
     std::atomic<bool> processingPrepared { false };
     std::atomic<int> lastEditorWidth { 0 };
     std::atomic<int> lastEditorHeight { 0 };
+    std::atomic<bool> suppressHostStateNotifications { false };
     int preparedNumChannels = 2;
     int lastProcessedBlockSize = 0;
     double currentSampleRate = 0.0;

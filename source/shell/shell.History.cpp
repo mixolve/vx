@@ -7,6 +7,37 @@
 #include "../modules/spe/module.spe.SpeProcessor.h"
 #include "../modules/multiband/tse/module.tse.TseProcessor.h"
 
+juce::RangedAudioParameter* VxAudioProcessorEditor::findHostAssignableParameter(const juce::String& parameterId) const noexcept
+{
+    const auto trimmedParameterId = parameterId.trim();
+
+    if (trimmedParameterId.isEmpty())
+        return nullptr;
+
+    if (auto* parameter = valueTreeState.getParameter(trimmedParameterId))
+        return parameter;
+
+    const auto findInModule = [&trimmedParameterId] (auto* processor) -> juce::RangedAudioParameter*
+    {
+        if (processor == nullptr)
+            return nullptr;
+
+        return processor->getValueTreeState().getParameter(trimmedParameterId);
+    };
+
+    switch (audioProcessor.getActiveModule())
+    {
+        case VxAudioProcessor::ActiveModule::eqe: return findInModule(audioProcessor.getEqeModuleProcessor());
+        case VxAudioProcessor::ActiveModule::spe: return findInModule(audioProcessor.getSpeModuleProcessor());
+        case VxAudioProcessor::ActiveModule::mie: return findInModule(audioProcessor.getMieModuleProcessor());
+        case VxAudioProcessor::ActiveModule::mxe: return findInModule(audioProcessor.getMxeModuleProcessor());
+        case VxAudioProcessor::ActiveModule::tse: return findInModule(audioProcessor.getTseModuleProcessor());
+        case VxAudioProcessor::ActiveModule::none: break;
+    }
+
+    return nullptr;
+}
+
 void VxAudioProcessorEditor::syncHostSlotAssignmentValue(const int slotIndex, const float normalizedValue)
 {
     if (! juce::isPositiveAndBelow(slotIndex, static_cast<int>(hostSlotAssignments.size())))
@@ -17,8 +48,7 @@ void VxAudioProcessorEditor::syncHostSlotAssignmentValue(const int slotIndex, co
     if (assignment.parameterId.isEmpty())
         return;
 
-    if (auto* assignedParameter = valueTreeState.getParameter(assignment.parameterId);
-        assignedParameter != nullptr)
+    if (auto* assignedParameter = findHostAssignableParameter(assignment.parameterId))
     {
         assignedParameter->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, normalizedValue));
     }
@@ -49,7 +79,7 @@ void VxAudioProcessorEditor::parameterChanged(const juce::String& parameterID, f
             if (assignment.parameterId != parameterID)
                 continue;
 
-            auto* assignedParameter = valueTreeState.getParameter(parameterID);
+            auto* assignedParameter = findHostAssignableParameter(parameterID);
             auto* slotParameter = valueTreeState.getParameter(VxAudioProcessor::getHostSlotParameterId(slotIndex));
 
             if (assignedParameter == nullptr || slotParameter == nullptr)
@@ -64,8 +94,32 @@ void VxAudioProcessorEditor::parameterChanged(const juce::String& parameterID, f
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::valueTreePropertyChanged(juce::ValueTree&, const juce::Identifier&)
+void VxAudioProcessorEditor::resyncEditorFromProcessorState()
 {
+    restoreEditorStateFromValueTree();
+    refreshModuleStateListeners();
+    refreshModuleTabButton();
+    updateSectionStates();
+    syncFocusedParameterControl();
+    resized();
+    repaint();
+}
+
+void VxAudioProcessorEditor::valueTreePropertyChanged(juce::ValueTree& treeWhosePropertyHasChanged,
+                                                       const juce::Identifier& property)
+{
+    if (treeWhosePropertyHasChanged == valueTreeState.state
+        && property == juce::Identifier(VxAudioProcessor::activeModuleStateKey))
+        resyncEditorFromProcessorState();
+
+    scheduleHistorySnapshot();
+}
+
+void VxAudioProcessorEditor::valueTreeRedirected(juce::ValueTree& treeWhichHasBeenChanged)
+{
+    if (treeWhichHasBeenChanged == valueTreeState.state)
+        resyncEditorFromProcessorState();
+
     scheduleHistorySnapshot();
 }
 
@@ -73,6 +127,12 @@ void VxAudioProcessorEditor::registerParameterListeners()
 {
     for (int slotIndex = 0; slotIndex < VxAudioProcessor::hostAutomationSlotCount; ++slotIndex)
         valueTreeState.addParameterListener(VxAudioProcessor::getHostSlotParameterId(slotIndex), this);
+
+    if (! shellStateListenerRegistered)
+    {
+        valueTreeState.state.addListener(this);
+        shellStateListenerRegistered = true;
+    }
 
     refreshModuleStateListeners();
 }
@@ -101,6 +161,12 @@ void VxAudioProcessorEditor::unregisterParameterListeners()
 {
     for (int slotIndex = 0; slotIndex < VxAudioProcessor::hostAutomationSlotCount; ++slotIndex)
         valueTreeState.removeParameterListener(VxAudioProcessor::getHostSlotParameterId(slotIndex), this);
+
+    if (shellStateListenerRegistered)
+    {
+        valueTreeState.state.removeListener(this);
+        shellStateListenerRegistered = false;
+    }
 
     clearModuleStateListeners();
 }
@@ -187,6 +253,10 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
 
     speDeltaAttachment.reset();
     speDualMonoLinkAttachment.reset();
+    for (auto& attachment : spePhaseBypassAttachments)
+        attachment.reset();
+    for (auto& attachment : speAmplitudeBypassAttachments)
+        attachment.reset();
 
     if (speAttackControl != nullptr) speAttackControl->detach();
     if (speReleaseControl != nullptr) speReleaseControl->detach();
@@ -215,6 +285,18 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
             spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->detach();
         if (spePhaseImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
             spePhaseImpactControls[static_cast<size_t>(filterIndex)]->detach();
+        if (speAmplitudeTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
+            speAmplitudeTypeControls[static_cast<size_t>(filterIndex)]->detach();
+        if (speAmplitudePlaceControls[static_cast<size_t>(filterIndex)] != nullptr)
+            speAmplitudePlaceControls[static_cast<size_t>(filterIndex)]->detach();
+        if (speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)] != nullptr)
+            speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]->detach();
+        if (speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr)
+            speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->detach();
+        if (speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr)
+            speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]->detach();
+        if (speAmplitudeImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
+            speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]->detach();
     }
 
     shell_setup_support::removeOwnedChild(speAnalyserContent, speAnalyserComponent);
@@ -228,6 +310,7 @@ void VxAudioProcessorEditor::scheduleHistorySnapshot()
     if (suppressHistorySnapshots)
         return;
 
+    audioProcessor.notifyHostOfStateChange();
     pendingHistorySnapshot.store(true, std::memory_order_relaxed);
     lastHistoryChangeTimeMs.store(juce::Time::getMillisecondCounter(), std::memory_order_relaxed);
 }

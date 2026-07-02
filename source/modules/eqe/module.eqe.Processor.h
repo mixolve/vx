@@ -154,6 +154,7 @@ private:
         void reset() noexcept;
         void setIdentity() noexcept;
         void process(juce::AudioBuffer<float>& buffer, int numChannels) noexcept;
+        void processWithChannelMask(juce::AudioBuffer<float>& buffer, int numChannels, bool processLeft, bool processRight) noexcept;
 
         bool active = false;
         std::array<float, phaseFirSize> taps {};

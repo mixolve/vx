@@ -44,6 +44,7 @@ SpeModuleProcessor::SpeModuleProcessor(juce::AudioProcessor& owner)
     dspHopDivisorParam = parameters.getRawParameterValue(paramDspHopDivisorId);
     dspSlopeParam = parameters.getRawParameterValue(paramDspSlopeId);
     phaseFilterCountParam = parameters.getRawParameterValue(paramPhaseFilterCountId);
+    amplitudeFilterCountParam = parameters.getRawParameterValue(paramAmplitudeFilterCountId);
 
     for (auto filterIndex = 0; filterIndex < maxPhaseFilterCount; ++filterIndex)
     {
@@ -53,6 +54,14 @@ SpeModuleProcessor::SpeModuleProcessor(juce::AudioProcessor& owner)
         phaseFrequencyParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterFrequencyParamId(filterIndex));
         phaseBandwidthParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterBandwidthParamId(filterIndex));
         phaseImpactParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterImpactParamId(filterIndex));
+        phaseBypassParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterBypassParamId(filterIndex));
+        amplitudeTypeParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getAmplitudeFilterTypeParamId(filterIndex));
+        amplitudePlaceParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getAmplitudeFilterPlaceParamId(filterIndex));
+        amplitudeSlopeParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getAmplitudeFilterSlopeParamId(filterIndex));
+        amplitudeFrequencyParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getAmplitudeFilterFrequencyParamId(filterIndex));
+        amplitudeBandwidthParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getAmplitudeFilterBandwidthParamId(filterIndex));
+        amplitudeImpactParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getAmplitudeFilterImpactParamId(filterIndex));
+        amplitudeBypassParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getAmplitudeFilterBypassParamId(filterIndex));
     }
 
     for (const auto* parameterId : dualMonoLinkedParameterIds)

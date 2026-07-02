@@ -75,6 +75,25 @@ int VxAudioProcessorEditor::getSpeMainContentHeight() const
         }
     }
 
+    heights.push_back(rowHeight);
+    heights.push_back(rowHeight);
+
+    const auto activeAmplitudeFilterCount = getActiveSpeAmplitudeFilterCount();
+    for (auto filterIndex = 0; filterIndex < activeAmplitudeFilterCount; ++filterIndex)
+    {
+        heights.push_back(rowHeight);
+
+        if (speAmplitudeExpanded[static_cast<size_t>(filterIndex)])
+        {
+            heights.push_back(speAmplitudeTypeControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudeTypeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(speAmplitudePlaceControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudePlaceControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(speAmplitudeImpactControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+        }
+    }
+
     heights.push_back(0);
     heights.push_back(rowHeight);
     return sumHeights(heights);
@@ -123,6 +142,49 @@ bool VxAudioProcessorEditor::shouldShowSpePhaseImpact(const int filterIndex) con
     return juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount);
 }
 
+int VxAudioProcessorEditor::getActiveSpeAmplitudeFilterCount() const noexcept
+{
+    if (const auto* speProcessor = audioProcessor.getSpeModuleProcessor())
+        return speProcessor->getActiveAmplitudeFilterCount();
+
+    return 0;
+}
+
+bool VxAudioProcessorEditor::shouldEnableSpeAmplitudeOrder(const int filterIndex) const noexcept
+{
+    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
+        return false;
+
+    const auto* typeControl = speAmplitudeTypeControls[static_cast<size_t>(filterIndex)].get();
+    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
+    return typeIndex != 2 && typeIndex != 4;
+}
+
+bool VxAudioProcessorEditor::shouldEnableSpeAmplitudeFrequency(const int filterIndex) const noexcept
+{
+    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
+        return false;
+
+    const auto* typeControl = speAmplitudeTypeControls[static_cast<size_t>(filterIndex)].get();
+    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
+    return typeIndex != 4;
+}
+
+bool VxAudioProcessorEditor::shouldEnableSpeAmplitudeBandwidth(const int filterIndex) const noexcept
+{
+    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
+        return false;
+
+    const auto* typeControl = speAmplitudeTypeControls[static_cast<size_t>(filterIndex)].get();
+    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
+    return typeIndex == 1;
+}
+
+bool VxAudioProcessorEditor::shouldShowSpeAmplitudeImpact(const int filterIndex) const noexcept
+{
+    return juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount);
+}
+
 void VxAudioProcessorEditor::enforceSingleExpandedSpePhaseFilter(const int preferredFilterIndex)
 {
     const auto activeCount = getActiveSpePhaseFilterCount();
@@ -130,6 +192,15 @@ void VxAudioProcessorEditor::enforceSingleExpandedSpePhaseFilter(const int prefe
 
     for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
         spePhaseExpanded[static_cast<size_t>(filterIndex)] = filterIndex == targetFilterIndex;
+}
+
+void VxAudioProcessorEditor::enforceSingleExpandedSpeAmplitudeFilter(const int preferredFilterIndex)
+{
+    const auto activeCount = getActiveSpeAmplitudeFilterCount();
+    const auto targetFilterIndex = juce::isPositiveAndBelow(preferredFilterIndex, activeCount) ? preferredFilterIndex : -1;
+
+    for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        speAmplitudeExpanded[static_cast<size_t>(filterIndex)] = filterIndex == targetFilterIndex;
 }
 
 juce::String VxAudioProcessorEditor::getSpePhaseFilterHeaderText(const int filterIndex) const
@@ -146,7 +217,30 @@ juce::String VxAudioProcessorEditor::getSpePhaseFilterHeaderText(const int filte
 
     const auto typeIndex = typeControl != nullptr ? juce::jlimit(0, static_cast<int>(typeNames.size()) - 1, typeControl->getSelectedChoiceIndex()) : 1;
     const auto placeIndex = placeControl != nullptr ? juce::jlimit(0, static_cast<int>(placeNames.size()) - 1, placeControl->getSelectedChoiceIndex()) : 0;
-    const auto frequency = frequencyControl != nullptr ? juce::roundToInt(frequencyControl->getValue()) : 632;
+    const auto frequency = typeIndex == 4 ? 0 : (frequencyControl != nullptr ? juce::roundToInt(frequencyControl->getValue()) : 632);
+
+    return juce::String::formatted("%02d-%s-%s-%05d",
+                                   filterIndex + 1,
+                                   typeNames[static_cast<size_t>(typeIndex)],
+                                   placeNames[static_cast<size_t>(placeIndex)],
+                                   juce::jlimit(0, 99999, frequency));
+}
+
+juce::String VxAudioProcessorEditor::getSpeAmplitudeFilterHeaderText(const int filterIndex) const
+{
+    static constexpr std::array<const char*, 5> typeNames { "LSH", "BEL", "FTL", "HSH", "FUL" };
+    static constexpr std::array<const char*, 3> placeNames { "RTL", "LTR", "50" };
+
+    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
+        return {};
+
+    const auto* typeControl = speAmplitudeTypeControls[static_cast<size_t>(filterIndex)].get();
+    const auto* placeControl = speAmplitudePlaceControls[static_cast<size_t>(filterIndex)].get();
+    const auto* frequencyControl = speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)].get();
+
+    const auto typeIndex = typeControl != nullptr ? juce::jlimit(0, static_cast<int>(typeNames.size()) - 1, typeControl->getSelectedChoiceIndex()) : 1;
+    const auto placeIndex = placeControl != nullptr ? juce::jlimit(0, static_cast<int>(placeNames.size()) - 1, placeControl->getSelectedChoiceIndex()) : 0;
+    const auto frequency = typeIndex == 4 ? 0 : (frequencyControl != nullptr ? juce::roundToInt(frequencyControl->getValue()) : 632);
 
     return juce::String::formatted("%02d-%s-%s-%05d",
                                    filterIndex + 1,

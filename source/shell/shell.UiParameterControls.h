@@ -26,6 +26,11 @@ public:
     void setInteractionEnabled(bool shouldEnable);
     void setValueClickAction(std::function<void()> action);
     void setTitleWidthOverride(int width) noexcept;
+    void setTitleText(const juce::String& text);
+    void setValueTextTransform(std::function<juce::String(double)> displayFormatter,
+                               std::function<juce::String(double)> editorFormatter,
+                               std::function<double(const juce::String&)> textParser);
+    void clearValueTextTransform();
     juce::Rectangle<int> getValueBounds() const noexcept;
     void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);
     void resized() override;
@@ -46,6 +51,9 @@ private:
     std::unique_ptr<Attachment> attachment;
     juce::String overrideText;
     std::function<void()> valueClickAction;
+    std::function<juce::String(double)> customDisplayFormatter;
+    std::function<juce::String(double)> customEditorFormatter;
+    std::function<double(const juce::String&)> customTextParser;
     int titleWidthOverride = -1;
     bool interactionEnabled = true;
 };

@@ -6,6 +6,21 @@
 
 namespace
 {
+bool hasRestoredModuleProcessor(VxAudioProcessor& processor, const VxAudioProcessor::ActiveModule module) noexcept
+{
+    switch (module)
+    {
+        case VxAudioProcessor::ActiveModule::eqe: return processor.getEqeModuleProcessor() != nullptr;
+        case VxAudioProcessor::ActiveModule::spe: return processor.getSpeModuleProcessor() != nullptr;
+        case VxAudioProcessor::ActiveModule::mie: return processor.getMieModuleProcessor() != nullptr;
+        case VxAudioProcessor::ActiveModule::mxe: return processor.getMxeModuleProcessor() != nullptr;
+        case VxAudioProcessor::ActiveModule::tse: return processor.getTseModuleProcessor() != nullptr;
+        case VxAudioProcessor::ActiveModule::none: break;
+    }
+
+    return false;
+}
+
 void removeUnknownParameterElements(juce::ValueTree& state, juce::AudioProcessorValueTreeState& parameters)
 {
     for (int childIndex = state.getNumChildren(); --childIndex >= 0;)
@@ -159,6 +174,7 @@ void VxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
     {
         if (stateXml->hasTagName(parameters.state.getType()))
         {
+            const auto previousNotificationSuppression = suppressHostStateNotifications.exchange(true, std::memory_order_acq_rel);
             const ScopedProcessingSuspend suspendGuard(*this);
             const auto wasProcessingPrepared = processingPrepared.exchange(false, std::memory_order_acq_rel);
             const juce::ScopedLock lock(processingLock);
@@ -218,7 +234,8 @@ void VxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
                     processor->setStateFromXmlString(restoredTseStateXml);
             }
 
-            setActiveModule(isModuleLoaded() ? restoredActiveModule : ActiveModule::none);
+            setActiveModule(hasRestoredModuleProcessor(*this, restoredActiveModule) ? restoredActiveModule : ActiveModule::none);
+            registerActiveModuleStateListeners();
 
             updateShellLatency();
             setLastEditorSize(static_cast<int>(parameters.state.getProperty(editorWidthStateKey, 0)),
@@ -226,6 +243,8 @@ void VxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 
             if (wasProcessingPrepared && currentSampleRate > 0.0)
                 processingPrepared.store(true, std::memory_order_release);
+
+            suppressHostStateNotifications.store(previousNotificationSuppression, std::memory_order_release);
         }
     }
 }
@@ -240,4 +259,14 @@ void VxAudioProcessor::setLastEditorSize(const int width, const int height) noex
 {
     lastEditorWidth.store(juce::jmax(0, width), std::memory_order_relaxed);
     lastEditorHeight.store(juce::jmax(0, height), std::memory_order_relaxed);
+}
+
+void VxAudioProcessor::notifyHostOfStateChange()
+{
+    if (suppressHostStateNotifications.load(std::memory_order_relaxed))
+        return;
+
+    updateHostDisplay(juce::AudioProcessorListener::ChangeDetails()
+                          .withNonParameterStateChanged(true)
+                          .withProgramChanged(true));
 }

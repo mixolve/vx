@@ -149,6 +149,17 @@ void EqeModuleProcessor::PhaseFirFilter::process(juce::AudioBuffer<float>& buffe
     if (! active)
         return;
 
+    processWithChannelMask(buffer, numChannels, true, true);
+}
+
+void EqeModuleProcessor::PhaseFirFilter::processWithChannelMask(juce::AudioBuffer<float>& buffer,
+                                                                const int numChannels,
+                                                                const bool processLeft,
+                                                                const bool processRight) noexcept
+{
+    if (! active)
+        return;
+
     const auto channelLimit = juce::jlimit(0, static_cast<int>(maxSupportedChannels), numChannels);
 
     for (int sampleIndex = 0; sampleIndex < buffer.getNumSamples(); ++sampleIndex)
@@ -157,19 +168,33 @@ void EqeModuleProcessor::PhaseFirFilter::process(juce::AudioBuffer<float>& buffe
         {
             auto& channelState = state[static_cast<size_t>(channel)];
             channelState[static_cast<size_t>(writeIndex)] = buffer.getSample(channel, sampleIndex);
+            const auto applyPhase = channelLimit < 2
+                || (channel == 0 ? processLeft : processRight);
 
-            auto output = 0.0f;
-            auto readIndex = writeIndex;
-
-            for (int tapIndex = 0; tapIndex < phaseFirSize; ++tapIndex)
+            if (applyPhase)
             {
-                output += taps[static_cast<size_t>(tapIndex)] * channelState[static_cast<size_t>(readIndex)];
+                auto output = 0.0f;
+                auto readIndex = writeIndex;
 
-                if (--readIndex < 0)
-                    readIndex = phaseFirSize - 1;
+                for (int tapIndex = 0; tapIndex < phaseFirSize; ++tapIndex)
+                {
+                    output += taps[static_cast<size_t>(tapIndex)] * channelState[static_cast<size_t>(readIndex)];
+
+                    if (--readIndex < 0)
+                        readIndex = phaseFirSize - 1;
+                }
+
+                buffer.setSample(channel, sampleIndex, output);
             }
+            else
+            {
+                auto readIndex = writeIndex - phaseFirLatencySamples;
 
-            buffer.setSample(channel, sampleIndex, output);
+                while (readIndex < 0)
+                    readIndex += phaseFirSize;
+
+                buffer.setSample(channel, sampleIndex, channelState[static_cast<size_t>(readIndex)]);
+            }
         }
 
         if (++writeIndex >= phaseFirSize)

@@ -18,6 +18,7 @@ struct VxAudioProcessorEditor::FilterSection
     bool isBandwidthInactiveAtCurrentSlope() const noexcept;
     bool isSlopeInactive() const noexcept;
     bool isGainInactive() const noexcept;
+    void setGainDisplaysDegrees(bool shouldDisplayDegrees);
     void updatePlaceChoicesForType(bool normalizeSelection);
 
     void setStoredValues(FilterType type,
@@ -57,5 +58,6 @@ struct VxAudioProcessorEditor::FilterSection
     FilterType lastFilterType = FilterType::bell;
     bool expanded = false;
     bool suppressStoredValueCapture = false;
+    bool gainDisplaysDegrees = false;
 
 };

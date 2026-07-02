@@ -24,6 +24,16 @@ void VxAudioProcessorEditor::setupShellControls()
     globalBypassAttachment = std::make_unique<ButtonAttachment>(valueTreeState,
                                                                  VxAudioProcessor::paramGlobalBypassId,
                                                                  *globalBypassButton);
+    globalBypassButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+    {
+        if (! modifiers.isCtrlDown())
+            return false;
+
+        if (auto* parameter = valueTreeState.getParameter(VxAudioProcessor::paramGlobalBypassId))
+            return handleHostSlotAssignRequest(VxAudioProcessor::paramGlobalBypassId, "B", parameter->getValue());
+
+        return false;
+    };
     globalBypassButton->onClick = [this]
     {
         clearKeyboardFocus(*this);

@@ -14,7 +14,13 @@ juce::File getEqeAppGroupContainerDirectory()
             return {};
 
         const char* path = containerUrl.path.UTF8String;
-        return path != nullptr ? juce::File(juce::String::fromUTF8(path)) : juce::File();
+
+        if (path == nullptr)
+            return {};
+
+        auto directory = juce::File(juce::String::fromUTF8(path));
+        directory.createDirectory();
+        return directory.isDirectory() ? directory : juce::File();
     }
 #else
     return {};

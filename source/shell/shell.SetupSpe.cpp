@@ -108,6 +108,27 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                              });
         };
 
+        const auto assignSpeButtonHostSlot = [this] (BoxTextButton& button,
+                                                     juce::String parameterId,
+                                                     juce::String parameterName)
+        {
+            auto targetParameterId = std::move(parameterId);
+            auto targetParameterName = std::move(parameterName);
+
+            button.onClickWithModifiers = [this,
+                                           assignedParameterId = std::move(targetParameterId),
+                                           assignedParameterName = std::move(targetParameterName)] (const juce::ModifierKeys& modifiers)
+            {
+                if (! modifiers.isCtrlDown())
+                    return false;
+
+                if (auto* parameter = findHostAssignableParameter(assignedParameterId))
+                    return handleHostSlotAssignRequest(assignedParameterId, assignedParameterName, parameter->getValue());
+
+                return false;
+            };
+        };
+
         speFftProcessorHeader = std::make_unique<BoxTextButton>(uiAccent);
         speFftProcessorHeader->setButtonText("FFT PROCESSOR");
         speFftProcessorHeader->setClickingTogglesState(false);
@@ -231,6 +252,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         speDeltaAttachment = std::make_unique<ButtonAttachment>(speState,
                                                                 SpeModuleProcessor::paramDeltaId,
                                                                 *speDeltaButton);
+        assignSpeButtonHostSlot(*speDeltaButton, SpeModuleProcessor::paramDeltaId, "DELTA");
         speDeltaButton->onClick = [this]
         {
             clearKeyboardFocus(*this);
@@ -280,6 +302,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         speDualMonoLinkAttachment = std::make_unique<ButtonAttachment>(speState,
                                                                        SpeModuleProcessor::paramDualMonoLinkId,
                                                                        *speDualMonoLinkButton);
+        assignSpeButtonHostSlot(*speDualMonoLinkButton, SpeModuleProcessor::paramDualMonoLinkId, "LINK-LR");
         speDualMonoLinkButton->onClick = [this]
         {
             clearKeyboardFocus(*this);
@@ -298,7 +321,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         filterContent.addAndMakeVisible(*spePhaseProcessorHeader);
 
         spePhaseAddButton = std::make_unique<BoxTextButton>(uiGrey500);
-        spePhaseAddButton->setButtonText("AD");
+        spePhaseAddButton->setButtonText("ADD");
         spePhaseAddButton->setTooltip("ADD PHASE FILTER");
         spePhaseAddButton->onClick = [this]
         {
@@ -321,6 +344,24 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
 
         for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
         {
+            spePhaseBypassButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiAccent);
+            spePhaseBypassButtons[static_cast<size_t>(filterIndex)]->setButtonText("B");
+            spePhaseBypassButtons[static_cast<size_t>(filterIndex)]->setTooltip("BYPASS PHASE FILTER");
+            spePhaseBypassButtons[static_cast<size_t>(filterIndex)]->setTextJustification(juce::Justification::centred);
+            spePhaseBypassButtons[static_cast<size_t>(filterIndex)]->setClickingTogglesState(true);
+            spePhaseBypassAttachments[static_cast<size_t>(filterIndex)] = std::make_unique<ButtonAttachment>(
+                speState,
+                SpeModuleProcessor::getPhaseFilterBypassParamId(filterIndex),
+                *spePhaseBypassButtons[static_cast<size_t>(filterIndex)]);
+            assignSpeButtonHostSlot(*spePhaseBypassButtons[static_cast<size_t>(filterIndex)],
+                                    SpeModuleProcessor::getPhaseFilterBypassParamId(filterIndex),
+                                    "B");
+            spePhaseBypassButtons[static_cast<size_t>(filterIndex)]->onClick = [this]
+            {
+                clearKeyboardFocus(*this);
+            };
+            filterContent.addAndMakeVisible(*spePhaseBypassButtons[static_cast<size_t>(filterIndex)]);
+
             spePhaseRemoveButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiGrey500);
             spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]->setButtonText("D");
             spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]->setTooltip("DELETE PHASE FILTER");
@@ -413,6 +454,153 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                 "IMPACT",
                 0);
             filterContent.addAndMakeVisible(*spePhaseImpactControls[static_cast<size_t>(filterIndex)]);
+        }
+
+        speAmplitudeProcessorHeader = std::make_unique<BoxTextButton>(uiAccent);
+        speAmplitudeProcessorHeader->setButtonText("AMPLITUDE PROCESSOR");
+        speAmplitudeProcessorHeader->setClickingTogglesState(false);
+        speAmplitudeProcessorHeader->setBorderVisible(false);
+        speAmplitudeProcessorHeader->setFillVisible(false);
+        speAmplitudeProcessorHeader->setDividerLineVisible(true);
+        speAmplitudeProcessorHeader->setPressFillEnabled(false);
+        speAmplitudeProcessorHeader->setTextJustification(juce::Justification::centredLeft);
+        speAmplitudeProcessorHeader->setInterceptsMouseClicks(false, false);
+        filterContent.addAndMakeVisible(*speAmplitudeProcessorHeader);
+
+        speAmplitudeAddButton = std::make_unique<BoxTextButton>(uiGrey500);
+        speAmplitudeAddButton->setButtonText("ADD");
+        speAmplitudeAddButton->setTooltip("ADD AMPLITUDE FILTER");
+        speAmplitudeAddButton->onClick = [this]
+        {
+            const auto preservedScrollY = filterViewport.getViewPositionY();
+            auto* activeSpeProcessor = audioProcessor.getSpeModuleProcessor();
+
+            if (activeSpeProcessor != nullptr && activeSpeProcessor->addAmplitudeFilter())
+            {
+                enforceSingleExpandedSpeAmplitudeFilter(getActiveSpeAmplitudeFilterCount() - 1);
+                updateSectionStates();
+                resized();
+                const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+                filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                scheduleHistorySnapshot();
+            }
+
+            clearKeyboardFocus(*this);
+        };
+        filterContent.addAndMakeVisible(*speAmplitudeAddButton);
+
+        for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        {
+            speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiAccent);
+            speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]->setButtonText("B");
+            speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]->setTooltip("BYPASS AMPLITUDE FILTER");
+            speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]->setTextJustification(juce::Justification::centred);
+            speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]->setClickingTogglesState(true);
+            speAmplitudeBypassAttachments[static_cast<size_t>(filterIndex)] = std::make_unique<ButtonAttachment>(
+                speState,
+                SpeModuleProcessor::getAmplitudeFilterBypassParamId(filterIndex),
+                *speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]);
+            assignSpeButtonHostSlot(*speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)],
+                                    SpeModuleProcessor::getAmplitudeFilterBypassParamId(filterIndex),
+                                    "B");
+            speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]->onClick = [this]
+            {
+                clearKeyboardFocus(*this);
+            };
+            filterContent.addAndMakeVisible(*speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]);
+
+            speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiGrey500);
+            speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)]->setButtonText("D");
+            speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)]->setTooltip("DELETE AMPLITUDE FILTER");
+            speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)]->onClick = [this, filterIndex]
+            {
+                const auto preservedScrollY = filterViewport.getViewPositionY();
+                auto* activeSpeProcessor = audioProcessor.getSpeModuleProcessor();
+
+                if (activeSpeProcessor != nullptr && activeSpeProcessor->removeAmplitudeFilter(filterIndex))
+                {
+                    enforceSingleExpandedSpeAmplitudeFilter(-1);
+                    updateSectionStates();
+                    resized();
+                    const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+                    filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                    scheduleHistorySnapshot();
+                }
+
+                clearKeyboardFocus(*this);
+            };
+            filterContent.addAndMakeVisible(*speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)]);
+
+            speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiAccent);
+            speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setButtonText({});
+            speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setTextJustification(juce::Justification::centred);
+            speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setClickingTogglesState(true);
+            speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setCancelClickOnLeave(true);
+            speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->onClick = [this, filterIndex]
+            {
+                const auto preservedScrollY = filterViewport.getViewPositionY();
+                enforceSingleExpandedSpeAmplitudeFilter(speAmplitudeExpanded[static_cast<size_t>(filterIndex)] ? -1 : filterIndex);
+                updateSectionStates();
+                resized();
+                const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+                filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                clearKeyboardFocus(*this);
+            };
+            filterContent.addAndMakeVisible(*speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]);
+
+            speAmplitudeTypeControls[static_cast<size_t>(filterIndex)] = std::make_unique<ChoiceControl>(
+                speState,
+                SpeModuleProcessor::getAmplitudeFilterTypeParamId(filterIndex),
+                "TYPE",
+                std::vector<int> { 0, 1, 2, 3, 4 });
+            speAmplitudeTypeControls[static_cast<size_t>(filterIndex)]->onValueChanged = [this]
+            {
+                updateSectionStates();
+            };
+            filterContent.addAndMakeVisible(*speAmplitudeTypeControls[static_cast<size_t>(filterIndex)]);
+
+            speAmplitudePlaceControls[static_cast<size_t>(filterIndex)] = std::make_unique<ChoiceControl>(
+                speState,
+                SpeModuleProcessor::getAmplitudeFilterPlaceParamId(filterIndex),
+                "PLACE",
+                std::vector<int> { 0, 1, 2 });
+            speAmplitudePlaceControls[static_cast<size_t>(filterIndex)]->onValueChanged = [this]
+            {
+                updateSectionStates();
+            };
+            filterContent.addAndMakeVisible(*speAmplitudePlaceControls[static_cast<size_t>(filterIndex)]);
+
+            speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)] = std::make_unique<ChoiceControl>(
+                speState,
+                SpeModuleProcessor::getAmplitudeFilterSlopeParamId(filterIndex),
+                "ORDER",
+                std::vector<int> { 0, 1, 2, 3, 4, 5 });
+            filterContent.addAndMakeVisible(*speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]);
+
+            speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)] = std::make_unique<ParameterControl>(
+                speState,
+                SpeModuleProcessor::getAmplitudeFilterFrequencyParamId(filterIndex),
+                "FREQ",
+                2);
+            speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->onValueChanged = [this]
+            {
+                updateSectionStates();
+            };
+            filterContent.addAndMakeVisible(*speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]);
+
+            speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)] = std::make_unique<ParameterControl>(
+                speState,
+                SpeModuleProcessor::getAmplitudeFilterBandwidthParamId(filterIndex),
+                "BW",
+                2);
+            filterContent.addAndMakeVisible(*speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]);
+
+            speAmplitudeImpactControls[static_cast<size_t>(filterIndex)] = std::make_unique<ParameterControl>(
+                speState,
+                SpeModuleProcessor::getAmplitudeFilterImpactParamId(filterIndex),
+                "IMPACT",
+                0);
+            filterContent.addAndMakeVisible(*speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]);
         }
 
         speAnalyserFftSizeControl = std::make_unique<LocalParameterControl>("FFT-SIZE",

@@ -142,8 +142,10 @@ double phaseAmountRadiansForType(const EqeModuleProcessor::FilterType filterType
         return 0.0;
     }
 
-    return juce::jlimit(-juce::MathConstants<double>::pi,
-                        juce::MathConstants<double>::pi,
+    static constexpr auto phaseWrapGuardRadians = 1.0e-3;
+    const auto phaseLimit = juce::MathConstants<double>::pi - phaseWrapGuardRadians;
+    return juce::jlimit(-phaseLimit,
+                        phaseLimit,
                         (gainDb / 12.0) * (juce::MathConstants<double>::pi * 0.5));
 }
 }
@@ -545,8 +547,7 @@ void EqeModuleProcessor::updatePhaseFirFilter(PhaseFirFilter& target,
     for (int tapIndex = 0; tapIndex < phaseFirSize; ++tapIndex)
     {
         const auto sourceIndex = (tapIndex - phaseFirLatencySamples + phaseFirSize) % phaseFirSize;
-        target.taps[static_cast<size_t>(tapIndex)] = spectrum[static_cast<size_t>(sourceIndex)].real()
-                                                     / static_cast<float>(phaseFirSize);
+        target.taps[static_cast<size_t>(tapIndex)] = spectrum[static_cast<size_t>(sourceIndex)].real();
     }
 
     target.active = true;

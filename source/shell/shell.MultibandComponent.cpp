@@ -113,6 +113,21 @@ public:
         soloButton.setButtonText("SOLO");
         soloButton.setTextJustification(juce::Justification::centred);
         soloButton.setClickingTogglesState(false);
+        soloButton.onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+        {
+            if (! modifiers.isCtrlDown())
+                return false;
+
+            if (owner.config.assignHostSlot == nullptr || owner.config.makeSoloParameterId == nullptr)
+                return false;
+
+            const auto parameterId = owner.config.makeSoloParameterId(bandIndex);
+
+            if (auto* parameter = owner.valueTreeState.getParameter(parameterId))
+                return owner.config.assignHostSlot(parameterId, "SOLO", parameter->getValue());
+
+            return false;
+        };
         soloButton.onClick = [this]
         {
             owner.toggleManualSolo(bandIndex);
@@ -220,6 +235,21 @@ private:
             topGapMultiplier = spec.topGapMultiplier;
             button->setClickingTogglesState(true);
             attachment = std::make_unique<ButtonAttachment>(owner.valueTreeState, parameterIdToToggle, *button);
+            button->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+            {
+                if (! modifiers.isCtrlDown())
+                    return false;
+
+                if (owner.config.assignHostSlot == nullptr)
+                    return false;
+
+                if (auto* parameter = owner.valueTreeState.getParameter(parameterIdToToggle))
+                    return owner.config.assignHostSlot(parameterIdToToggle,
+                                                       button != nullptr ? button->getButtonText() : parameterIdToToggle,
+                                                       parameter->getValue());
+
+                return false;
+            };
             button->onStateChange = [this] { updateLabel(); };
             button->onClick = [this]
             {
@@ -283,6 +313,21 @@ private:
             addAndMakeVisible(*control);
 
             modeButton = makeTimeModeButton();
+            modeButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+            {
+                if (! modifiers.isCtrlDown())
+                    return false;
+
+                if (owner.config.assignHostSlot == nullptr)
+                    return false;
+
+                if (auto* parameter = owner.valueTreeState.getParameter(modeParameterIdToEdit))
+                    return owner.config.assignHostSlot(modeParameterIdToEdit,
+                                                       modeButton != nullptr ? modeButton->getButtonText() : modeParameterIdToEdit,
+                                                       parameter->getValue());
+
+                return false;
+            };
             modeButton->onClick = [this]
             {
                 owner.setParameterPlainValue(modeParameterIdToEdit, isHostSyncMode() ? 0.0f : 1.0f);
@@ -523,6 +568,21 @@ public:
         autoSoloButton = makeTextButton("AUTO-SOLO");
         autoSoloButton->setClickingTogglesState(true);
         autoSoloButton->setToggleState(owner.autoSoloEnabled, juce::dontSendNotification);
+        autoSoloButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+        {
+            if (! modifiers.isCtrlDown())
+                return false;
+
+            if (owner.config.assignHostSlot == nullptr || owner.config.makeFullbandParameterId == nullptr)
+                return false;
+
+            const auto parameterId = owner.config.makeFullbandParameterId("autoSolo");
+
+            if (auto* parameter = owner.valueTreeState.getParameter(parameterId))
+                return owner.config.assignHostSlot(parameterId, "AUTO-SOLO", parameter->getValue());
+
+            return false;
+        };
         autoSoloButton->onClick = [this]
         {
             if (! isAutoSoloAvailable())

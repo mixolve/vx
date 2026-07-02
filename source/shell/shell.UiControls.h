@@ -137,7 +137,7 @@ public:
     void mouseExit(const juce::MouseEvent&) override;
 
     std::function<void()> onPressed;
-    std::function<void(const juce::ModifierKeys&)> onClickWithModifiers;
+    std::function<bool(const juce::ModifierKeys&)> onClickWithModifiers;
     std::function<void(const juce::MouseEvent&)> onDragBegin;
     std::function<void(const juce::MouseEvent&)> onDragMove;
     std::function<void(const juce::MouseEvent&)> onDragFinish;
@@ -161,6 +161,7 @@ private:
     bool borderVisible = true;
     bool hasTextColourOverride = false;
     juce::Colour textColourOverride;
+    bool hostAssignmentFlashActive = false;
     bool leadingDotVisible = false;
     juce::Colour leadingDotColour;
     float leadingDotLevel = 0.0f;
@@ -171,5 +172,6 @@ private:
     juce::String longPressOriginalText;
     juce::String longPressPromptText = "RESET?";
 
+    void flashHostAssignmentOutline();
     void timerCallback() override;
 };

@@ -73,6 +73,25 @@ VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTr
         state,
         EqeModuleProcessor::getFilterBypassParamId(bandIndexIn),
         *bypassButton);
+    bypassButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+    {
+        if (! modifiers.isCtrlDown())
+            return false;
+
+        auto* editor = bypassButton != nullptr
+            ? bypassButton->findParentComponentOfClass<VxAudioProcessorEditor>()
+            : nullptr;
+
+        if (editor == nullptr)
+            return false;
+
+        const auto parameterId = EqeModuleProcessor::getFilterBypassParamId(bandIndex);
+
+        if (auto* parameter = editor->findHostAssignableParameter(parameterId))
+            return editor->handleHostSlotAssignRequest(parameterId, "B", parameter->getValue());
+
+        return false;
+    };
 
     lastFilterType = getFilterType();
     slopeControl->setChoices(getBellSlopeDisplayChoicesForType(lastFilterType));
@@ -188,6 +207,50 @@ bool VxAudioProcessorEditor::FilterSection::isGainInactive() const noexcept
     const auto filterType = getFilterType();
     return filterType == FilterType::lowCut
         || filterType == FilterType::highCut;
+}
+
+void VxAudioProcessorEditor::FilterSection::setGainDisplaysDegrees(const bool shouldDisplayDegrees)
+{
+    if (gainControl == nullptr)
+        return;
+
+    if (gainDisplaysDegrees == shouldDisplayDegrees)
+        return;
+
+    gainDisplaysDegrees = shouldDisplayDegrees;
+
+    if (gainDisplaysDegrees)
+    {
+        static constexpr auto degreesPerDb = 7.5;
+        const auto formatDegrees = [] (const double value)
+        {
+            auto degrees = juce::jlimit(-180.0, 180.0, value * degreesPerDb);
+            if (std::abs(degrees) < 0.005)
+                degrees = 0.0;
+
+            return juce::String::formatted("%.2f", degrees);
+        };
+
+        gainControl->setTitleText("DEG");
+        gainControl->setValueTextTransform(
+            formatDegrees,
+            formatDegrees,
+            [] (const juce::String& text)
+            {
+                const auto degrees = text.retainCharacters("0123456789+-.").getDoubleValue();
+                return juce::jlimit(-180.0, 180.0, degrees) / degreesPerDb;
+            });
+
+        if (gainControl->getValue() > 24.0)
+            gainControl->setValue(24.0, true);
+        else if (gainControl->getValue() < -24.0)
+            gainControl->setValue(-24.0, true);
+    }
+    else
+    {
+        gainControl->setTitleText("GAIN");
+        gainControl->clearValueTextTransform();
+    }
 }
 
 void VxAudioProcessorEditor::FilterSection::updatePlaceChoicesForType(const bool normalizeSelection)
