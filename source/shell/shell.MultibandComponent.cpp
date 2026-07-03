@@ -115,18 +115,13 @@ public:
         soloButton.setClickingTogglesState(false);
         soloButton.onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
         {
-            if (! modifiers.isCtrlDown())
+            if (owner.config.makeSoloParameterId == nullptr)
                 return false;
 
-            if (owner.config.assignHostSlot == nullptr || owner.config.makeSoloParameterId == nullptr)
-                return false;
-
-            const auto parameterId = owner.config.makeSoloParameterId(bandIndex);
-
-            if (auto* parameter = owner.valueTreeState.getParameter(parameterId))
-                return owner.config.assignHostSlot(parameterId, "SOLO", parameter->getValue());
-
-            return false;
+            return owner.assignButtonHostSlot(owner.config.makeSoloParameterId(bandIndex),
+                                              "SOLO",
+                                              &soloButton,
+                                              modifiers);
         };
         soloButton.onClick = [this]
         {
@@ -237,18 +232,10 @@ private:
             attachment = std::make_unique<ButtonAttachment>(owner.valueTreeState, parameterIdToToggle, *button);
             button->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
             {
-                if (! modifiers.isCtrlDown())
-                    return false;
-
-                if (owner.config.assignHostSlot == nullptr)
-                    return false;
-
-                if (auto* parameter = owner.valueTreeState.getParameter(parameterIdToToggle))
-                    return owner.config.assignHostSlot(parameterIdToToggle,
-                                                       button != nullptr ? button->getButtonText() : parameterIdToToggle,
-                                                       parameter->getValue());
-
-                return false;
+                return owner.assignButtonHostSlot(parameterIdToToggle,
+                                                  parameterIdToToggle,
+                                                  button.get(),
+                                                  modifiers);
             };
             button->onStateChange = [this] { updateLabel(); };
             button->onClick = [this]
@@ -315,18 +302,10 @@ private:
             modeButton = makeTimeModeButton();
             modeButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
             {
-                if (! modifiers.isCtrlDown())
-                    return false;
-
-                if (owner.config.assignHostSlot == nullptr)
-                    return false;
-
-                if (auto* parameter = owner.valueTreeState.getParameter(modeParameterIdToEdit))
-                    return owner.config.assignHostSlot(modeParameterIdToEdit,
-                                                       modeButton != nullptr ? modeButton->getButtonText() : modeParameterIdToEdit,
-                                                       parameter->getValue());
-
-                return false;
+                return owner.assignButtonHostSlot(modeParameterIdToEdit,
+                                                  modeParameterIdToEdit,
+                                                  modeButton.get(),
+                                                  modifiers);
             };
             modeButton->onClick = [this]
             {
@@ -570,18 +549,13 @@ public:
         autoSoloButton->setToggleState(owner.autoSoloEnabled, juce::dontSendNotification);
         autoSoloButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
         {
-            if (! modifiers.isCtrlDown())
+            if (owner.config.makeFullbandParameterId == nullptr)
                 return false;
 
-            if (owner.config.assignHostSlot == nullptr || owner.config.makeFullbandParameterId == nullptr)
-                return false;
-
-            const auto parameterId = owner.config.makeFullbandParameterId("autoSolo");
-
-            if (auto* parameter = owner.valueTreeState.getParameter(parameterId))
-                return owner.config.assignHostSlot(parameterId, "AUTO-SOLO", parameter->getValue());
-
-            return false;
+            return owner.assignButtonHostSlot(owner.config.makeFullbandParameterId("autoSolo"),
+                                              "AUTO-SOLO",
+                                              autoSoloButton.get(),
+                                              modifiers);
         };
         autoSoloButton->onClick = [this]
         {
@@ -1163,6 +1137,24 @@ bool MultibandModuleComponent::setParameterNormalisedValue(juce::RangedAudioPara
         config.markParametersDirty();
 
     return true;
+}
+
+bool MultibandModuleComponent::assignButtonHostSlot(const juce::String& parameterId,
+                                                    const juce::String& fallbackName,
+                                                    const BoxTextButton* button,
+                                                    const juce::ModifierKeys& modifiers)
+{
+    if (! modifiers.isCtrlDown() || config.assignHostSlot == nullptr)
+        return false;
+
+    if (auto* parameter = valueTreeState.getParameter(parameterId))
+    {
+        return config.assignHostSlot(parameterId,
+                                     button != nullptr ? button->getButtonText() : fallbackName,
+                                     parameter->getValue());
+    }
+
+    return false;
 }
 
 void MultibandModuleComponent::clearFocus()

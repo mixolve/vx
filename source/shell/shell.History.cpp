@@ -271,7 +271,7 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
     if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->detach();
     if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->detach();
     if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->detach();
-    for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+    for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
     {
         if (spePhaseTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
             spePhaseTypeControls[static_cast<size_t>(filterIndex)]->detach();
@@ -368,13 +368,13 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
 
     struct PreservedUiState
     {
-        bool shellGlobalHost = false;
+        bool hostParameters = false;
         int filterScrollY = 0;
     };
 
     const PreservedUiState preservedUiState
     {
-        shellGlobalHostExpanded,
+        hostParametersExpanded,
         filterViewport.getViewPositionY()
     };
     auto* bypassParameter = valueTreeState.getParameter(VxAudioProcessor::paramGlobalBypassId);
@@ -393,10 +393,10 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
                                                                : juce::String {});
     reloadFilterPresetFromProcessor();
 
-    shellGlobalHostExpanded = preservedUiState.shellGlobalHost;
+    hostParametersExpanded = preservedUiState.hostParameters;
 
     storeEditorStateToValueTree();
-    updateEditorWidthState();
+    syncEditorWidthToBounds();
     updateSectionStates();
     resized();
 

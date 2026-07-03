@@ -1,6 +1,7 @@
 #pragma once
 
 #include "module.mie.DspSupport.h"
+#include "../module.multiband.Processor.h"
 
 #include <JuceHeader.h>
 
@@ -108,4 +109,6 @@ private:
     std::array<double, depPhaseBufferSize> depPhaseRight {};
     std::array<double, depPhaseTaps> depPhaseCoefficients {};
 };
+
+using MultibandProcessor = vx::multiband::Processor<DspCore>;
 } // namespace mie::dsp

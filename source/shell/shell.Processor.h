@@ -21,8 +21,6 @@ public:
     inline static constexpr auto paramGlobalBypassId = "global_bypass";
     inline static constexpr auto paramHostSlotPrefix = "host_slot_";
     inline static constexpr float fixedSlopeDbPerOct = EqeModuleProcessor::fixedSlopeDbPerOct;
-    inline static constexpr auto filterPresetLastSelectedStateKey = "filter_preset_last_selected";
-    inline static constexpr auto filterPresetDefaultSelectedStateKey = "filter_preset_default_selected";
     inline static constexpr auto activeModuleStateKey = "vx.active_module";
     inline static constexpr auto eqeModuleStateKey = "vx.eqe_state";
     inline static constexpr auto speModuleStateKey = "vx.spe_state";
@@ -34,8 +32,8 @@ public:
     inline static constexpr auto mieModuleId = "mie";
     inline static constexpr auto mxeModuleId = "mxe";
     inline static constexpr auto tseModuleId = "tse";
-    inline static constexpr auto editorWidthStateKey = "mxe.editor.width";
-    inline static constexpr auto editorHeightStateKey = "mxe.editor.height";
+    inline static constexpr auto editorWidthStateKey = "vx.editor.width";
+    inline static constexpr auto editorHeightStateKey = "vx.editor.height";
     static constexpr int maxEqeFilterCount = EqeModuleProcessor::maxFilterCount;
     static constexpr int hostAutomationSlotCount = 64;
 

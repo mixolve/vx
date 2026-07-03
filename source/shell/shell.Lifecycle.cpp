@@ -63,7 +63,7 @@ void VxAudioProcessorEditor::timerCallback()
     const auto clipValue = audioProcessor.getGlobalClipIndicator();
     const auto now = juce::Time::getMillisecondCounter();
 
-    if (shellGlobalHeader != nullptr)
+    if (clipButton != nullptr)
     {
         if (clipValue > 0.5f)
             lastClipIndicatorTimeMs = now;
@@ -73,9 +73,9 @@ void VxAudioProcessorEditor::timerCallback()
             && now - lastClipIndicatorTimeMs < clipIndicatorHoldMs;
 
         if (showClipIndicator)
-            shellGlobalHeader->setTextColourOverride(juce::Colour(0xffff9999));
+            clipButton->setTextColourOverride(juce::Colour(0xffff9999));
         else
-            shellGlobalHeader->clearTextColourOverride();
+            clipButton->clearTextColourOverride();
     }
 
     if (auto* mieEditor = dynamic_cast<MultibandModuleComponent*>(mieModuleEditor.get()))
@@ -166,9 +166,9 @@ void VxAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
 
 void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
 {
-    if (shellGlobalHostViewport.getBounds().contains(event.getPosition()))
+    if (hostParametersViewport.getBounds().contains(event.getPosition()))
     {
-        if (scrollViewportWithWheel(shellGlobalHostViewport, shellGlobalHostContent.getHeight(), wheel))
+        if (scrollViewportWithWheel(hostParametersViewport, hostParametersContent.getHeight(), wheel))
             return;
     }
 

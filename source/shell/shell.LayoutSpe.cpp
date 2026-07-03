@@ -23,6 +23,7 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
         || speAmplitudeProcessorHeader == nullptr
         || spePhaseAddButton == nullptr
         || speAmplitudeAddButton == nullptr
+        || speAnalyserSettingsHeader == nullptr
         || speDualMonoLinkButton == nullptr
         || speDeltaButton == nullptr)
         return;
@@ -132,7 +133,6 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
     for (auto filterIndex = 0; filterIndex < activePhaseFilterCount; ++filterIndex)
     {
         auto* bypassButton = spePhaseBypassButtons[static_cast<size_t>(filterIndex)].get();
-        auto* removeButton = spePhaseRemoveButtons[static_cast<size_t>(filterIndex)].get();
         auto* headerButton = spePhaseHeaderButtons[static_cast<size_t>(filterIndex)].get();
         auto* typeControl = spePhaseTypeControls[static_cast<size_t>(filterIndex)].get();
         auto* placeChoiceControl = spePhasePlaceControls[static_cast<size_t>(filterIndex)].get();
@@ -142,7 +142,6 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
         auto* impactControl = spePhaseImpactControls[static_cast<size_t>(filterIndex)].get();
 
         if (bypassButton == nullptr
-            || removeButton == nullptr
             || headerButton == nullptr
             || typeControl == nullptr
             || placeChoiceControl == nullptr
@@ -158,10 +157,7 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
 
         auto bypassBounds = headerBounds.removeFromLeft(rowHeight);
         headerBounds.removeFromLeft(parameterGap);
-        auto removeBounds = headerBounds.removeFromLeft(rowHeight);
-        headerBounds.removeFromLeft(parameterGap);
         bypassButton->setBounds(bypassBounds);
-        removeButton->setBounds(removeBounds);
         headerButton->setBounds(headerBounds);
 
         if (! mainBounds.isEmpty())
@@ -192,7 +188,6 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
     for (auto filterIndex = 0; filterIndex < activeAmplitudeFilterCount; ++filterIndex)
     {
         auto* bypassButton = speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)].get();
-        auto* removeButton = speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)].get();
         auto* headerButton = speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)].get();
         auto* typeControl = speAmplitudeTypeControls[static_cast<size_t>(filterIndex)].get();
         auto* placeChoiceControl = speAmplitudePlaceControls[static_cast<size_t>(filterIndex)].get();
@@ -202,7 +197,6 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
         auto* impactControl = speAmplitudeImpactControls[static_cast<size_t>(filterIndex)].get();
 
         if (bypassButton == nullptr
-            || removeButton == nullptr
             || headerButton == nullptr
             || typeControl == nullptr
             || placeChoiceControl == nullptr
@@ -218,10 +212,7 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
 
         auto bypassBounds = headerBounds.removeFromLeft(rowHeight);
         headerBounds.removeFromLeft(parameterGap);
-        auto removeBounds = headerBounds.removeFromLeft(rowHeight);
-        headerBounds.removeFromLeft(parameterGap);
         bypassButton->setBounds(bypassBounds);
-        removeButton->setBounds(removeBounds);
         headerButton->setBounds(headerBounds);
 
         if (! mainBounds.isEmpty())
@@ -253,6 +244,11 @@ void VxAudioProcessorEditor::layoutSpeModuleSections(juce::Rectangle<int>& bound
         if (! area.isEmpty())
             area.removeFromTop(verticalGap);
     };
+
+    speAnalyserSettingsHeader->setBounds(analyserContentBounds.removeFromTop(rowHeight));
+
+    if (! analyserContentBounds.isEmpty())
+        analyserContentBounds.removeFromTop(verticalGap);
 
     placeAnalyserControl(analyserContentBounds, *speAnalyserFftSizeControl);
     placeAnalyserControl(analyserContentBounds, *speAnalyserOverlapControl);

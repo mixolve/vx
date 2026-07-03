@@ -274,7 +274,7 @@ void SpeModuleProcessor::SpectralCompressor::processFrame(int channelsToUse,
                 }
             };
 
-            const auto filterShapeFor = [binFrequency, slopeForChoice] (const CompressorSettings::PhaseFilter& filter) noexcept
+            const auto filterShapeFor = [binFrequency, slopeForChoice] (const CompressorSettings::SpectralFilter& filter) noexcept
             {
                 const auto safeFrequency = juce::jlimit(analyserMinFrequency, analyserMaxFrequency, filter.frequency);
                 const auto safeBandwidth = juce::jlimit(0.05f, 5.0f, filter.bandwidth);

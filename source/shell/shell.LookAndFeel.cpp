@@ -159,9 +159,9 @@ void VxAudioProcessorEditor::updateTooltipBoundsConstraint() noexcept
 {
     if (lookAndFeel == nullptr
         || footerTab == nullptr
-        || shellGlobalHeader == nullptr
+        || clipButton == nullptr
         || footerTab->getBounds().isEmpty()
-        || shellGlobalHeader->getBounds().isEmpty())
+        || clipButton->getBounds().isEmpty())
     {
         return;
     }
@@ -169,7 +169,7 @@ void VxAudioProcessorEditor::updateTooltipBoundsConstraint() noexcept
     auto tooltipBounds = getLocalBounds();
     tooltipBounds.setLeft(footerTab->getX());
     tooltipBounds.setRight(footerTab->getRight());
-    tooltipBounds.setTop(shellGlobalHeader->getY());
+    tooltipBounds.setTop(clipButton->getY());
     tooltipBounds.setBottom(footerTab->getBottom());
 
     lookAndFeel->setTooltipBoundsConstraint(tooltipBounds);

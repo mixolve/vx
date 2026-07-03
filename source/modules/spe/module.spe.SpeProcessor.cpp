@@ -46,7 +46,7 @@ SpeModuleProcessor::SpeModuleProcessor(juce::AudioProcessor& owner)
     phaseFilterCountParam = parameters.getRawParameterValue(paramPhaseFilterCountId);
     amplitudeFilterCountParam = parameters.getRawParameterValue(paramAmplitudeFilterCountId);
 
-    for (auto filterIndex = 0; filterIndex < maxPhaseFilterCount; ++filterIndex)
+    for (auto filterIndex = 0; filterIndex < maxSpeFilterCount; ++filterIndex)
     {
         phaseTypeParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterTypeParamId(filterIndex));
         phasePlaceParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getPhaseFilterPlaceParamId(filterIndex));

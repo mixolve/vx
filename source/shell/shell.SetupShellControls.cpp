@@ -7,14 +7,14 @@ void VxAudioProcessorEditor::setupShellControls()
         audioProcessor.resetGlobalClipIndicator();
         lastClipIndicatorTimeMs = 0;
 
-        if (shellGlobalHeader != nullptr)
-            shellGlobalHeader->clearTextColourOverride();
+        if (clipButton != nullptr)
+            clipButton->clearTextColourOverride();
 
         clearKeyboardFocus(*this);
     };
 
-    if (shellGlobalHeader != nullptr)
-        shellGlobalHeader->setLongPressAction(resetGlobalClip, 500);
+    if (clipButton != nullptr)
+        clipButton->setLongPressAction(resetGlobalClip, 500);
 
     globalBypassButton = std::make_unique<BoxTextButton>(uiAccent);
     globalBypassButton->setButtonText("B");
@@ -96,7 +96,7 @@ void VxAudioProcessorEditor::setupShellControls()
             clearHostSlot(slotIndex);
             clearKeyboardFocus(*this);
         }, 500, "CLEAR?");
-        shellGlobalHostContent.addAndMakeVisible(*slotButton);
+        hostParametersContent.addAndMakeVisible(*slotButton);
         hostSlotButtons[static_cast<size_t>(slotIndex)] = std::move(slotButton);
     }
 
@@ -144,10 +144,10 @@ void VxAudioProcessorEditor::updateTooltipTogglePrompt()
         tooltipWindow->setHoverDelayMs(1500);
     }
 
-    if (shellGlobalHostHeader == nullptr)
+    if (hostButton == nullptr)
         return;
 
-    shellGlobalHostHeader->setLongPressAction([this]
+    hostButton->setLongPressAction([this]
     {
         tooltipsEnabled = ! tooltipsEnabled;
         updateTooltipTogglePrompt();
@@ -250,7 +250,7 @@ bool VxAudioProcessorEditor::handleHostSlotAssignRequest(const juce::String& par
 
     refreshHostSlotButtons();
     storeEditorStateToValueTree();
-    if (shellGlobalHostExpanded)
+    if (hostParametersExpanded)
     {
         updateSectionStates();
         resized();

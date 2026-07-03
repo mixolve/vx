@@ -110,7 +110,7 @@ void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bound
         };
 
         placeFilterControl(*section->typeControl);
-        placeFilterControl(*section->lrmsControl);
+        placeFilterControl(*section->placeControl);
         placeFilterControl(*section->slopeControl);
         placeFilterControl(*section->frequencyControl);
         placeFilterControl(*section->bandwidthControl);

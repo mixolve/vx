@@ -7,178 +7,226 @@
 
 void VxAudioProcessorEditor::updateSectionStates()
 {
-    constexpr auto showShellGlobalStrip = true;
+    constexpr auto globalControlsVisible = true;
 
     const auto activeFilterCount = getActiveFilterCount();
     const auto activeModule = audioProcessor.getActiveModule();
-    auto setSpePhaseControlsVisible = [this] (const bool shouldShow)
+    auto setActiveSpeFilterControlState = [] (auto* control, const bool visible, const bool active)
     {
-        const auto activePhaseFilterCount = shouldShow ? getActiveSpePhaseFilterCount() : 0;
+        if (control == nullptr)
+            return;
 
-        if (spePhaseAddButton != nullptr)
+        control->setVisible(visible);
+        control->setInteractionEnabled(active);
+
+        if (active)
+            control->clearOverrideText();
+        else
+            control->setOverrideText("OFF");
+    };
+
+    auto setSpeFilterControlsVisible = [setActiveSpeFilterControlState] (const bool shouldShow,
+                                                                         auto* addButton,
+                                                                         const int activeSpeFilterCount,
+                                                                         auto& bypassButtons,
+                                                                         auto& headerButtons,
+                                                                         auto& typeControls,
+                                                                         auto& placeControls,
+                                                                         auto& slopeControls,
+                                                                         auto& frequencyControls,
+                                                                         auto& bandwidthControls,
+                                                                         auto& impactControls,
+                                                                         auto& expandedStates,
+                                                                         auto getHeaderText,
+                                                                         auto shouldEnableOrder,
+                                                                         auto shouldEnableFrequency,
+                                                                         auto shouldEnableBandwidth,
+                                                                         auto shouldShowImpact)
+    {
+        if (addButton != nullptr)
         {
-            spePhaseAddButton->setVisible(shouldShow);
-            spePhaseAddButton->setEnabled(activePhaseFilterCount < spePhaseFilterControlCount);
-            spePhaseAddButton->setAlpha(activePhaseFilterCount < spePhaseFilterControlCount ? 1.0f : 0.45f);
+            addButton->setVisible(shouldShow);
+            addButton->setEnabled(activeSpeFilterCount < speFilterControlCount);
+            addButton->setAlpha(activeSpeFilterCount < speFilterControlCount ? 1.0f : 0.45f);
         }
 
-        for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
         {
-            const auto filterVisible = shouldShow && filterIndex < activePhaseFilterCount;
-            const auto filterExpanded = filterVisible && spePhaseExpanded[static_cast<size_t>(filterIndex)];
+            const auto filterVisible = shouldShow && filterIndex < activeSpeFilterCount;
+            const auto filterExpanded = filterVisible && expandedStates[static_cast<size_t>(filterIndex)];
 
-            if (spePhaseBypassButtons[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhaseBypassButtons[static_cast<size_t>(filterIndex)]->setVisible(filterVisible);
-            if (spePhaseRemoveButtons[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]->setVisible(filterVisible);
-            if (spePhaseHeaderButtons[static_cast<size_t>(filterIndex)] != nullptr)
+            if (bypassButtons[static_cast<size_t>(filterIndex)] != nullptr)
+                bypassButtons[static_cast<size_t>(filterIndex)]->setVisible(filterVisible);
+            if (headerButtons[static_cast<size_t>(filterIndex)] != nullptr)
             {
-                spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setVisible(filterVisible);
-                spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setButtonText(filterVisible ? getSpePhaseFilterHeaderText(filterIndex) : juce::String {});
-                spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setToggleState(filterExpanded, juce::dontSendNotification);
+                headerButtons[static_cast<size_t>(filterIndex)]->setVisible(filterVisible);
+                headerButtons[static_cast<size_t>(filterIndex)]->setButtonText(filterVisible ? getHeaderText(filterIndex) : juce::String {});
+                headerButtons[static_cast<size_t>(filterIndex)]->setToggleState(filterExpanded, juce::dontSendNotification);
             }
-            if (spePhaseTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhaseTypeControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-            if (spePhasePlaceControls[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhasePlaceControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-            if (spePhaseSlopeControls[static_cast<size_t>(filterIndex)] != nullptr)
-            {
-                const auto orderActive = shouldEnableSpePhaseOrder(filterIndex);
-                spePhaseSlopeControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-                spePhaseSlopeControls[static_cast<size_t>(filterIndex)]->setInteractionEnabled(orderActive);
 
-                if (orderActive)
-                    spePhaseSlopeControls[static_cast<size_t>(filterIndex)]->clearOverrideText();
-                else
-                    spePhaseSlopeControls[static_cast<size_t>(filterIndex)]->setOverrideText("OFF");
-            }
-            if (spePhaseFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr)
-            {
-                const auto frequencyActive = shouldEnableSpePhaseFrequency(filterIndex);
-                spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-                spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->setInteractionEnabled(frequencyActive);
+            if (typeControls[static_cast<size_t>(filterIndex)] != nullptr)
+                typeControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
+            if (placeControls[static_cast<size_t>(filterIndex)] != nullptr)
+                placeControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
 
-                if (frequencyActive)
-                    spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->clearOverrideText();
-                else
-                    spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->setOverrideText("OFF");
-            }
-            if (spePhaseBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr)
-            {
-                const auto bandwidthActive = shouldEnableSpePhaseBandwidth(filterIndex);
-                spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-                spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->setInteractionEnabled(bandwidthActive);
-
-                if (bandwidthActive)
-                    spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->clearOverrideText();
-                else
-                    spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->setOverrideText("OFF");
-            }
-            if (spePhaseImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
-            {
-                const auto impactActive = shouldShowSpePhaseImpact(filterIndex);
-                spePhaseImpactControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-                spePhaseImpactControls[static_cast<size_t>(filterIndex)]->setInteractionEnabled(impactActive);
-
-                if (impactActive)
-                    spePhaseImpactControls[static_cast<size_t>(filterIndex)]->clearOverrideText();
-                else
-                    spePhaseImpactControls[static_cast<size_t>(filterIndex)]->setOverrideText("OFF");
-            }
+            setActiveSpeFilterControlState(slopeControls[static_cast<size_t>(filterIndex)].get(),
+                                           filterExpanded,
+                                           shouldEnableOrder(filterIndex));
+            setActiveSpeFilterControlState(frequencyControls[static_cast<size_t>(filterIndex)].get(),
+                                           filterExpanded,
+                                           shouldEnableFrequency(filterIndex));
+            setActiveSpeFilterControlState(bandwidthControls[static_cast<size_t>(filterIndex)].get(),
+                                           filterExpanded,
+                                           shouldEnableBandwidth(filterIndex));
+            setActiveSpeFilterControlState(impactControls[static_cast<size_t>(filterIndex)].get(),
+                                           filterExpanded,
+                                           shouldShowImpact(filterIndex));
         }
     };
 
-    auto setSpeAmplitudeControlsVisible = [this] (const bool shouldShow)
+    auto setSpePhaseControlsVisible = [this, setSpeFilterControlsVisible] (const bool shouldShow)
     {
-        const auto activeAmplitudeFilterCount = shouldShow ? getActiveSpeAmplitudeFilterCount() : 0;
+        setSpeFilterControlsVisible(shouldShow,
+                                    spePhaseAddButton.get(),
+                                    shouldShow ? getActiveSpePhaseFilterCount() : 0,
+                                    spePhaseBypassButtons,
+                                    spePhaseHeaderButtons,
+                                    spePhaseTypeControls,
+                                    spePhasePlaceControls,
+                                    spePhaseSlopeControls,
+                                    spePhaseFrequencyControls,
+                                    spePhaseBandwidthControls,
+                                    spePhaseImpactControls,
+                                    spePhaseExpanded,
+                                    [this] (const int filterIndex) { return getSpePhaseFilterHeaderText(filterIndex); },
+                                    [this] (const int filterIndex) { return shouldEnableSpePhaseOrder(filterIndex); },
+                                    [this] (const int filterIndex) { return shouldEnableSpePhaseFrequency(filterIndex); },
+                                    [this] (const int filterIndex) { return shouldEnableSpePhaseBandwidth(filterIndex); },
+                                    [this] (const int filterIndex) { return shouldShowSpePhaseImpact(filterIndex); });
+    };
 
-        if (speAmplitudeAddButton != nullptr)
+    auto setSpeAmplitudeControlsVisible = [this, setSpeFilterControlsVisible] (const bool shouldShow)
+    {
+        setSpeFilterControlsVisible(shouldShow,
+                                    speAmplitudeAddButton.get(),
+                                    shouldShow ? getActiveSpeAmplitudeFilterCount() : 0,
+                                    speAmplitudeBypassButtons,
+                                    speAmplitudeHeaderButtons,
+                                    speAmplitudeTypeControls,
+                                    speAmplitudePlaceControls,
+                                    speAmplitudeSlopeControls,
+                                    speAmplitudeFrequencyControls,
+                                    speAmplitudeBandwidthControls,
+                                    speAmplitudeImpactControls,
+                                    speAmplitudeExpanded,
+                                    [this] (const int filterIndex) { return getSpeAmplitudeFilterHeaderText(filterIndex); },
+                                    [this] (const int filterIndex) { return shouldEnableSpeAmplitudeOrder(filterIndex); },
+                                    [this] (const int filterIndex) { return shouldEnableSpeAmplitudeFrequency(filterIndex); },
+                                    [this] (const int filterIndex) { return shouldEnableSpeAmplitudeBandwidth(filterIndex); },
+                                    [this] (const int filterIndex) { return shouldShowSpeAmplitudeImpact(filterIndex); });
+    };
+
+    auto setComponentVisible = [] (auto* component, const bool shouldShow)
+    {
+        if (component != nullptr)
+            component->setVisible(shouldShow);
+    };
+
+    auto setPresetsVisible = [this, setComponentVisible] (const bool shouldShow)
+    {
+        if (presetsSection == nullptr)
+            return;
+
+        setComponentVisible(&presetsSection->presetCombo, shouldShow);
+        setComponentVisible(presetsSection->adButton.get(), shouldShow);
+        setComponentVisible(presetsSection->saveButton.get(), shouldShow);
+        setComponentVisible(presetsSection->renameButton.get(), shouldShow);
+        setComponentVisible(presetsSection->defaultButton.get(), shouldShow);
+        setComponentVisible(presetsSection->deleteButton.get(), shouldShow);
+    };
+
+    auto setEqeFilterSectionsVisible = [this] (const bool shouldShow)
+    {
+        for (auto& section : filterSections)
         {
-            speAmplitudeAddButton->setVisible(shouldShow);
-            speAmplitudeAddButton->setEnabled(activeAmplitudeFilterCount < spePhaseFilterControlCount);
-            speAmplitudeAddButton->setAlpha(activeAmplitudeFilterCount < spePhaseFilterControlCount ? 1.0f : 0.45f);
-        }
+            if (section == nullptr)
+                continue;
 
-        for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
-        {
-            const auto filterVisible = shouldShow && filterIndex < activeAmplitudeFilterCount;
-            const auto filterExpanded = filterVisible && speAmplitudeExpanded[static_cast<size_t>(filterIndex)];
-
-            if (speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]->setVisible(filterVisible);
-            if (speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)]->setVisible(filterVisible);
-            if (speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)] != nullptr)
-            {
-                speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setVisible(filterVisible);
-                speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setButtonText(filterVisible ? getSpeAmplitudeFilterHeaderText(filterIndex) : juce::String {});
-                speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setToggleState(filterExpanded, juce::dontSendNotification);
-            }
-            if (speAmplitudeTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudeTypeControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-            if (speAmplitudePlaceControls[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudePlaceControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-            if (speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)] != nullptr)
-            {
-                const auto orderActive = shouldEnableSpeAmplitudeOrder(filterIndex);
-                speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-                speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]->setInteractionEnabled(orderActive);
-
-                if (orderActive)
-                    speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]->clearOverrideText();
-                else
-                    speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]->setOverrideText("OFF");
-            }
-            if (speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr)
-            {
-                const auto frequencyActive = shouldEnableSpeAmplitudeFrequency(filterIndex);
-                speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-                speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->setInteractionEnabled(frequencyActive);
-
-                if (frequencyActive)
-                    speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->clearOverrideText();
-                else
-                    speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->setOverrideText("OFF");
-            }
-            if (speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr)
-            {
-                const auto bandwidthActive = shouldEnableSpeAmplitudeBandwidth(filterIndex);
-                speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-                speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]->setInteractionEnabled(bandwidthActive);
-
-                if (bandwidthActive)
-                    speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]->clearOverrideText();
-                else
-                    speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]->setOverrideText("OFF");
-            }
-            if (speAmplitudeImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
-            {
-                const auto impactActive = shouldShowSpeAmplitudeImpact(filterIndex);
-                speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-                speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]->setInteractionEnabled(impactActive);
-
-                if (impactActive)
-                    speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]->clearOverrideText();
-                else
-                    speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]->setOverrideText("OFF");
-            }
+            section->moveUpButton->setVisible(shouldShow);
+            section->moveDownButton->setVisible(shouldShow);
+            section->header->setVisible(shouldShow);
+            section->typeControl->setVisible(shouldShow);
+            section->placeControl->setVisible(shouldShow);
+            section->slopeControl->setVisible(shouldShow);
+            section->frequencyControl->setVisible(shouldShow);
+            section->bandwidthControl->setVisible(shouldShow);
+            section->gainControl->setVisible(shouldShow);
+            section->bypassButton->setVisible(shouldShow);
         }
     };
 
-    if (shellGlobalHeader != nullptr)
+    auto setEqeControlsVisible = [this, setComponentVisible, setPresetsVisible, setEqeFilterSectionsVisible] (const bool shouldShow)
     {
-        shellGlobalHeader->setVisible(showShellGlobalStrip);
-        shellGlobalHeader->setButtonText("C");
-        shellGlobalHeader->setToggleState(false, juce::dontSendNotification);
+        filterViewport.setVisible(shouldShow);
+        setPresetsVisible(shouldShow);
+        setComponentVisible(addFilterButton.get(), shouldShow);
+        setComponentVisible(clearFiltersButton.get(), shouldShow);
+        setComponentVisible(sortPlaceButton.get(), shouldShow);
+        setComponentVisible(sortFreqButton.get(), shouldShow);
+        setComponentVisible(sortDuoButton.get(), shouldShow);
+        setEqeFilterSectionsVisible(shouldShow);
+    };
+
+    auto setSpeControlsVisible = [this, setComponentVisible, setSpePhaseControlsVisible, setSpeAmplitudeControlsVisible] (const bool shouldShow)
+    {
+        speAnalyserViewport.setVisible(shouldShow);
+        setComponentVisible(speAnalyserComponent.get(), shouldShow);
+        setComponentVisible(speAttackControl.get(), shouldShow);
+        setComponentVisible(speReleaseControl.get(), shouldShow);
+        setComponentVisible(speKneeControl.get(), shouldShow);
+        setComponentVisible(speRatioControl.get(), shouldShow);
+        setComponentVisible(speFftProcessorHeader.get(), shouldShow);
+        setComponentVisible(speDspFftSizeControl.get(), shouldShow);
+        setComponentVisible(speDspHopDivisorControl.get(), shouldShow);
+        setComponentVisible(speDspSlopeControl.get(), shouldShow);
+        setComponentVisible(speDeltaButton.get(), shouldShow);
+        setComponentVisible(speDualMonoLeftThresholdControl.get(), shouldShow);
+        setComponentVisible(speDualMonoLeftAdaptiveControl.get(), shouldShow);
+        setComponentVisible(speDualMonoLeftAdaptiveOffsetControl.get(), shouldShow);
+        setComponentVisible(speDualMonoRightThresholdControl.get(), shouldShow);
+        setComponentVisible(speDualMonoRightAdaptiveControl.get(), shouldShow);
+        setComponentVisible(speDualMonoRightAdaptiveOffsetControl.get(), shouldShow);
+        setComponentVisible(speDynamicProcessorHeader.get(), shouldShow);
+        setComponentVisible(speDualMonoLinkButton.get(), shouldShow);
+        setComponentVisible(spePhaseProcessorHeader.get(), shouldShow);
+        setSpePhaseControlsVisible(shouldShow);
+        setComponentVisible(speAmplitudeProcessorHeader.get(), shouldShow);
+        setSpeAmplitudeControlsVisible(shouldShow);
+        setComponentVisible(speAnalyserSettingsHeader.get(), shouldShow);
+        setComponentVisible(speAnalyserFftSizeControl.get(), shouldShow);
+        setComponentVisible(speAnalyserOverlapControl.get(), shouldShow);
+        setComponentVisible(speAnalyserLeftControl.get(), shouldShow);
+        setComponentVisible(speAnalyserRightControl.get(), shouldShow);
+        setComponentVisible(speAnalyserRangeLowControl.get(), shouldShow);
+        setComponentVisible(speAnalyserRangeHighControl.get(), shouldShow);
+        setComponentVisible(speAnalyserSlopeControl.get(), shouldShow);
+        setComponentVisible(speAnalyserTimeControl.get(), shouldShow);
+    };
+
+    if (clipButton != nullptr)
+    {
+        clipButton->setVisible(globalControlsVisible);
+        clipButton->setButtonText("C");
+        clipButton->setToggleState(false, juce::dontSendNotification);
     }
 
     if (footerTab != nullptr)
         footerTab->setVisible(true);
 
-    if (shellGlobalHostHeader != nullptr)
+    if (hostButton != nullptr)
     {
-        shellGlobalHostHeader->setVisible(showShellGlobalStrip);
-        shellGlobalHostHeader->setToggleState(shellGlobalHostExpanded, juce::dontSendNotification);
+        hostButton->setVisible(globalControlsVisible);
+        hostButton->setToggleState(hostParametersExpanded, juce::dontSendNotification);
     }
 
     refreshModuleTabButton();
@@ -194,29 +242,29 @@ void VxAudioProcessorEditor::updateSectionStates()
         moduleTabButton->setToggleState(active, juce::dontSendNotification);
     }
 
-    const auto shellHostVisible = shellGlobalHostExpanded;
+    const auto hostParametersVisible = hostParametersExpanded;
 
-    shellGlobalHostViewport.setVisible(shellHostVisible);
+    hostParametersViewport.setVisible(hostParametersVisible);
 
     if (moduleAddButton != nullptr)
     {
         const auto noModuleLoaded = ! audioProcessor.isModuleLoaded();
-        moduleAddButton->setVisible(noModuleLoaded && ! shellGlobalHostExpanded);
+        moduleAddButton->setVisible(noModuleLoaded && ! hostParametersExpanded);
         moduleAddButton->setEnabled(noModuleLoaded);
     }
 
     if (globalBypassButton != nullptr)
-        globalBypassButton->setVisible(showShellGlobalStrip);
+        globalBypassButton->setVisible(globalControlsVisible);
 
     if (undoButton != nullptr)
-        undoButton->setVisible(showShellGlobalStrip);
+        undoButton->setVisible(globalControlsVisible);
 
     if (redoButton != nullptr)
-        redoButton->setVisible(showShellGlobalStrip);
+        redoButton->setVisible(globalControlsVisible);
 
     for (auto& hostSlotButton : hostSlotButtons)
         if (hostSlotButton != nullptr)
-            hostSlotButton->setVisible(shellHostVisible);
+            hostSlotButton->setVisible(hostParametersVisible);
 
     if (mieModuleEditor != nullptr)
         mieModuleEditor->setVisible(mieModuleLoaded);
@@ -229,288 +277,42 @@ void VxAudioProcessorEditor::updateSectionStates()
 
     if (! eqeModuleLoaded && ! speModuleLoaded && ! mieModuleLoaded && ! mxeModuleLoaded && ! tseModuleLoaded)
     {
-
-
-        speAnalyserViewport.setVisible(false);
-        filterViewport.setVisible(false);
-
-        if (presetsSection != nullptr)
-        {
-            presetsSection->presetCombo.setVisible(false);
-            presetsSection->adButton->setVisible(false);
-            presetsSection->saveButton->setVisible(false);
-            presetsSection->renameButton->setVisible(false);
-            presetsSection->defaultButton->setVisible(false);
-            presetsSection->deleteButton->setVisible(false);
-        }
-
-        if (addFilterButton != nullptr)
-            addFilterButton->setVisible(false);
-
-        if (clearFiltersButton != nullptr)
-            clearFiltersButton->setVisible(false);
-
-        if (sortPlaceButton != nullptr)
-            sortPlaceButton->setVisible(false);
-
-        if (sortFreqButton != nullptr)
-            sortFreqButton->setVisible(false);
-
-        if (sortDuoButton != nullptr)
-            sortDuoButton->setVisible(false);
-
-
-
-
-
-
-
-
-
-
-        for (auto& section : filterSections)
-        {
-            if (section == nullptr)
-                continue;
-
-            section->moveUpButton->setVisible(false);
-            section->moveDownButton->setVisible(false);
-            section->header->setVisible(false);
-            section->typeControl->setVisible(false);
-            section->lrmsControl->setVisible(false);
-            section->slopeControl->setVisible(false);
-            section->frequencyControl->setVisible(false);
-            section->bandwidthControl->setVisible(false);
-            section->gainControl->setVisible(false);
-            section->bypassButton->setVisible(false);
-        }
-
-        if (speAttackControl != nullptr) speAttackControl->setVisible(false);
-        if (speReleaseControl != nullptr) speReleaseControl->setVisible(false);
-        if (speKneeControl != nullptr) speKneeControl->setVisible(false);
-        if (speRatioControl != nullptr) speRatioControl->setVisible(false);
-        if (speFftProcessorHeader != nullptr) speFftProcessorHeader->setVisible(false);
-        if (speDspFftSizeControl != nullptr) speDspFftSizeControl->setVisible(false);
-        if (speDspHopDivisorControl != nullptr) speDspHopDivisorControl->setVisible(false);
-        if (speDspSlopeControl != nullptr) speDspSlopeControl->setVisible(false);
-        if (speDeltaButton != nullptr) speDeltaButton->setVisible(false);
-        if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->setVisible(false);
-        if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->setVisible(false);
-        if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->setVisible(false);
-        if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->setVisible(false);
-        if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->setVisible(false);
-        if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->setVisible(false);
-        if (speDynamicProcessorHeader != nullptr) speDynamicProcessorHeader->setVisible(false);
-        if (speDualMonoLinkButton != nullptr) speDualMonoLinkButton->setVisible(false);
-        if (spePhaseProcessorHeader != nullptr) spePhaseProcessorHeader->setVisible(false);
-        setSpePhaseControlsVisible(false);
-        if (speAmplitudeProcessorHeader != nullptr) speAmplitudeProcessorHeader->setVisible(false);
-        setSpeAmplitudeControlsVisible(false);
-        if (speAnalyserFftSizeControl != nullptr) speAnalyserFftSizeControl->setVisible(false);
-        if (speAnalyserOverlapControl != nullptr) speAnalyserOverlapControl->setVisible(false);
-        if (speAnalyserLeftControl != nullptr) speAnalyserLeftControl->setVisible(false);
-        if (speAnalyserRightControl != nullptr) speAnalyserRightControl->setVisible(false);
-        if (speAnalyserRangeLowControl != nullptr) speAnalyserRangeLowControl->setVisible(false);
-        if (speAnalyserRangeHighControl != nullptr) speAnalyserRangeHighControl->setVisible(false);
-        if (speAnalyserSlopeControl != nullptr) speAnalyserSlopeControl->setVisible(false);
-        if (speAnalyserTimeControl != nullptr) speAnalyserTimeControl->setVisible(false);
-        if (mieModuleEditor != nullptr) mieModuleEditor->setVisible(false);
-        if (mxeModuleEditor != nullptr) mxeModuleEditor->setVisible(false);
-        if (tseModuleEditor != nullptr) tseModuleEditor->setVisible(false);
-        if (speAnalyserComponent != nullptr) speAnalyserComponent->setVisible(false);
+        setEqeControlsVisible(false);
+        setSpeControlsVisible(false);
+        setComponentVisible(mieModuleEditor.get(), false);
+        setComponentVisible(mxeModuleEditor.get(), false);
+        setComponentVisible(tseModuleEditor.get(), false);
 
         return;
     }
 
     if (mieModuleLoaded || mxeModuleLoaded || tseModuleLoaded)
     {
-
-        if (presetsSection != nullptr)
-        {
-            presetsSection->presetCombo.setVisible(false);
-            presetsSection->adButton->setVisible(false);
-            presetsSection->saveButton->setVisible(false);
-            presetsSection->renameButton->setVisible(false);
-            presetsSection->defaultButton->setVisible(false);
-            presetsSection->deleteButton->setVisible(false);
-        }
-
-        speAnalyserViewport.setVisible(false);
-        if (speAnalyserComponent != nullptr)
-            speAnalyserComponent->setVisible(false);
-        filterViewport.setVisible(false);
-        if (addFilterButton != nullptr) addFilterButton->setVisible(false);
-        if (clearFiltersButton != nullptr) clearFiltersButton->setVisible(false);
-        if (sortPlaceButton != nullptr) sortPlaceButton->setVisible(false);
-        if (sortFreqButton != nullptr) sortFreqButton->setVisible(false);
-        if (sortDuoButton != nullptr) sortDuoButton->setVisible(false);
-        for (auto& section : filterSections)
-        {
-            if (section == nullptr)
-                continue;
-
-            section->moveUpButton->setVisible(false);
-            section->moveDownButton->setVisible(false);
-            section->header->setVisible(false);
-            section->typeControl->setVisible(false);
-            section->lrmsControl->setVisible(false);
-            section->slopeControl->setVisible(false);
-            section->frequencyControl->setVisible(false);
-            section->bandwidthControl->setVisible(false);
-            section->gainControl->setVisible(false);
-            section->bypassButton->setVisible(false);
-        }
-
-        if (speAttackControl != nullptr) speAttackControl->setVisible(false);
-        if (speReleaseControl != nullptr) speReleaseControl->setVisible(false);
-        if (speKneeControl != nullptr) speKneeControl->setVisible(false);
-        if (speRatioControl != nullptr) speRatioControl->setVisible(false);
-        if (speFftProcessorHeader != nullptr) speFftProcessorHeader->setVisible(false);
-        if (speDspFftSizeControl != nullptr) speDspFftSizeControl->setVisible(false);
-        if (speDspHopDivisorControl != nullptr) speDspHopDivisorControl->setVisible(false);
-        if (speDspSlopeControl != nullptr) speDspSlopeControl->setVisible(false);
-        if (speDeltaButton != nullptr) speDeltaButton->setVisible(false);
-        if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->setVisible(false);
-        if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->setVisible(false);
-        if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->setVisible(false);
-        if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->setVisible(false);
-        if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->setVisible(false);
-        if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->setVisible(false);
-        if (speDynamicProcessorHeader != nullptr) speDynamicProcessorHeader->setVisible(false);
-        if (speDualMonoLinkButton != nullptr) speDualMonoLinkButton->setVisible(false);
-        if (spePhaseProcessorHeader != nullptr) spePhaseProcessorHeader->setVisible(false);
-        setSpePhaseControlsVisible(false);
-        if (speAmplitudeProcessorHeader != nullptr) speAmplitudeProcessorHeader->setVisible(false);
-        setSpeAmplitudeControlsVisible(false);
-        if (speAnalyserFftSizeControl != nullptr) speAnalyserFftSizeControl->setVisible(false);
-        if (speAnalyserOverlapControl != nullptr) speAnalyserOverlapControl->setVisible(false);
-        if (speAnalyserLeftControl != nullptr) speAnalyserLeftControl->setVisible(false);
-        if (speAnalyserRightControl != nullptr) speAnalyserRightControl->setVisible(false);
-        if (speAnalyserRangeLowControl != nullptr) speAnalyserRangeLowControl->setVisible(false);
-        if (speAnalyserRangeHighControl != nullptr) speAnalyserRangeHighControl->setVisible(false);
-        if (speAnalyserSlopeControl != nullptr) speAnalyserSlopeControl->setVisible(false);
-        if (speAnalyserTimeControl != nullptr) speAnalyserTimeControl->setVisible(false);
-        speAnalyserViewport.setVisible(false);
-        if (mieModuleEditor != nullptr) mieModuleEditor->setVisible(mieModuleLoaded);
-        if (mxeModuleEditor != nullptr) mxeModuleEditor->setVisible(mxeModuleLoaded);
-        if (tseModuleEditor != nullptr) tseModuleEditor->setVisible(tseModuleLoaded);
+        setEqeControlsVisible(false);
+        setSpeControlsVisible(false);
+        setComponentVisible(mieModuleEditor.get(), mieModuleLoaded);
+        setComponentVisible(mxeModuleEditor.get(), mxeModuleLoaded);
+        setComponentVisible(tseModuleEditor.get(), tseModuleLoaded);
 
         return;
     }
 
     if (speModuleLoaded)
     {
-        if (presetsSection != nullptr)
-        {
-            presetsSection->presetCombo.setVisible(false);
-            presetsSection->adButton->setVisible(false);
-            presetsSection->saveButton->setVisible(false);
-            presetsSection->renameButton->setVisible(false);
-            presetsSection->defaultButton->setVisible(false);
-            presetsSection->deleteButton->setVisible(false);
-        }
-
-
-        speAnalyserViewport.setVisible(true);
-
-        if (speAnalyserComponent != nullptr)
-            speAnalyserComponent->setVisible(true);
-
+        setPresetsVisible(false);
+        setSpeControlsVisible(true);
         filterViewport.setVisible(true);
-        if (addFilterButton != nullptr)
-            addFilterButton->setVisible(false);
-        if (clearFiltersButton != nullptr)
-            clearFiltersButton->setVisible(false);
-        if (sortPlaceButton != nullptr)
-            sortPlaceButton->setVisible(false);
-        if (sortFreqButton != nullptr)
-            sortFreqButton->setVisible(false);
-        if (sortDuoButton != nullptr)
-            sortDuoButton->setVisible(false);
-        if (speDualMonoLinkButton != nullptr) speDualMonoLinkButton->setVisible(true);
-        if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->setVisible(true);
-        if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->setVisible(true);
-        if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->setVisible(true);
-        if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->setVisible(true);
-        if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->setVisible(true);
-        if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->setVisible(true);
-        if (speFftProcessorHeader != nullptr) speFftProcessorHeader->setVisible(true);
-        if (speDynamicProcessorHeader != nullptr) speDynamicProcessorHeader->setVisible(true);
-        if (spePhaseProcessorHeader != nullptr) spePhaseProcessorHeader->setVisible(true);
-        setSpePhaseControlsVisible(true);
-        if (speAmplitudeProcessorHeader != nullptr) speAmplitudeProcessorHeader->setVisible(true);
-        setSpeAmplitudeControlsVisible(true);
-        if (speAttackControl != nullptr) speAttackControl->setVisible(true);
-        if (speReleaseControl != nullptr) speReleaseControl->setVisible(true);
-        if (speKneeControl != nullptr) speKneeControl->setVisible(true);
-        if (speRatioControl != nullptr) speRatioControl->setVisible(true);
-        if (speDspFftSizeControl != nullptr) speDspFftSizeControl->setVisible(true);
-        if (speDspHopDivisorControl != nullptr) speDspHopDivisorControl->setVisible(true);
-        if (speDspSlopeControl != nullptr) speDspSlopeControl->setVisible(true);
-        if (speDeltaButton != nullptr) speDeltaButton->setVisible(true);
-        if (speAnalyserFftSizeControl != nullptr) speAnalyserFftSizeControl->setVisible(true);
-        if (speAnalyserOverlapControl != nullptr) speAnalyserOverlapControl->setVisible(true);
-        if (speAnalyserLeftControl != nullptr) speAnalyserLeftControl->setVisible(true);
-        if (speAnalyserRightControl != nullptr) speAnalyserRightControl->setVisible(true);
-        if (speAnalyserRangeLowControl != nullptr) speAnalyserRangeLowControl->setVisible(true);
-        if (speAnalyserRangeHighControl != nullptr) speAnalyserRangeHighControl->setVisible(true);
-        if (speAnalyserSlopeControl != nullptr) speAnalyserSlopeControl->setVisible(true);
-        if (speAnalyserTimeControl != nullptr) speAnalyserTimeControl->setVisible(true);
-
-
-        for (auto& section : filterSections)
-        {
-            if (section == nullptr)
-                continue;
-
-            section->moveUpButton->setVisible(false);
-            section->moveDownButton->setVisible(false);
-            section->header->setVisible(false);
-            section->typeControl->setVisible(false);
-            section->lrmsControl->setVisible(false);
-            section->slopeControl->setVisible(false);
-            section->frequencyControl->setVisible(false);
-            section->bandwidthControl->setVisible(false);
-            section->gainControl->setVisible(false);
-            section->bypassButton->setVisible(false);
-        }
+        setComponentVisible(addFilterButton.get(), false);
+        setComponentVisible(clearFiltersButton.get(), false);
+        setComponentVisible(sortPlaceButton.get(), false);
+        setComponentVisible(sortFreqButton.get(), false);
+        setComponentVisible(sortDuoButton.get(), false);
+        setEqeFilterSectionsVisible(false);
 
         return;
     }
 
-    if (speAttackControl != nullptr) speAttackControl->setVisible(false);
-    if (speReleaseControl != nullptr) speReleaseControl->setVisible(false);
-    if (speKneeControl != nullptr) speKneeControl->setVisible(false);
-    if (speRatioControl != nullptr) speRatioControl->setVisible(false);
-    if (speFftProcessorHeader != nullptr) speFftProcessorHeader->setVisible(false);
-    if (speDspFftSizeControl != nullptr) speDspFftSizeControl->setVisible(false);
-    if (speDspHopDivisorControl != nullptr) speDspHopDivisorControl->setVisible(false);
-    if (speDspSlopeControl != nullptr) speDspSlopeControl->setVisible(false);
-    if (speDeltaButton != nullptr) speDeltaButton->setVisible(false);
-    if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->setVisible(false);
-    if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->setVisible(false);
-    if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->setVisible(false);
-    if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->setVisible(false);
-    if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->setVisible(false);
-    if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->setVisible(false);
-    if (speDynamicProcessorHeader != nullptr) speDynamicProcessorHeader->setVisible(false);
-    if (speDualMonoLinkButton != nullptr) speDualMonoLinkButton->setVisible(false);
-    if (spePhaseProcessorHeader != nullptr) spePhaseProcessorHeader->setVisible(false);
-    setSpePhaseControlsVisible(false);
-    if (speAmplitudeProcessorHeader != nullptr) speAmplitudeProcessorHeader->setVisible(false);
-    setSpeAmplitudeControlsVisible(false);
-    if (speAnalyserFftSizeControl != nullptr) speAnalyserFftSizeControl->setVisible(false);
-    if (speAnalyserOverlapControl != nullptr) speAnalyserOverlapControl->setVisible(false);
-    if (speAnalyserLeftControl != nullptr) speAnalyserLeftControl->setVisible(false);
-    if (speAnalyserRightControl != nullptr) speAnalyserRightControl->setVisible(false);
-    if (speAnalyserRangeLowControl != nullptr) speAnalyserRangeLowControl->setVisible(false);
-    if (speAnalyserRangeHighControl != nullptr) speAnalyserRangeHighControl->setVisible(false);
-    if (speAnalyserSlopeControl != nullptr) speAnalyserSlopeControl->setVisible(false);
-    if (speAnalyserTimeControl != nullptr) speAnalyserTimeControl->setVisible(false);
-    if (speAnalyserComponent != nullptr) speAnalyserComponent->setVisible(false);
-    speAnalyserViewport.setVisible(false);
-
-
+    setSpeControlsVisible(false);
 
     if (clearFiltersButton != nullptr)
     {
@@ -544,25 +346,7 @@ void VxAudioProcessorEditor::updateSectionStates()
     }
 
     filterViewport.setVisible(eqeModuleLoaded);
-
-    if (presetsSection != nullptr)
-    {
-        presetsSection->presetCombo.setVisible(eqeModuleLoaded);
-        presetsSection->adButton->setVisible(eqeModuleLoaded);
-        presetsSection->saveButton->setVisible(eqeModuleLoaded);
-        presetsSection->renameButton->setVisible(eqeModuleLoaded);
-        presetsSection->defaultButton->setVisible(eqeModuleLoaded);
-        presetsSection->deleteButton->setVisible(eqeModuleLoaded);
-    }
-
-
-
-
-
-
-
-
-
+    setPresetsVisible(eqeModuleLoaded);
 
     for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
     {
@@ -600,7 +384,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         section->header->setVisible(isActive);
         section->header->setToggleState(sectionExpanded, juce::dontSendNotification);
         section->typeControl->setVisible(sectionExpanded);
-        section->lrmsControl->setVisible(sectionExpanded);
+        section->placeControl->setVisible(sectionExpanded);
         section->slopeControl->setVisible(sectionExpanded);
         section->slopeControl->setInteractionEnabled(! slopeInactive);
         if (slopeInactive || filterOrderOff)

@@ -9,22 +9,22 @@ VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTr
                                                   EqeModuleProcessor::getFilterTypeParamId(bandIndexIn),
                                                   "TYPE",
                                                   std::vector<int> { 0, 1, 2, 3, 4, 5, 6 })),
-      lrmsControl(std::make_unique<ChoiceControl>(state,
-                                                  EqeModuleProcessor::getFilterLrmsParamId(bandIndexIn),
+      placeControl(std::make_unique<ChoiceControl>(state,
+                                                  EqeModuleProcessor::getFilterPlaceParamId(bandIndexIn),
                                                   "PLACE",
                                                   std::vector<int> { 0, 1, 2, 3, 4, 5, 6, 7 })),
       slopeControl(std::make_unique<ChoiceControl>(state,
                                                    EqeModuleProcessor::getFilterSlopeParamId(bandIndexIn),
-                                                                                                      "ORDER",
-                                                                                                      std::vector<int> { 0, 1, 2, 3, 4, 5 })),
+                                                   "ORDER",
+                                                   std::vector<int> { 0, 1, 2, 3, 4, 5 })),
       frequencyControl(std::make_unique<ParameterControl>(state,
                                                           EqeModuleProcessor::getFilterFrequencyParamId(bandIndexIn),
                                                           "FREQ",
                                                           2)),
       bandwidthControl(std::make_unique<ParameterControl>(state,
-                                                  EqeModuleProcessor::getFilterBandwidthParamId(bandIndexIn),
-                                                  "BW",
-                                                  2)),
+                                                          EqeModuleProcessor::getFilterBandwidthParamId(bandIndexIn),
+                                                          "BW",
+                                                          2)),
       gainControl(std::make_unique<ParameterControl>(state,
                                                      EqeModuleProcessor::getFilterGainParamId(bandIndexIn),
                                                      "GAIN",
@@ -35,8 +35,8 @@ VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTr
     if (auto* parameter = state.getParameter(EqeModuleProcessor::getFilterTypeParamId(bandIndexIn)))
         typeParameter = dynamic_cast<juce::AudioParameterChoice*>(parameter);
 
-    if (auto* parameter = state.getParameter(EqeModuleProcessor::getFilterLrmsParamId(bandIndexIn)))
-        lrmsParameter = dynamic_cast<juce::AudioParameterChoice*>(parameter);
+    if (auto* parameter = state.getParameter(EqeModuleProcessor::getFilterPlaceParamId(bandIndexIn)))
+        placeParameter = dynamic_cast<juce::AudioParameterChoice*>(parameter);
 
     if (auto* parameter = state.getParameter(EqeModuleProcessor::getFilterSlopeParamId(bandIndexIn)))
         slopeParameter = dynamic_cast<juce::AudioParameterChoice*>(parameter);
@@ -104,8 +104,8 @@ void VxAudioProcessorEditor::FilterSection::detach() noexcept
     if (typeControl != nullptr)
         typeControl->detach();
 
-    if (lrmsControl != nullptr)
-        lrmsControl->detach();
+    if (placeControl != nullptr)
+        placeControl->detach();
 
     if (slopeControl != nullptr)
         slopeControl->detach();
@@ -121,7 +121,7 @@ void VxAudioProcessorEditor::FilterSection::detach() noexcept
 
     bypassAttachment.reset();
     typeParameter = nullptr;
-    lrmsParameter = nullptr;
+    placeParameter = nullptr;
     slopeParameter = nullptr;
     frequencyParameter = nullptr;
     bandwidthParameter = nullptr;
@@ -131,14 +131,14 @@ void VxAudioProcessorEditor::FilterSection::detach() noexcept
 void VxAudioProcessorEditor::FilterSection::rebind(juce::AudioProcessorValueTreeState& state)
 {
     typeControl->rebind(state);
-    lrmsControl->rebind(state);
+    placeControl->rebind(state);
     slopeControl->rebind(state);
     frequencyControl->rebind(state);
     bandwidthControl->rebind(state);
     gainControl->rebind(state);
 
     typeParameter = dynamic_cast<juce::AudioParameterChoice*>(state.getParameter(EqeModuleProcessor::getFilterTypeParamId(bandIndex)));
-    lrmsParameter = dynamic_cast<juce::AudioParameterChoice*>(state.getParameter(EqeModuleProcessor::getFilterLrmsParamId(bandIndex)));
+    placeParameter = dynamic_cast<juce::AudioParameterChoice*>(state.getParameter(EqeModuleProcessor::getFilterPlaceParamId(bandIndex)));
     slopeParameter = dynamic_cast<juce::AudioParameterChoice*>(state.getParameter(EqeModuleProcessor::getFilterSlopeParamId(bandIndex)));
     frequencyParameter = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(EqeModuleProcessor::getFilterFrequencyParamId(bandIndex)));
     bandwidthParameter = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(EqeModuleProcessor::getFilterBandwidthParamId(bandIndex)));
@@ -165,7 +165,7 @@ VxAudioProcessorEditor::FilterSection::FilterType VxAudioProcessorEditor::Filter
 
 int VxAudioProcessorEditor::FilterSection::getPlace() const noexcept
 {
-    return lrmsParameter != nullptr ? lrmsParameter->getIndex()
+    return placeParameter != nullptr ? placeParameter->getIndex()
                                     : 0;
 }
 
@@ -255,36 +255,36 @@ void VxAudioProcessorEditor::FilterSection::setGainDisplaysDegrees(const bool sh
 
 void VxAudioProcessorEditor::FilterSection::updatePlaceChoicesForType(const bool normalizeSelection)
 {
-    if (lrmsControl == nullptr)
+    if (placeControl == nullptr)
         return;
 
     const auto phasePlaceAllowed = ! isCutFilterType(getFilterType());
-    lrmsControl->setChoiceEnabled(5, phasePlaceAllowed);
-    lrmsControl->setChoiceEnabled(6, phasePlaceAllowed);
-    lrmsControl->setChoiceEnabled(7, phasePlaceAllowed);
+    placeControl->setChoiceEnabled(5, phasePlaceAllowed);
+    placeControl->setChoiceEnabled(6, phasePlaceAllowed);
+    placeControl->setChoiceEnabled(7, phasePlaceAllowed);
 
     if (normalizeSelection && ! phasePlaceAllowed && isPhasePlaceChoice(getPlace()))
-        lrmsControl->setSelectedChoiceIndex(0, true);
+        placeControl->setSelectedChoiceIndex(0, true);
 }
 
 void VxAudioProcessorEditor::FilterSection::setStoredValues(const FilterType type,
                                                            const double frequency,
                                                            const double bandwidth,
                                                            const double slope,
-                                                           const int lrms,
+                                                           const int place,
                                                            const bool isCustom) noexcept
 {
     const auto index = static_cast<size_t>(EqeModuleProcessor::choiceIndexFromFilterType(type));
     storedFrequencies[index] = frequency;
     storedBandwidths[index] = bandwidth;
     storedSlopes[index] = slope;
-    storedLrms[index] = isCutFilterType(type) && isPhasePlaceChoice(lrms) ? 0 : lrms;
+    storedPlace[index] = isCutFilterType(type) && isPhasePlaceChoice(place) ? 0 : place;
     storedValuesCustom[index] = isCustom;
 }
 
-int VxAudioProcessorEditor::FilterSection::getStoredLrms(const FilterType type) const noexcept
+int VxAudioProcessorEditor::FilterSection::getStoredPlace(const FilterType type) const noexcept
 {
-    return storedLrms[static_cast<size_t>(EqeModuleProcessor::choiceIndexFromFilterType(type))];
+    return storedPlace[static_cast<size_t>(EqeModuleProcessor::choiceIndexFromFilterType(type))];
 }
 
 void VxAudioProcessorEditor::FilterSection::captureCurrentValuesForType(const FilterType type,
@@ -300,7 +300,7 @@ void VxAudioProcessorEditor::FilterSection::captureCurrentValuesForType(const Fi
                     frequencyParameter->get(),
                     bandwidthParameter->get(),
                     EqeModuleProcessor::getBellSlopeValueForChoiceIndex(slopeParameter->getIndex()),
-                    lrmsParameter != nullptr ? lrmsParameter->getIndex() : getStoredLrms(type),
+                    placeParameter != nullptr ? placeParameter->getIndex() : getStoredPlace(type),
                     markCustom);
 }
 
@@ -315,7 +315,7 @@ void VxAudioProcessorEditor::FilterSection::copyStoredValuesFrom(const FilterSec
     storedFrequencies = other.storedFrequencies;
     storedBandwidths = other.storedBandwidths;
     storedSlopes = other.storedSlopes;
-    storedLrms = other.storedLrms;
+    storedPlace = other.storedPlace;
     storedValuesCustom = other.storedValuesCustom;
     lastFilterType = other.lastFilterType;
     expanded = other.expanded;

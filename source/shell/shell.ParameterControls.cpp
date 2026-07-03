@@ -44,6 +44,25 @@ bool canUseFocusedPotentiometer(juce::RangedAudioParameter* parameter, const std
         && valueClickAction == nullptr
         && dynamic_cast<juce::AudioParameterChoice*>(parameter) == nullptr;
 }
+
+bool assignParameterTitleToHostSlot(juce::Component& source,
+                                    BoxTextButton* titleButton,
+                                    const juce::String& parameterId,
+                                    juce::RangedAudioParameter* parameter,
+                                    const juce::ModifierKeys& modifiers)
+{
+    if (! modifiers.isCtrlDown() || parameter == nullptr)
+        return false;
+
+    if (auto* owner = source.findParentComponentOfClass<VxAudioProcessorEditor>())
+    {
+        return owner->handleHostSlotAssignRequest(parameterId,
+                                                  titleButton != nullptr ? titleButton->getButtonText() : parameterId,
+                                                  parameter->getValue());
+    }
+
+    return false;
+}
 }
 
 juce::Slider* shell_parameter_focus::getFocusedValueSlider() noexcept
@@ -99,21 +118,7 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     titleButton->setTextJustification(juce::Justification::centred);
     titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
     {
-        if (! modifiers.isCtrlDown())
-            return false;
-
-        if (parameter == nullptr)
-            return false;
-
-        if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
-        {
-            auto* rangedParameter = static_cast<juce::RangedAudioParameter*>(parameter);
-            return owner->handleHostSlotAssignRequest(parameterId,
-                                                      titleButton != nullptr ? titleButton->getButtonText() : parameterId,
-                                                      rangedParameter != nullptr ? rangedParameter->getValue() : 0.0f);
-        }
-
-        return false;
+        return assignParameterTitleToHostSlot(*this, titleButton.get(), parameterId, parameter, modifiers);
     };
     titleButton->onClick = [this]
     {
@@ -432,11 +437,6 @@ juce::String ParameterControl::formatEditorValue() const
     if (parameter != nullptr && dynamic_cast<juce::AudioParameterChoice*>(parameter) != nullptr)
         return parameter->getText(parameter->convertTo0to1(static_cast<float>(slider.getValue())), 64).trim();
 
-    if (parameter != nullptr)
-    {
-        const auto parameterText = parameter->getText(parameter->convertTo0to1(static_cast<float>(slider.getValue())), 64).trim();
-    }
-
     return formatFixedDecimalValue(slider.getValue(), editorDecimals);
 }
 
@@ -458,21 +458,7 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
     titleButton->setPressFillEnabled(false);
     titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
     {
-        if (! modifiers.isCtrlDown())
-            return false;
-
-        if (parameter == nullptr)
-            return false;
-
-        if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
-        {
-            auto* rangedParameter = static_cast<juce::RangedAudioParameter*>(parameter);
-            return owner->handleHostSlotAssignRequest(parameterId,
-                                                      titleButton != nullptr ? titleButton->getButtonText() : parameterId,
-                                                      rangedParameter != nullptr ? rangedParameter->getValue() : 0.0f);
-        }
-
-        return false;
+        return assignParameterTitleToHostSlot(*this, titleButton.get(), parameterId, parameter, modifiers);
     };
     titleButton->onClick = [this]
     {
@@ -486,8 +472,8 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
         }
         else if (parameter != nullptr)
         {
-            auto* rangedParameter = static_cast<juce::RangedAudioParameter*>(parameter);
-            setSelectedChoiceIndex(juce::roundToInt(rangedParameter->convertFrom0to1(rangedParameter->getDefaultValue())),
+            auto& rangedParameter = static_cast<juce::RangedAudioParameter&>(*parameter);
+            setSelectedChoiceIndex(juce::roundToInt(rangedParameter.convertFrom0to1(rangedParameter.getDefaultValue())),
                                    true);
         }
 

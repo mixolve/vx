@@ -25,9 +25,9 @@ struct VxAudioProcessorEditor::FilterSection
                          double frequency,
                          double bandwidth,
                          double slope,
-                         int lrms,
+                         int place,
                          bool isCustom = false) noexcept;
-    int getStoredLrms(FilterType type) const noexcept;
+    int getStoredPlace(FilterType type) const noexcept;
     void captureCurrentValuesForType(FilterType type, bool markCustom = true) noexcept;
     void captureCurrentValuesForCurrentType(bool markCustom = true) noexcept;
     void copyStoredValuesFrom(const FilterSection& other) noexcept;
@@ -36,7 +36,7 @@ struct VxAudioProcessorEditor::FilterSection
     std::unique_ptr<BoxTextButton> header;
     std::unique_ptr<BoxTextButton> moveDownButton;
     std::unique_ptr<ChoiceControl> typeControl;
-    std::unique_ptr<ChoiceControl> lrmsControl;
+    std::unique_ptr<ChoiceControl> placeControl;
     std::unique_ptr<ChoiceControl> slopeControl;
     std::unique_ptr<ParameterControl> frequencyControl;
     std::unique_ptr<ParameterControl> bandwidthControl;
@@ -44,7 +44,7 @@ struct VxAudioProcessorEditor::FilterSection
     std::unique_ptr<BoxTextButton> bypassButton;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> bypassAttachment;
     juce::AudioParameterChoice* typeParameter = nullptr;
-    juce::AudioParameterChoice* lrmsParameter = nullptr;
+    juce::AudioParameterChoice* placeParameter = nullptr;
     juce::AudioParameterFloat* frequencyParameter = nullptr;
     juce::AudioParameterFloat* bandwidthParameter = nullptr;
     juce::AudioParameterChoice* slopeParameter = nullptr;
@@ -53,7 +53,7 @@ struct VxAudioProcessorEditor::FilterSection
     std::array<double, 7> storedFrequencies { 40.0, 120.0, 632.0, 632.0, 5000.0, 12000.0, 632.0 };
     std::array<double, 7> storedBandwidths { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
     std::array<double, 7> storedSlopes { 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0 };
-    std::array<int, 7> storedLrms { 0, 0, 0, 0, 0, 0, 0 };
+    std::array<int, 7> storedPlace { 0, 0, 0, 0, 0, 0, 0 };
     std::array<bool, 7> storedValuesCustom { false, false, false, false, false, false, false };
     FilterType lastFilterType = FilterType::bell;
     bool expanded = false;

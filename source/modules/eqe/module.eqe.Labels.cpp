@@ -60,9 +60,9 @@ juce::String EqeModuleProcessor::getFilterTypeParamId(const int filterIndex)
     return "filter_" + juce::String(filterIndex + 1) + "_type";
 }
 
-juce::String EqeModuleProcessor::getFilterLrmsParamId(const int filterIndex)
+juce::String EqeModuleProcessor::getFilterPlaceParamId(const int filterIndex)
 {
-    return "filter_" + juce::String(filterIndex + 1) + "_lrms";
+    return "filter_" + juce::String(filterIndex + 1) + "_place";
 }
 
 juce::String EqeModuleProcessor::getFilterFrequencyParamId(const int filterIndex)
@@ -99,7 +99,7 @@ juce::String EqeModuleProcessor::getFilterHeaderText(const FilterType type, cons
 
 namespace
 {
-juce::String filterLrmsDisplayPrefix(const int choiceIndex)
+juce::String filterPlaceDisplayPrefix(const int choiceIndex)
 {
     switch (juce::jlimit(0, 7, choiceIndex))
     {
@@ -124,8 +124,8 @@ juce::String EqeModuleProcessor::getFilterHeaderText(const int filterIndex, cons
 
     const auto bandIndex = static_cast<size_t>(filterIndex);
     const auto filterType = getFilterTypeForBand(bandIndex);
-    const auto lrmsChoice = filterLrmsParams[bandIndex] != nullptr
-        ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterLrmsParams[bandIndex]->load(std::memory_order_relaxed))))
+    const auto placeChoice = filterPlaceParams[bandIndex] != nullptr
+        ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterPlaceParams[bandIndex]->load(std::memory_order_relaxed))))
         : 0;
     const auto frequency = filterFrequencyParams[bandIndex] != nullptr
         ? filterFrequencyParams[bandIndex]->load(std::memory_order_relaxed)
@@ -136,14 +136,14 @@ juce::String EqeModuleProcessor::getFilterHeaderText(const int filterIndex, cons
         return juce::String::formatted("%02d-%s-%s",
                                        displayIndex + 1,
                                        filterTypeDisplayPrefix(filterType).toRawUTF8(),
-                                       filterLrmsDisplayPrefix(lrmsChoice).toRawUTF8())
+                                       filterPlaceDisplayPrefix(placeChoice).toRawUTF8())
             + "-00000";
     }
 
     return juce::String::formatted("%02d-%s-%s-%05d",
                                    displayIndex + 1,
                                    filterTypeDisplayPrefix(filterType).toRawUTF8(),
-                                   filterLrmsDisplayPrefix(lrmsChoice).toRawUTF8(),
+                                   filterPlaceDisplayPrefix(placeChoice).toRawUTF8(),
                                    static_cast<int>(std::lround(frequency)));
 }
 

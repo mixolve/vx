@@ -54,7 +54,7 @@ juce::Rectangle<int> VxAudioProcessorEditor::getFilterSectionBounds(const int fi
     };
 
     includeVisibleComponent(section->typeControl.get());
-    includeVisibleComponent(section->lrmsControl.get());
+    includeVisibleComponent(section->placeControl.get());
     includeVisibleComponent(section->slopeControl.get());
     includeVisibleComponent(section->frequencyControl.get());
     includeVisibleComponent(section->bandwidthControl.get());

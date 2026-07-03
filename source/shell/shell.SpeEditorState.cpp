@@ -3,6 +3,64 @@
 
 #include <array>
 
+namespace
+{
+template <typename TypeControls, typename PlaceControls, typename FrequencyControls>
+juce::String formatSpeFilterHeaderText(const int filterIndex,
+                                       const int filterControlCount,
+                                       const TypeControls& typeControls,
+                                       const PlaceControls& placeControls,
+                                       const FrequencyControls& frequencyControls)
+{
+    static constexpr std::array<const char*, 5> typeNames { "LSH", "BEL", "FTL", "HSH", "FUL" };
+    static constexpr std::array<const char*, 3> placeNames { "RTL", "LTR", "50" };
+
+    if (! juce::isPositiveAndBelow(filterIndex, filterControlCount))
+        return {};
+
+    const auto* typeControl = typeControls[static_cast<size_t>(filterIndex)].get();
+    const auto* placeControl = placeControls[static_cast<size_t>(filterIndex)].get();
+    const auto* frequencyControl = frequencyControls[static_cast<size_t>(filterIndex)].get();
+
+    const auto typeIndex = typeControl != nullptr ? juce::jlimit(0, static_cast<int>(typeNames.size()) - 1, typeControl->getSelectedChoiceIndex()) : 1;
+    const auto placeIndex = placeControl != nullptr ? juce::jlimit(0, static_cast<int>(placeNames.size()) - 1, placeControl->getSelectedChoiceIndex()) : 0;
+    const auto frequency = typeIndex == 4 ? 0 : (frequencyControl != nullptr ? juce::roundToInt(frequencyControl->getValue()) : 632);
+
+    return juce::String::formatted("%02d-%s-%s-%05d",
+                                   filterIndex + 1,
+                                   typeNames[static_cast<size_t>(typeIndex)],
+                                   placeNames[static_cast<size_t>(placeIndex)],
+                                   juce::jlimit(0, 99999, frequency));
+}
+
+template <typename TypeControls>
+int getSpeFilterTypeIndex(const int filterIndex,
+                          const int filterControlCount,
+                          const TypeControls& typeControls) noexcept
+{
+    if (! juce::isPositiveAndBelow(filterIndex, filterControlCount))
+        return -1;
+
+    const auto* typeControl = typeControls[static_cast<size_t>(filterIndex)].get();
+    return typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
+}
+
+bool shouldEnableSpeFilterOrder(const int typeIndex) noexcept
+{
+    return typeIndex >= 0 && typeIndex != 2 && typeIndex != 4;
+}
+
+bool shouldEnableSpeFilterFrequency(const int typeIndex) noexcept
+{
+    return typeIndex >= 0 && typeIndex != 4;
+}
+
+bool shouldEnableSpeFilterBandwidth(const int typeIndex) noexcept
+{
+    return typeIndex == 1;
+}
+} // namespace
+
 void VxAudioProcessorEditor::loadSpeModule()
 {
     if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::spe))
@@ -14,9 +72,9 @@ void VxAudioProcessorEditor::loadSpeModule()
     mxeModuleLoaded = false;
     tseModuleLoaded = false;
 
-    shellGlobalHostExpanded = false;
+    hostParametersExpanded = false;
     rebindActiveModuleEditors();
-    updateEditorWidthState();
+    syncEditorWidthToBounds();
     refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
@@ -59,40 +117,51 @@ int VxAudioProcessorEditor::getSpeMainContentHeight() const
         rowHeight
     };
 
-    const auto activePhaseFilterCount = getActiveSpePhaseFilterCount();
-    for (auto filterIndex = 0; filterIndex < activePhaseFilterCount; ++filterIndex)
+    const auto appendSpeFilterHeights = [&heights] (const int activeFilterCount,
+                                                    const auto& expandedStates,
+                                                    const auto& typeControls,
+                                                    const auto& placeControls,
+                                                    const auto& slopeControls,
+                                                    const auto& frequencyControls,
+                                                    const auto& bandwidthControls,
+                                                    const auto& impactControls)
     {
-        heights.push_back(rowHeight);
-
-        if (spePhaseExpanded[static_cast<size_t>(filterIndex)])
+        for (auto filterIndex = 0; filterIndex < activeFilterCount; ++filterIndex)
         {
-            heights.push_back(spePhaseTypeControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhaseTypeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-            heights.push_back(spePhasePlaceControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhasePlaceControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-            heights.push_back(spePhaseSlopeControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhaseSlopeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-            heights.push_back(spePhaseFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-            heights.push_back(spePhaseBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-            heights.push_back(spePhaseImpactControls[static_cast<size_t>(filterIndex)] != nullptr ? spePhaseImpactControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            heights.push_back(rowHeight);
+
+            if (expandedStates[static_cast<size_t>(filterIndex)])
+            {
+                heights.push_back(typeControls[static_cast<size_t>(filterIndex)] != nullptr ? typeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+                heights.push_back(placeControls[static_cast<size_t>(filterIndex)] != nullptr ? placeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+                heights.push_back(slopeControls[static_cast<size_t>(filterIndex)] != nullptr ? slopeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+                heights.push_back(frequencyControls[static_cast<size_t>(filterIndex)] != nullptr ? frequencyControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+                heights.push_back(bandwidthControls[static_cast<size_t>(filterIndex)] != nullptr ? bandwidthControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+                heights.push_back(impactControls[static_cast<size_t>(filterIndex)] != nullptr ? impactControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
+            }
         }
-    }
+    };
+
+    appendSpeFilterHeights(getActiveSpePhaseFilterCount(),
+                           spePhaseExpanded,
+                           spePhaseTypeControls,
+                           spePhasePlaceControls,
+                           spePhaseSlopeControls,
+                           spePhaseFrequencyControls,
+                           spePhaseBandwidthControls,
+                           spePhaseImpactControls);
 
     heights.push_back(rowHeight);
     heights.push_back(rowHeight);
 
-    const auto activeAmplitudeFilterCount = getActiveSpeAmplitudeFilterCount();
-    for (auto filterIndex = 0; filterIndex < activeAmplitudeFilterCount; ++filterIndex)
-    {
-        heights.push_back(rowHeight);
-
-        if (speAmplitudeExpanded[static_cast<size_t>(filterIndex)])
-        {
-            heights.push_back(speAmplitudeTypeControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudeTypeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-            heights.push_back(speAmplitudePlaceControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudePlaceControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-            heights.push_back(speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-            heights.push_back(speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-            heights.push_back(speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-            heights.push_back(speAmplitudeImpactControls[static_cast<size_t>(filterIndex)] != nullptr ? speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]->getPreferredHeight() : 0);
-        }
-    }
+    appendSpeFilterHeights(getActiveSpeAmplitudeFilterCount(),
+                           speAmplitudeExpanded,
+                           speAmplitudeTypeControls,
+                           speAmplitudePlaceControls,
+                           speAmplitudeSlopeControls,
+                           speAmplitudeFrequencyControls,
+                           speAmplitudeBandwidthControls,
+                           speAmplitudeImpactControls);
 
     heights.push_back(0);
     heights.push_back(rowHeight);
@@ -109,37 +178,22 @@ int VxAudioProcessorEditor::getActiveSpePhaseFilterCount() const noexcept
 
 bool VxAudioProcessorEditor::shouldEnableSpePhaseOrder(const int filterIndex) const noexcept
 {
-    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
-        return false;
-
-    const auto* typeControl = spePhaseTypeControls[static_cast<size_t>(filterIndex)].get();
-    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
-    return typeIndex != 2 && typeIndex != 4;
+    return shouldEnableSpeFilterOrder(getSpeFilterTypeIndex(filterIndex, speFilterControlCount, spePhaseTypeControls));
 }
 
 bool VxAudioProcessorEditor::shouldEnableSpePhaseFrequency(const int filterIndex) const noexcept
 {
-    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
-        return false;
-
-    const auto* typeControl = spePhaseTypeControls[static_cast<size_t>(filterIndex)].get();
-    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
-    return typeIndex != 4;
+    return shouldEnableSpeFilterFrequency(getSpeFilterTypeIndex(filterIndex, speFilterControlCount, spePhaseTypeControls));
 }
 
 bool VxAudioProcessorEditor::shouldEnableSpePhaseBandwidth(const int filterIndex) const noexcept
 {
-    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
-        return false;
-
-    const auto* typeControl = spePhaseTypeControls[static_cast<size_t>(filterIndex)].get();
-    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
-    return typeIndex == 1;
+    return shouldEnableSpeFilterBandwidth(getSpeFilterTypeIndex(filterIndex, speFilterControlCount, spePhaseTypeControls));
 }
 
 bool VxAudioProcessorEditor::shouldShowSpePhaseImpact(const int filterIndex) const noexcept
 {
-    return juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount);
+    return juce::isPositiveAndBelow(filterIndex, speFilterControlCount);
 }
 
 int VxAudioProcessorEditor::getActiveSpeAmplitudeFilterCount() const noexcept
@@ -152,37 +206,22 @@ int VxAudioProcessorEditor::getActiveSpeAmplitudeFilterCount() const noexcept
 
 bool VxAudioProcessorEditor::shouldEnableSpeAmplitudeOrder(const int filterIndex) const noexcept
 {
-    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
-        return false;
-
-    const auto* typeControl = speAmplitudeTypeControls[static_cast<size_t>(filterIndex)].get();
-    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
-    return typeIndex != 2 && typeIndex != 4;
+    return shouldEnableSpeFilterOrder(getSpeFilterTypeIndex(filterIndex, speFilterControlCount, speAmplitudeTypeControls));
 }
 
 bool VxAudioProcessorEditor::shouldEnableSpeAmplitudeFrequency(const int filterIndex) const noexcept
 {
-    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
-        return false;
-
-    const auto* typeControl = speAmplitudeTypeControls[static_cast<size_t>(filterIndex)].get();
-    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
-    return typeIndex != 4;
+    return shouldEnableSpeFilterFrequency(getSpeFilterTypeIndex(filterIndex, speFilterControlCount, speAmplitudeTypeControls));
 }
 
 bool VxAudioProcessorEditor::shouldEnableSpeAmplitudeBandwidth(const int filterIndex) const noexcept
 {
-    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
-        return false;
-
-    const auto* typeControl = speAmplitudeTypeControls[static_cast<size_t>(filterIndex)].get();
-    const auto typeIndex = typeControl != nullptr ? typeControl->getSelectedChoiceIndex() : 1;
-    return typeIndex == 1;
+    return shouldEnableSpeFilterBandwidth(getSpeFilterTypeIndex(filterIndex, speFilterControlCount, speAmplitudeTypeControls));
 }
 
 bool VxAudioProcessorEditor::shouldShowSpeAmplitudeImpact(const int filterIndex) const noexcept
 {
-    return juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount);
+    return juce::isPositiveAndBelow(filterIndex, speFilterControlCount);
 }
 
 void VxAudioProcessorEditor::enforceSingleExpandedSpePhaseFilter(const int preferredFilterIndex)
@@ -190,7 +229,7 @@ void VxAudioProcessorEditor::enforceSingleExpandedSpePhaseFilter(const int prefe
     const auto activeCount = getActiveSpePhaseFilterCount();
     const auto targetFilterIndex = juce::isPositiveAndBelow(preferredFilterIndex, activeCount) ? preferredFilterIndex : -1;
 
-    for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+    for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
         spePhaseExpanded[static_cast<size_t>(filterIndex)] = filterIndex == targetFilterIndex;
 }
 
@@ -199,54 +238,26 @@ void VxAudioProcessorEditor::enforceSingleExpandedSpeAmplitudeFilter(const int p
     const auto activeCount = getActiveSpeAmplitudeFilterCount();
     const auto targetFilterIndex = juce::isPositiveAndBelow(preferredFilterIndex, activeCount) ? preferredFilterIndex : -1;
 
-    for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+    for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
         speAmplitudeExpanded[static_cast<size_t>(filterIndex)] = filterIndex == targetFilterIndex;
 }
 
 juce::String VxAudioProcessorEditor::getSpePhaseFilterHeaderText(const int filterIndex) const
 {
-    static constexpr std::array<const char*, 5> typeNames { "LSH", "BEL", "FTL", "HSH", "FUL" };
-    static constexpr std::array<const char*, 3> placeNames { "RTL", "LTR", "50" };
-
-    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
-        return {};
-
-    const auto* typeControl = spePhaseTypeControls[static_cast<size_t>(filterIndex)].get();
-    const auto* placeControl = spePhasePlaceControls[static_cast<size_t>(filterIndex)].get();
-    const auto* frequencyControl = spePhaseFrequencyControls[static_cast<size_t>(filterIndex)].get();
-
-    const auto typeIndex = typeControl != nullptr ? juce::jlimit(0, static_cast<int>(typeNames.size()) - 1, typeControl->getSelectedChoiceIndex()) : 1;
-    const auto placeIndex = placeControl != nullptr ? juce::jlimit(0, static_cast<int>(placeNames.size()) - 1, placeControl->getSelectedChoiceIndex()) : 0;
-    const auto frequency = typeIndex == 4 ? 0 : (frequencyControl != nullptr ? juce::roundToInt(frequencyControl->getValue()) : 632);
-
-    return juce::String::formatted("%02d-%s-%s-%05d",
-                                   filterIndex + 1,
-                                   typeNames[static_cast<size_t>(typeIndex)],
-                                   placeNames[static_cast<size_t>(placeIndex)],
-                                   juce::jlimit(0, 99999, frequency));
+    return formatSpeFilterHeaderText(filterIndex,
+                                     speFilterControlCount,
+                                     spePhaseTypeControls,
+                                     spePhasePlaceControls,
+                                     spePhaseFrequencyControls);
 }
 
 juce::String VxAudioProcessorEditor::getSpeAmplitudeFilterHeaderText(const int filterIndex) const
 {
-    static constexpr std::array<const char*, 5> typeNames { "LSH", "BEL", "FTL", "HSH", "FUL" };
-    static constexpr std::array<const char*, 3> placeNames { "RTL", "LTR", "50" };
-
-    if (! juce::isPositiveAndBelow(filterIndex, spePhaseFilterControlCount))
-        return {};
-
-    const auto* typeControl = speAmplitudeTypeControls[static_cast<size_t>(filterIndex)].get();
-    const auto* placeControl = speAmplitudePlaceControls[static_cast<size_t>(filterIndex)].get();
-    const auto* frequencyControl = speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)].get();
-
-    const auto typeIndex = typeControl != nullptr ? juce::jlimit(0, static_cast<int>(typeNames.size()) - 1, typeControl->getSelectedChoiceIndex()) : 1;
-    const auto placeIndex = placeControl != nullptr ? juce::jlimit(0, static_cast<int>(placeNames.size()) - 1, placeControl->getSelectedChoiceIndex()) : 0;
-    const auto frequency = typeIndex == 4 ? 0 : (frequencyControl != nullptr ? juce::roundToInt(frequencyControl->getValue()) : 632);
-
-    return juce::String::formatted("%02d-%s-%s-%05d",
-                                   filterIndex + 1,
-                                   typeNames[static_cast<size_t>(typeIndex)],
-                                   placeNames[static_cast<size_t>(placeIndex)],
-                                   juce::jlimit(0, 99999, frequency));
+    return formatSpeFilterHeaderText(filterIndex,
+                                     speFilterControlCount,
+                                     speAmplitudeTypeControls,
+                                     speAmplitudePlaceControls,
+                                     speAmplitudeFrequencyControls);
 }
 
 int VxAudioProcessorEditor::getSpeAnalyserContentHeight() const
@@ -264,7 +275,8 @@ int VxAudioProcessorEditor::getSpeAnalyserContentHeight() const
         return totalHeight + (verticalGap * juce::jmax(0, static_cast<int>(heights.size()) - 1));
     };
 
-    return sumHeights({ speAnalyserFftSizeControl != nullptr ? speAnalyserFftSizeControl->getPreferredHeight() : 0,
+    return sumHeights({ speAnalyserSettingsHeader != nullptr ? rowHeight : 0,
+                        speAnalyserFftSizeControl != nullptr ? speAnalyserFftSizeControl->getPreferredHeight() : 0,
                         speAnalyserOverlapControl != nullptr ? speAnalyserOverlapControl->getPreferredHeight() : 0,
                         speAnalyserLeftControl != nullptr ? speAnalyserLeftControl->getPreferredHeight() : 0,
                         speAnalyserRightControl != nullptr ? speAnalyserRightControl->getPreferredHeight() : 0,

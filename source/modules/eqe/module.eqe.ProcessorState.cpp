@@ -23,11 +23,6 @@ inline constexpr auto eqeFilterOrder = std::to_array<ParameterOrderEntry>({
     { "bypass", "BYPASS" },
 });
 
-bool supportsPersistentEqePresets() noexcept
-{
-    return true;
-}
-
 void ensureDefaultPresetFilesExist(EqeModuleProcessor& processor)
 {
     if (loadFilterPresetsXml() == nullptr)
@@ -57,6 +52,86 @@ float readParameterValue(juce::AudioProcessorValueTreeState& state, const juce::
         return parameter->convertFrom0to1(parameter->getValue());
 
     return 0.0f;
+}
+
+template <typename Callback>
+void forEachFilterParameterId(const int filterIndex, Callback&& callback)
+{
+    callback(EqeModuleProcessor::getFilterTypeParamId(filterIndex));
+    callback(EqeModuleProcessor::getFilterPlaceParamId(filterIndex));
+    callback(EqeModuleProcessor::getFilterSlopeParamId(filterIndex));
+    callback(EqeModuleProcessor::getFilterFrequencyParamId(filterIndex));
+    callback(EqeModuleProcessor::getFilterBandwidthParamId(filterIndex));
+    callback(EqeModuleProcessor::getFilterGainParamId(filterIndex));
+    callback(EqeModuleProcessor::getFilterBypassParamId(filterIndex));
+}
+
+template <typename Callback>
+void forEachFilterShapeParameterId(const int filterIndex, Callback&& callback)
+{
+    callback(EqeModuleProcessor::getFilterSlopeParamId(filterIndex));
+    callback(EqeModuleProcessor::getFilterFrequencyParamId(filterIndex));
+    callback(EqeModuleProcessor::getFilterBandwidthParamId(filterIndex));
+}
+
+struct FilterParameterValues
+{
+    float type = 0.0f;
+    float place = 0.0f;
+    float frequency = 0.0f;
+    float bandwidth = 0.0f;
+    float slope = 0.0f;
+    float gain = 0.0f;
+    float bypass = 0.0f;
+};
+
+FilterParameterValues makeDefaultFilterParameterValues(const EqeModuleProcessor::FilterType type)
+{
+    return {
+        static_cast<float>(EqeModuleProcessor::choiceIndexFromFilterType(type)),
+        0.0f,
+        defaultFilterFrequencyForType(type),
+        defaultFilterBandwidthForType(type),
+        static_cast<float>(EqeModuleProcessor::getBellSlopeChoiceIndexForValue(defaultFilterSlopeForType(type))),
+        0.0f,
+        0.0f
+    };
+}
+
+FilterParameterValues readFilterParameterValues(juce::AudioProcessorValueTreeState& state, const int filterIndex)
+{
+    return {
+        readParameterValue(state, EqeModuleProcessor::getFilterTypeParamId(filterIndex)),
+        readParameterValue(state, EqeModuleProcessor::getFilterPlaceParamId(filterIndex)),
+        readParameterValue(state, EqeModuleProcessor::getFilterFrequencyParamId(filterIndex)),
+        readParameterValue(state, EqeModuleProcessor::getFilterBandwidthParamId(filterIndex)),
+        readParameterValue(state, EqeModuleProcessor::getFilterSlopeParamId(filterIndex)),
+        readParameterValue(state, EqeModuleProcessor::getFilterGainParamId(filterIndex)),
+        readParameterValue(state, EqeModuleProcessor::getFilterBypassParamId(filterIndex))
+    };
+}
+
+void setFilterParameterValues(juce::AudioProcessorValueTreeState& state,
+                              const int filterIndex,
+                              const FilterParameterValues& values)
+{
+    setParameterValue(state, EqeModuleProcessor::getFilterTypeParamId(filterIndex), values.type);
+    setParameterValue(state, EqeModuleProcessor::getFilterPlaceParamId(filterIndex), values.place);
+    setParameterValue(state, EqeModuleProcessor::getFilterFrequencyParamId(filterIndex), values.frequency);
+    setParameterValue(state, EqeModuleProcessor::getFilterBandwidthParamId(filterIndex), values.bandwidth);
+    setParameterValue(state, EqeModuleProcessor::getFilterSlopeParamId(filterIndex), values.slope);
+    setParameterValue(state, EqeModuleProcessor::getFilterGainParamId(filterIndex), values.gain);
+    setParameterValue(state, EqeModuleProcessor::getFilterBypassParamId(filterIndex), values.bypass);
+}
+
+void resetFilterParameterValues(juce::AudioProcessorValueTreeState& state, const int filterIndex)
+{
+    forEachFilterParameterId(filterIndex,
+                             [&state] (const juce::String& parameterId)
+                             {
+                                 if (auto* parameter = state.getParameter(parameterId))
+                                     parameter->setValueNotifyingHost(parameter->getDefaultValue());
+                             });
 }
 
 void ensureStateParameterElement(juce::XmlElement& stateElement,
@@ -189,13 +264,11 @@ std::unique_ptr<juce::XmlElement> createCompleteRestoredStateElement(const juce:
 
     for (int filterIndex = 0; filterIndex < EqeModuleProcessor::maxFilterCount; ++filterIndex)
     {
-        addDefaultStateParameterElement(*completeStateElement, parameters, EqeModuleProcessor::getFilterTypeParamId(filterIndex));
-        addDefaultStateParameterElement(*completeStateElement, parameters, EqeModuleProcessor::getFilterLrmsParamId(filterIndex));
-        addDefaultStateParameterElement(*completeStateElement, parameters, EqeModuleProcessor::getFilterSlopeParamId(filterIndex));
-        addDefaultStateParameterElement(*completeStateElement, parameters, EqeModuleProcessor::getFilterFrequencyParamId(filterIndex));
-        addDefaultStateParameterElement(*completeStateElement, parameters, EqeModuleProcessor::getFilterBandwidthParamId(filterIndex));
-        addDefaultStateParameterElement(*completeStateElement, parameters, EqeModuleProcessor::getFilterGainParamId(filterIndex));
-        addDefaultStateParameterElement(*completeStateElement, parameters, EqeModuleProcessor::getFilterBypassParamId(filterIndex));
+        forEachFilterParameterId(filterIndex,
+                                 [&completeStateElement, &parameters] (const juce::String& parameterId)
+                                 {
+                                     addDefaultStateParameterElement(*completeStateElement, parameters, parameterId);
+                                 });
     }
 
     for (auto* child : sparseStateElement.getChildIterator())
@@ -229,71 +302,56 @@ void removeUnknownStateParameterElements(juce::XmlElement& stateElement,
     }
 }
 
-bool containsUnsupportedEqeStateData(const juce::XmlElement& stateElement)
+void removeUnknownStateAttributes(juce::XmlElement& stateElement)
 {
-    for (int attributeIndex = 0; attributeIndex < stateElement.getNumAttributes(); ++attributeIndex)
+    for (int attributeIndex = stateElement.getNumAttributes(); --attributeIndex >= 0;)
     {
         const auto attributeName = stateElement.getAttributeName(attributeIndex);
 
-        if (attributeName.startsWithIgnoreCase("editor_")
-            || attributeName == EqeModuleProcessor::filterPresetLastSelectedStateKey
-            || attributeName == EqeModuleProcessor::filterPresetDefaultSelectedStateKey)
-            return true;
+        if (attributeName != EqeModuleProcessor::activeFilterCountStateKey)
+            stateElement.removeAttribute(attributeName);
     }
+}
 
-    for (auto* child : stateElement.getChildIterator())
+int countRestoredCurrentFilters(juce::XmlElement& stateElement)
+{
+    const auto requestedFilterCount = clampActiveFilterCount(stateElement.getIntAttribute(EqeModuleProcessor::activeFilterCountStateKey, 0));
+    auto restoredFilterCount = 0;
+
+    for (int filterIndex = 0; filterIndex < requestedFilterCount; ++filterIndex)
     {
-        if (child == nullptr)
-            continue;
+        if (findStateParameterElement(stateElement, EqeModuleProcessor::getFilterTypeParamId(filterIndex)) == nullptr)
+            break;
 
-        if (child->hasTagName("PARAM"))
-        {
-            const auto parameterId = child->getStringAttribute("id").trim();
-
-            if (parameterId == "out_gain"
-                || parameterId == "global_bypass"
-                || parameterId == "global_bypass_out_gain_only"
-                || parameterId.startsWithIgnoreCase("global_gain")
-                || parameterId.startsWithIgnoreCase("eqe_")
-                || parameterId.endsWithIgnoreCase("_ttss"))
-                return true;
-        }
-
-        if (containsUnsupportedEqeStateData(*child))
-            return true;
+        restoredFilterCount = filterIndex + 1;
     }
 
-    return false;
+    return restoredFilterCount;
 }
 
 void normalizeRestoredStateElement(juce::XmlElement& stateElement,
                                    juce::AudioProcessorValueTreeState& parameters)
 {
-    rewriteFilterParameterIds(stateElement, false);
     removeUnknownStateParameterElements(stateElement, parameters);
+    removeUnknownStateAttributes(stateElement);
 
-    const auto restoredFilterCount = clampActiveFilterCount(stateElement.getIntAttribute(EqeModuleProcessor::activeFilterCountStateKey, 0));
+    const auto restoredFilterCount = countRestoredCurrentFilters(stateElement);
     stateElement.setAttribute(EqeModuleProcessor::activeFilterCountStateKey, restoredFilterCount);
 
     for (int filterIndex = 0; filterIndex < EqeModuleProcessor::maxFilterCount; ++filterIndex)
     {
         const auto typeId = EqeModuleProcessor::getFilterTypeParamId(filterIndex);
-        const auto placeId = EqeModuleProcessor::getFilterLrmsParamId(filterIndex);
-        const auto slopeId = EqeModuleProcessor::getFilterSlopeParamId(filterIndex);
-        const auto frequencyId = EqeModuleProcessor::getFilterFrequencyParamId(filterIndex);
-        const auto bandwidthId = EqeModuleProcessor::getFilterBandwidthParamId(filterIndex);
+        const auto placeId = EqeModuleProcessor::getFilterPlaceParamId(filterIndex);
         const auto gainId = EqeModuleProcessor::getFilterGainParamId(filterIndex);
         const auto bypassId = EqeModuleProcessor::getFilterBypassParamId(filterIndex);
 
         if (filterIndex >= restoredFilterCount)
         {
-            removeStateParameterElement(stateElement, typeId);
-            removeStateParameterElement(stateElement, placeId);
-            removeStateParameterElement(stateElement, slopeId);
-            removeStateParameterElement(stateElement, frequencyId);
-            removeStateParameterElement(stateElement, bandwidthId);
-            removeStateParameterElement(stateElement, gainId);
-            removeStateParameterElement(stateElement, bypassId);
+            forEachFilterParameterId(filterIndex,
+                                     [&stateElement] (const juce::String& parameterId)
+                                     {
+                                         removeStateParameterElement(stateElement, parameterId);
+                                     });
             continue;
         }
 
@@ -304,15 +362,19 @@ void normalizeRestoredStateElement(juce::XmlElement& stateElement,
 
         if (getRestoredFilterType(stateElement, parameters, filterIndex) == EqeModuleProcessor::FilterType::volume)
         {
-            removeStateParameterElement(stateElement, slopeId);
-            removeStateParameterElement(stateElement, frequencyId);
-            removeStateParameterElement(stateElement, bandwidthId);
+            forEachFilterShapeParameterId(filterIndex,
+                                          [&stateElement] (const juce::String& parameterId)
+                                          {
+                                              removeStateParameterElement(stateElement, parameterId);
+                                          });
             continue;
         }
 
-        ensureStateParameterElement(stateElement, parameters, slopeId);
-        ensureStateParameterElement(stateElement, parameters, frequencyId);
-        ensureStateParameterElement(stateElement, parameters, bandwidthId);
+        forEachFilterShapeParameterId(filterIndex,
+                                      [&stateElement, &parameters] (const juce::String& parameterId)
+                                      {
+                                          ensureStateParameterElement(stateElement, parameters, parameterId);
+                                      });
     }
 }
 }
@@ -324,7 +386,7 @@ EqeModuleProcessor::EqeModuleProcessor(juce::AudioProcessor& ownerProcessor)
     for (int filterIndex = 0; filterIndex < maxFilterCount; ++filterIndex)
     {
         filterTypeParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getFilterTypeParamId(filterIndex));
-        filterLrmsParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getFilterLrmsParamId(filterIndex));
+        filterPlaceParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getFilterPlaceParamId(filterIndex));
         filterFrequencyParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getFilterFrequencyParamId(filterIndex));
         filterBandwidthParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getFilterBandwidthParamId(filterIndex));
         filterSlopeChoiceParams[static_cast<size_t>(filterIndex)] = dynamic_cast<juce::AudioParameterChoice*>(parameters.getParameter(getFilterSlopeParamId(filterIndex)));
@@ -334,10 +396,7 @@ EqeModuleProcessor::EqeModuleProcessor(juce::AudioProcessor& ownerProcessor)
 
     registerParameterListeners();
 
-    if (supportsPersistentEqePresets())
-    {
-        ensureDefaultPresetFilesExist(*this);
-    }
+    ensureDefaultPresetFilesExist(*this);
 }
 
 EqeModuleProcessor::~EqeModuleProcessor()
@@ -368,9 +427,9 @@ void EqeModuleProcessor::appendEqeParameters(std::vector<std::unique_ptr<juce::R
             if (key == "place")
             {
                 parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
-                    juce::ParameterID { getFilterLrmsParamId(filterIndex), 1 },
+                    juce::ParameterID { getFilterPlaceParamId(filterIndex), 1 },
                     name,
-                    filterLrmsChoices,
+                    filterPlaceChoices,
                     0,
                     juce::AudioParameterChoiceAttributes()));
                 continue;
@@ -467,7 +526,7 @@ void EqeModuleProcessor::registerParameterListeners()
     for (int filterIndex = 0; filterIndex < maxFilterCount; ++filterIndex)
     {
         parameters.addParameterListener(getFilterTypeParamId(filterIndex), this);
-        parameters.addParameterListener(getFilterLrmsParamId(filterIndex), this);
+        parameters.addParameterListener(getFilterPlaceParamId(filterIndex), this);
         parameters.addParameterListener(getFilterFrequencyParamId(filterIndex), this);
         parameters.addParameterListener(getFilterBandwidthParamId(filterIndex), this);
         parameters.addParameterListener(getFilterSlopeParamId(filterIndex), this);
@@ -481,7 +540,7 @@ void EqeModuleProcessor::unregisterParameterListeners()
     for (int filterIndex = 0; filterIndex < maxFilterCount; ++filterIndex)
     {
         parameters.removeParameterListener(getFilterTypeParamId(filterIndex), this);
-        parameters.removeParameterListener(getFilterLrmsParamId(filterIndex), this);
+        parameters.removeParameterListener(getFilterPlaceParamId(filterIndex), this);
         parameters.removeParameterListener(getFilterFrequencyParamId(filterIndex), this);
         parameters.removeParameterListener(getFilterBandwidthParamId(filterIndex), this);
         parameters.removeParameterListener(getFilterSlopeParamId(filterIndex), this);
@@ -512,9 +571,6 @@ void EqeModuleProcessor::setStateInformation(const void* data, const int sizeInB
     {
         if (stateXml->hasTagName(parameters.state.getType()))
         {
-            if (containsUnsupportedEqeStateData(*stateXml))
-                return;
-
             const auto wasPrepared = prepared.exchange(false, std::memory_order_acq_rel);
             const juce::ScopedLock lock(filterProcessLock);
             auto restoredState = juce::ValueTree::fromXml(*stateXml);
@@ -545,9 +601,6 @@ void EqeModuleProcessor::setStateInformation(const void* data, const int sizeInB
 
 juce::String EqeModuleProcessor::getDefaultFilterPresetName() const
 {
-    if (! supportsPersistentEqePresets())
-        return {};
-
     auto presetsXml = loadFilterPresetsXml();
 
     if (presetsXml == nullptr || ! presetsXml->hasTagName(filterPresetsRootTag))
@@ -577,9 +630,6 @@ juce::String EqeModuleProcessor::getDefaultFilterPresetName() const
 
 juce::String EqeModuleProcessor::getLastFilterPresetName() const
 {
-    if (! supportsPersistentEqePresets())
-        return {};
-
     auto presetsXml = loadFilterPresetsXml();
 
     if (presetsXml == nullptr || ! presetsXml->hasTagName(filterPresetsRootTag))
@@ -596,9 +646,6 @@ juce::String EqeModuleProcessor::getLastFilterPresetName() const
 juce::StringArray EqeModuleProcessor::getFilterPresetNames() const
 {
     juce::StringArray presetNames;
-
-    if (! supportsPersistentEqePresets())
-        return presetNames;
 
     auto presetsXml = loadFilterPresetsXml();
 
@@ -622,9 +669,6 @@ juce::StringArray EqeModuleProcessor::getFilterPresetNames() const
 
 bool EqeModuleProcessor::saveFilterPreset(const juce::String& presetName)
 {
-    if (! supportsPersistentEqePresets())
-        return false;
-
     const auto trimmedName = presetName.trim();
 
     if (trimmedName.isEmpty())
@@ -655,9 +699,6 @@ bool EqeModuleProcessor::saveFilterPreset(const juce::String& presetName)
 
 bool EqeModuleProcessor::renameFilterPreset(const juce::String& sourcePresetName, const juce::String& newPresetName)
 {
-    if (! supportsPersistentEqePresets())
-        return false;
-
     auto presetsXml = loadFilterPresetsXml();
 
     if (presetsXml == nullptr || ! presetsXml->hasTagName(filterPresetsRootTag))
@@ -679,9 +720,6 @@ bool EqeModuleProcessor::renameFilterPreset(const juce::String& sourcePresetName
 
 bool EqeModuleProcessor::setDefaultFilterPreset(const juce::String& presetName)
 {
-    if (! supportsPersistentEqePresets())
-        return false;
-
     const auto trimmedName = presetName.trim();
 
     if (trimmedName.isEmpty())
@@ -698,9 +736,6 @@ bool EqeModuleProcessor::setDefaultFilterPreset(const juce::String& presetName)
 
 bool EqeModuleProcessor::loadInitialFilterPreset() noexcept
 {
-    if (! supportsPersistentEqePresets())
-        return false;
-
     const auto defaultFilterPresetName = getDefaultFilterPresetName();
 
     if (defaultFilterPresetName.isNotEmpty())
@@ -722,9 +757,6 @@ bool EqeModuleProcessor::loadInitialFilterPreset() noexcept
 
 bool EqeModuleProcessor::loadFilterPreset(const juce::String& presetName) noexcept
 {
-    if (! supportsPersistentEqePresets())
-        return false;
-
     const auto trimmedName = presetName.trim();
 
     if (trimmedName.isEmpty())
@@ -743,9 +775,6 @@ bool EqeModuleProcessor::loadFilterPreset(const juce::String& presetName) noexce
     auto* stateElement = presetElement->getChildByName(parameters.state.getType().toString());
 
     if (stateElement == nullptr)
-        return false;
-
-    if (containsUnsupportedEqeStateData(*stateElement))
         return false;
 
     auto normalizedStateElement = std::make_unique<juce::XmlElement>(*stateElement);
@@ -776,9 +805,6 @@ bool EqeModuleProcessor::loadFilterPreset(const juce::String& presetName) noexce
 
 bool EqeModuleProcessor::deleteFilterPreset(const juce::String& presetName)
 {
-    if (! supportsPersistentEqePresets())
-        return false;
-
     const auto trimmedName = presetName.trim();
 
     if (trimmedName.isEmpty() || getFilterPresetNames().size() <= 1)
@@ -811,14 +837,7 @@ bool EqeModuleProcessor::addFilter() noexcept
         return false;
 
     const auto newIndex = currentCount;
-    constexpr auto defaultType = FilterType::bell;
-    setParameterValue(parameters, getFilterTypeParamId(newIndex), static_cast<float>(choiceIndexFromFilterType(defaultType)));
-    setParameterValue(parameters, getFilterLrmsParamId(newIndex), 0.0f);
-    setParameterValue(parameters, getFilterFrequencyParamId(newIndex), defaultFilterFrequencyForType(defaultType));
-    setParameterValue(parameters, getFilterBandwidthParamId(newIndex), defaultFilterBandwidthForType(defaultType));
-    setParameterValue(parameters, getFilterSlopeParamId(newIndex), static_cast<float>(EqeModuleProcessor::getBellSlopeChoiceIndexForValue(defaultFilterSlopeForType(defaultType))));
-    setParameterValue(parameters, getFilterGainParamId(newIndex), 0.0f);
-    setParameterValue(parameters, getFilterBypassParamId(newIndex), 0.0f);
+    setFilterParameterValues(parameters, newIndex, makeDefaultFilterParameterValues(FilterType::bell));
     setActiveFilterCount(currentCount + 1);
     return true;
 }
@@ -833,23 +852,10 @@ bool EqeModuleProcessor::removeFilter(const int filterIndex) noexcept
     for (int sourceIndex = filterIndex + 1; sourceIndex < currentCount; ++sourceIndex)
     {
         const auto destinationIndex = sourceIndex - 1;
-        setParameterValue(parameters, getFilterTypeParamId(destinationIndex), readParameterValue(parameters, getFilterTypeParamId(sourceIndex)));
-        setParameterValue(parameters, getFilterLrmsParamId(destinationIndex), readParameterValue(parameters, getFilterLrmsParamId(sourceIndex)));
-        setParameterValue(parameters, getFilterFrequencyParamId(destinationIndex), readParameterValue(parameters, getFilterFrequencyParamId(sourceIndex)));
-        setParameterValue(parameters, getFilterBandwidthParamId(destinationIndex), readParameterValue(parameters, getFilterBandwidthParamId(sourceIndex)));
-        setParameterValue(parameters, getFilterSlopeParamId(destinationIndex), readParameterValue(parameters, getFilterSlopeParamId(sourceIndex)));
-        setParameterValue(parameters, getFilterGainParamId(destinationIndex), readParameterValue(parameters, getFilterGainParamId(sourceIndex)));
-        setParameterValue(parameters, getFilterBypassParamId(destinationIndex), readParameterValue(parameters, getFilterBypassParamId(sourceIndex)));
+        setFilterParameterValues(parameters, destinationIndex, readFilterParameterValues(parameters, sourceIndex));
     }
 
-    const auto lastIndex = currentCount - 1;
-    if (auto* parameter = parameters.getParameter(getFilterTypeParamId(lastIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-    if (auto* parameter = parameters.getParameter(getFilterLrmsParamId(lastIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-    if (auto* parameter = parameters.getParameter(getFilterFrequencyParamId(lastIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-    if (auto* parameter = parameters.getParameter(getFilterBandwidthParamId(lastIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-    if (auto* parameter = parameters.getParameter(getFilterSlopeParamId(lastIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-    if (auto* parameter = parameters.getParameter(getFilterGainParamId(lastIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-    if (auto* parameter = parameters.getParameter(getFilterBypassParamId(lastIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
+    resetFilterParameterValues(parameters, currentCount - 1);
 
     setActiveFilterCount(currentCount - 1);
     resetFilters();
@@ -865,15 +871,7 @@ bool EqeModuleProcessor::clearFilters() noexcept
         return false;
 
     for (int filterIndex = 0; filterIndex < currentCount; ++filterIndex)
-    {
-        if (auto* parameter = parameters.getParameter(getFilterTypeParamId(filterIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-        if (auto* parameter = parameters.getParameter(getFilterLrmsParamId(filterIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-        if (auto* parameter = parameters.getParameter(getFilterFrequencyParamId(filterIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-        if (auto* parameter = parameters.getParameter(getFilterBandwidthParamId(filterIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-        if (auto* parameter = parameters.getParameter(getFilterSlopeParamId(filterIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-        if (auto* parameter = parameters.getParameter(getFilterGainParamId(filterIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-        if (auto* parameter = parameters.getParameter(getFilterBypassParamId(filterIndex))) parameter->setValueNotifyingHost(parameter->getDefaultValue());
-    }
+        resetFilterParameterValues(parameters, filterIndex);
 
     setActiveFilterCount(0);
     resetFilters();
@@ -891,46 +889,17 @@ bool EqeModuleProcessor::moveFilter(const int sourceIndex, const int destination
         || sourceIndex == destinationIndex)
         return false;
 
-    struct BandSnapshot
-    {
-        float type = 0.0f;
-        float lrms = 0.0f;
-        float frequency = 0.0f;
-        float bandwidth = 0.0f;
-        float slope = 0.0f;
-        float gain = 0.0f;
-        float bypass = 0.0f;
-    };
-
-    std::vector<BandSnapshot> snapshots(static_cast<size_t>(currentCount));
+    std::vector<FilterParameterValues> snapshots(static_cast<size_t>(currentCount));
 
     for (int bandIndex = 0; bandIndex < currentCount; ++bandIndex)
-    {
-        auto& snapshot = snapshots[static_cast<size_t>(bandIndex)];
-        snapshot.type = readParameterValue(parameters, getFilterTypeParamId(bandIndex));
-        snapshot.lrms = readParameterValue(parameters, getFilterLrmsParamId(bandIndex));
-        snapshot.frequency = readParameterValue(parameters, getFilterFrequencyParamId(bandIndex));
-        snapshot.bandwidth = readParameterValue(parameters, getFilterBandwidthParamId(bandIndex));
-        snapshot.slope = readParameterValue(parameters, getFilterSlopeParamId(bandIndex));
-        snapshot.gain = readParameterValue(parameters, getFilterGainParamId(bandIndex));
-        snapshot.bypass = readParameterValue(parameters, getFilterBypassParamId(bandIndex));
-    }
+        snapshots[static_cast<size_t>(bandIndex)] = readFilterParameterValues(parameters, bandIndex);
 
     auto movedSnapshot = snapshots[static_cast<size_t>(sourceIndex)];
     snapshots.erase(snapshots.begin() + sourceIndex);
     snapshots.insert(snapshots.begin() + destinationIndex, movedSnapshot);
 
     for (int bandIndex = 0; bandIndex < currentCount; ++bandIndex)
-    {
-        const auto& snapshot = snapshots[static_cast<size_t>(bandIndex)];
-        setParameterValue(parameters, getFilterTypeParamId(bandIndex), snapshot.type);
-        setParameterValue(parameters, getFilterLrmsParamId(bandIndex), snapshot.lrms);
-        setParameterValue(parameters, getFilterFrequencyParamId(bandIndex), snapshot.frequency);
-        setParameterValue(parameters, getFilterBandwidthParamId(bandIndex), snapshot.bandwidth);
-        setParameterValue(parameters, getFilterSlopeParamId(bandIndex), snapshot.slope);
-        setParameterValue(parameters, getFilterGainParamId(bandIndex), snapshot.gain);
-        setParameterValue(parameters, getFilterBypassParamId(bandIndex), snapshot.bypass);
-    }
+        setFilterParameterValues(parameters, bandIndex, snapshots[static_cast<size_t>(bandIndex)]);
 
     resetFilters();
     updateFilters();

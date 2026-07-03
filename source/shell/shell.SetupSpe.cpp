@@ -8,45 +8,45 @@
 
 void VxAudioProcessorEditor::refreshSpeAnalyserControls(SpeModuleProcessor& speProcessor)
 {
-        const juce::ScopedValueSetter<bool> scopedIgnore(suppressSpeAnalyserControlChangeHandlers, true);
-        static constexpr std::array<const char*, 5> fftSizeLabels { "1024", "2048", "4096", "8192", "16384" };
+    const juce::ScopedValueSetter<bool> scopedIgnore(suppressSpeAnalyserControlChangeHandlers, true);
+    static constexpr std::array<const char*, 5> fftSizeLabels { "1024", "2048", "4096", "8192", "16384" };
     static constexpr std::array<const char*, 5> overlapLabels { "2", "4", "8", "16", "32" };
 
-        if (speAnalyserFftSizeControl != nullptr)
-        {
-            const auto fftIndex = juce::jlimit(0,
-                                               static_cast<int>(fftSizeLabels.size()) - 1,
-                                               juce::roundToInt(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramFftSizeId)));
-            speAnalyserFftSizeControl->setValue(static_cast<double>(fftIndex), false);
-            speAnalyserFftSizeControl->setOverrideText(fftSizeLabels[static_cast<size_t>(fftIndex)]);
-        }
+    if (speAnalyserFftSizeControl != nullptr)
+    {
+        const auto fftIndex = juce::jlimit(0,
+                                           static_cast<int>(fftSizeLabels.size()) - 1,
+                                           juce::roundToInt(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramFftSizeId)));
+        speAnalyserFftSizeControl->setValue(static_cast<double>(fftIndex), false);
+        speAnalyserFftSizeControl->setOverrideText(fftSizeLabels[static_cast<size_t>(fftIndex)]);
+    }
 
-        if (speAnalyserOverlapControl != nullptr)
-        {
-            const auto overlapIndex = juce::jlimit(0,
-                                                   static_cast<int>(overlapLabels.size()) - 1,
-                                                   juce::roundToInt(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramOverlapId)));
-            speAnalyserOverlapControl->setValue(static_cast<double>(overlapIndex), false);
-            speAnalyserOverlapControl->setOverrideText(overlapLabels[static_cast<size_t>(overlapIndex)]);
-        }
+    if (speAnalyserOverlapControl != nullptr)
+    {
+        const auto overlapIndex = juce::jlimit(0,
+                                               static_cast<int>(overlapLabels.size()) - 1,
+                                               juce::roundToInt(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramOverlapId)));
+        speAnalyserOverlapControl->setValue(static_cast<double>(overlapIndex), false);
+        speAnalyserOverlapControl->setOverrideText(overlapLabels[static_cast<size_t>(overlapIndex)]);
+    }
 
-        if (speAnalyserLeftControl != nullptr)
-            speAnalyserLeftControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramLeftId), false);
+    if (speAnalyserLeftControl != nullptr)
+        speAnalyserLeftControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramLeftId), false);
 
-        if (speAnalyserRightControl != nullptr)
-            speAnalyserRightControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRightId), false);
+    if (speAnalyserRightControl != nullptr)
+        speAnalyserRightControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRightId), false);
 
-        if (speAnalyserRangeLowControl != nullptr)
-            speAnalyserRangeLowControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRangeLowId), false);
+    if (speAnalyserRangeLowControl != nullptr)
+        speAnalyserRangeLowControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRangeLowId), false);
 
-        if (speAnalyserRangeHighControl != nullptr)
-            speAnalyserRangeHighControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRangeHighId), false);
+    if (speAnalyserRangeHighControl != nullptr)
+        speAnalyserRangeHighControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramRangeHighId), false);
 
-        if (speAnalyserSlopeControl != nullptr)
-            speAnalyserSlopeControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramSlopeId), false);
+    if (speAnalyserSlopeControl != nullptr)
+        speAnalyserSlopeControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramSlopeId), false);
 
-        if (speAnalyserTimeControl != nullptr)
-            speAnalyserTimeControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramTimeId), false);
+    if (speAnalyserTimeControl != nullptr)
+        speAnalyserTimeControl->setValue(speProcessor.getAnalyserParameterValue(SpeModuleProcessor::paramTimeId), false);
 }
 
 void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState& speState,
@@ -129,15 +129,28 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
             };
         };
 
+        const auto configureSectionHeader = [] (BoxTextButton& header, const juce::String& text)
+        {
+            header.setButtonText(text);
+            header.setClickingTogglesState(false);
+            header.setBorderVisible(false);
+            header.setFillVisible(false);
+            header.setDividerLineVisible(true);
+            header.setPressFillEnabled(false);
+            header.setTextJustification(juce::Justification::centredLeft);
+            header.setInterceptsMouseClicks(false, false);
+        };
+
+        const auto refreshSpeLayoutPreservingScroll = [this] (const int preservedScrollY)
+        {
+            updateSectionStates();
+            resized();
+            const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+            filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+        };
+
         speFftProcessorHeader = std::make_unique<BoxTextButton>(uiAccent);
-        speFftProcessorHeader->setButtonText("FFT PROCESSOR");
-        speFftProcessorHeader->setClickingTogglesState(false);
-        speFftProcessorHeader->setBorderVisible(false);
-        speFftProcessorHeader->setFillVisible(false);
-        speFftProcessorHeader->setDividerLineVisible(true);
-        speFftProcessorHeader->setPressFillEnabled(false);
-        speFftProcessorHeader->setTextJustification(juce::Justification::centredLeft);
-        speFftProcessorHeader->setInterceptsMouseClicks(false, false);
+        configureSectionHeader(*speFftProcessorHeader, "FFT PROCESSOR");
         filterContent.addAndMakeVisible(*speFftProcessorHeader);
 
         speDspFftSizeControl = std::make_unique<ParameterControl>(speState,
@@ -205,14 +218,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         filterContent.addAndMakeVisible(*speDspHopDivisorControl);
 
         speDynamicProcessorHeader = std::make_unique<BoxTextButton>(uiAccent);
-        speDynamicProcessorHeader->setButtonText("DYNAMIC PROCESSOR");
-        speDynamicProcessorHeader->setClickingTogglesState(false);
-        speDynamicProcessorHeader->setBorderVisible(false);
-        speDynamicProcessorHeader->setFillVisible(false);
-        speDynamicProcessorHeader->setDividerLineVisible(true);
-        speDynamicProcessorHeader->setPressFillEnabled(false);
-        speDynamicProcessorHeader->setTextJustification(juce::Justification::centredLeft);
-        speDynamicProcessorHeader->setInterceptsMouseClicks(false, false);
+        configureSectionHeader(*speDynamicProcessorHeader, "DYNAMIC PROCESSOR");
         filterContent.addAndMakeVisible(*speDynamicProcessorHeader);
 
         speAttackControl = std::make_unique<ParameterControl>(speState,
@@ -310,20 +316,13 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         filterContent.addAndMakeVisible(*speDualMonoLinkButton);
 
         spePhaseProcessorHeader = std::make_unique<BoxTextButton>(uiAccent);
-        spePhaseProcessorHeader->setButtonText("PHASE PROCESSOR");
-        spePhaseProcessorHeader->setClickingTogglesState(false);
-        spePhaseProcessorHeader->setBorderVisible(false);
-        spePhaseProcessorHeader->setFillVisible(false);
-        spePhaseProcessorHeader->setDividerLineVisible(true);
-        spePhaseProcessorHeader->setPressFillEnabled(false);
-        spePhaseProcessorHeader->setTextJustification(juce::Justification::centredLeft);
-        spePhaseProcessorHeader->setInterceptsMouseClicks(false, false);
+        configureSectionHeader(*spePhaseProcessorHeader, "PHASE PROCESSOR");
         filterContent.addAndMakeVisible(*spePhaseProcessorHeader);
 
         spePhaseAddButton = std::make_unique<BoxTextButton>(uiGrey500);
         spePhaseAddButton->setButtonText("ADD");
         spePhaseAddButton->setTooltip("ADD PHASE FILTER");
-        spePhaseAddButton->onClick = [this]
+        spePhaseAddButton->onClick = [this, refreshSpeLayoutPreservingScroll]
         {
             const auto preservedScrollY = filterViewport.getViewPositionY();
             auto* activeSpeProcessor = audioProcessor.getSpeModuleProcessor();
@@ -331,10 +330,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
             if (activeSpeProcessor != nullptr && activeSpeProcessor->addPhaseFilter())
             {
                 enforceSingleExpandedSpePhaseFilter(getActiveSpePhaseFilterCount() - 1);
-                updateSectionStates();
-                resized();
-                const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
-                filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                refreshSpeLayoutPreservingScroll(preservedScrollY);
                 scheduleHistorySnapshot();
             }
 
@@ -342,7 +338,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         };
         filterContent.addAndMakeVisible(*spePhaseAddButton);
 
-        for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
         {
             spePhaseBypassButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiAccent);
             spePhaseBypassButtons[static_cast<size_t>(filterIndex)]->setButtonText("B");
@@ -360,12 +356,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
             {
                 clearKeyboardFocus(*this);
             };
-            filterContent.addAndMakeVisible(*spePhaseBypassButtons[static_cast<size_t>(filterIndex)]);
-
-            spePhaseRemoveButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiGrey500);
-            spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]->setButtonText("D");
-            spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]->setTooltip("DELETE PHASE FILTER");
-            spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]->onClick = [this, filterIndex]
+            spePhaseBypassButtons[static_cast<size_t>(filterIndex)]->setLongPressAction([this, filterIndex, refreshSpeLayoutPreservingScroll]
             {
                 const auto preservedScrollY = filterViewport.getViewPositionY();
                 auto* activeSpeProcessor = audioProcessor.getSpeModuleProcessor();
@@ -373,30 +364,24 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                 if (activeSpeProcessor != nullptr && activeSpeProcessor->removePhaseFilter(filterIndex))
                 {
                     enforceSingleExpandedSpePhaseFilter(-1);
-                    updateSectionStates();
-                    resized();
-                    const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
-                    filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                    refreshSpeLayoutPreservingScroll(preservedScrollY);
                     scheduleHistorySnapshot();
                 }
 
                 clearKeyboardFocus(*this);
-            };
-            filterContent.addAndMakeVisible(*spePhaseRemoveButtons[static_cast<size_t>(filterIndex)]);
+            }, 500, "D");
+            filterContent.addAndMakeVisible(*spePhaseBypassButtons[static_cast<size_t>(filterIndex)]);
 
             spePhaseHeaderButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiAccent);
             spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setButtonText({});
             spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setTextJustification(juce::Justification::centred);
             spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setClickingTogglesState(true);
             spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->setCancelClickOnLeave(true);
-            spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->onClick = [this, filterIndex]
+            spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]->onClick = [this, filterIndex, refreshSpeLayoutPreservingScroll]
             {
                 const auto preservedScrollY = filterViewport.getViewPositionY();
                 enforceSingleExpandedSpePhaseFilter(spePhaseExpanded[static_cast<size_t>(filterIndex)] ? -1 : filterIndex);
-                updateSectionStates();
-                resized();
-                const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
-                filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                refreshSpeLayoutPreservingScroll(preservedScrollY);
                 clearKeyboardFocus(*this);
             };
             filterContent.addAndMakeVisible(*spePhaseHeaderButtons[static_cast<size_t>(filterIndex)]);
@@ -457,20 +442,13 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         }
 
         speAmplitudeProcessorHeader = std::make_unique<BoxTextButton>(uiAccent);
-        speAmplitudeProcessorHeader->setButtonText("AMPLITUDE PROCESSOR");
-        speAmplitudeProcessorHeader->setClickingTogglesState(false);
-        speAmplitudeProcessorHeader->setBorderVisible(false);
-        speAmplitudeProcessorHeader->setFillVisible(false);
-        speAmplitudeProcessorHeader->setDividerLineVisible(true);
-        speAmplitudeProcessorHeader->setPressFillEnabled(false);
-        speAmplitudeProcessorHeader->setTextJustification(juce::Justification::centredLeft);
-        speAmplitudeProcessorHeader->setInterceptsMouseClicks(false, false);
+        configureSectionHeader(*speAmplitudeProcessorHeader, "AMPLITUDE PROCESSOR");
         filterContent.addAndMakeVisible(*speAmplitudeProcessorHeader);
 
         speAmplitudeAddButton = std::make_unique<BoxTextButton>(uiGrey500);
         speAmplitudeAddButton->setButtonText("ADD");
         speAmplitudeAddButton->setTooltip("ADD AMPLITUDE FILTER");
-        speAmplitudeAddButton->onClick = [this]
+        speAmplitudeAddButton->onClick = [this, refreshSpeLayoutPreservingScroll]
         {
             const auto preservedScrollY = filterViewport.getViewPositionY();
             auto* activeSpeProcessor = audioProcessor.getSpeModuleProcessor();
@@ -478,10 +456,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
             if (activeSpeProcessor != nullptr && activeSpeProcessor->addAmplitudeFilter())
             {
                 enforceSingleExpandedSpeAmplitudeFilter(getActiveSpeAmplitudeFilterCount() - 1);
-                updateSectionStates();
-                resized();
-                const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
-                filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                refreshSpeLayoutPreservingScroll(preservedScrollY);
                 scheduleHistorySnapshot();
             }
 
@@ -489,7 +464,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
         };
         filterContent.addAndMakeVisible(*speAmplitudeAddButton);
 
-        for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
         {
             speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiAccent);
             speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]->setButtonText("B");
@@ -507,12 +482,7 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
             {
                 clearKeyboardFocus(*this);
             };
-            filterContent.addAndMakeVisible(*speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]);
-
-            speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiGrey500);
-            speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)]->setButtonText("D");
-            speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)]->setTooltip("DELETE AMPLITUDE FILTER");
-            speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)]->onClick = [this, filterIndex]
+            speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]->setLongPressAction([this, filterIndex, refreshSpeLayoutPreservingScroll]
             {
                 const auto preservedScrollY = filterViewport.getViewPositionY();
                 auto* activeSpeProcessor = audioProcessor.getSpeModuleProcessor();
@@ -520,30 +490,24 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                 if (activeSpeProcessor != nullptr && activeSpeProcessor->removeAmplitudeFilter(filterIndex))
                 {
                     enforceSingleExpandedSpeAmplitudeFilter(-1);
-                    updateSectionStates();
-                    resized();
-                    const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
-                    filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                    refreshSpeLayoutPreservingScroll(preservedScrollY);
                     scheduleHistorySnapshot();
                 }
 
                 clearKeyboardFocus(*this);
-            };
-            filterContent.addAndMakeVisible(*speAmplitudeRemoveButtons[static_cast<size_t>(filterIndex)]);
+            }, 500, "D");
+            filterContent.addAndMakeVisible(*speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]);
 
             speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)] = std::make_unique<BoxTextButton>(uiAccent);
             speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setButtonText({});
             speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setTextJustification(juce::Justification::centred);
             speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setClickingTogglesState(true);
             speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->setCancelClickOnLeave(true);
-            speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->onClick = [this, filterIndex]
+            speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]->onClick = [this, filterIndex, refreshSpeLayoutPreservingScroll]
             {
                 const auto preservedScrollY = filterViewport.getViewPositionY();
                 enforceSingleExpandedSpeAmplitudeFilter(speAmplitudeExpanded[static_cast<size_t>(filterIndex)] ? -1 : filterIndex);
-                updateSectionStates();
-                resized();
-                const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
-                filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedScrollY));
+                refreshSpeLayoutPreservingScroll(preservedScrollY);
                 clearKeyboardFocus(*this);
             };
             filterContent.addAndMakeVisible(*speAmplitudeHeaderButtons[static_cast<size_t>(filterIndex)]);
@@ -602,6 +566,10 @@ void VxAudioProcessorEditor::setupSpeControls(juce::AudioProcessorValueTreeState
                 0);
             filterContent.addAndMakeVisible(*speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]);
         }
+
+        speAnalyserSettingsHeader = std::make_unique<BoxTextButton>(uiAccent);
+        configureSectionHeader(*speAnalyserSettingsHeader, "ANALYZER SETTINGS");
+        speAnalyserContent.addAndMakeVisible(*speAnalyserSettingsHeader);
 
         speAnalyserFftSizeControl = std::make_unique<LocalParameterControl>("FFT-SIZE",
                                                                             0,

@@ -4,18 +4,12 @@
 namespace
 {
 constexpr auto editorFilterDisplayOrderStateKey = "editor_filter_display_order";
-constexpr auto editorShellGlobalHostExpandedStateKey = "editor_shell_global_host_expanded";
-constexpr auto editorLastCollapsedWidthStateKey = "editor_last_collapsed_width";
+constexpr auto editorHostParametersExpandedStateKey = "editor_host_parameters_expanded";
 
 juce::Point<int> clampEditorSize(const int width, const int height) noexcept
 {
     return { juce::jlimit(minimumEditorWidth, maximumEditorWidth, width),
              juce::jlimit(minimumEditorHeight, maximumEditorHeight, height) };
-}
-
-int clampCollapsedEditorWidth(const int width) noexcept
-{
-    return juce::jlimit(minimumEditorWidth, maximumEditorWidth, width);
 }
 
 juce::String encodeFilterDisplayOrder(const std::vector<int>& filterDisplayOrder, const int activeCount)
@@ -171,10 +165,7 @@ void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
             tseModuleLoaded = true;
     }
 
-    shellGlobalHostExpanded = static_cast<bool>(state.getProperty(editorShellGlobalHostExpandedStateKey, false));
-
-    lastCollapsedEditorWidth = clampCollapsedEditorWidth(static_cast<int>(state.getProperty(editorLastCollapsedWidthStateKey,
-                                                                                            minimumEditorWidth)));
+    hostParametersExpanded = static_cast<bool>(state.getProperty(editorHostParametersExpandedStateKey, false));
 
     const auto savedOrder = state.getProperty(editorFilterDisplayOrderStateKey).toString().trim();
 
@@ -249,8 +240,7 @@ void VxAudioProcessorEditor::storeEditorStateToValueTree() noexcept
         state.removeProperty(VxAudioProcessor::activeModuleStateKey, nullptr);
     }
 
-    state.setProperty(editorShellGlobalHostExpandedStateKey, shellGlobalHostExpanded, nullptr);
-    state.setProperty(editorLastCollapsedWidthStateKey, lastCollapsedEditorWidth, nullptr);
+    state.setProperty(editorHostParametersExpandedStateKey, hostParametersExpanded, nullptr);
     state.setProperty(editorFilterDisplayOrderStateKey,
                       encodeFilterDisplayOrder(filterDisplayOrder, getActiveFilterCount()),
                       nullptr);
@@ -306,7 +296,7 @@ int VxAudioProcessorEditor::getActiveFilterCount() const noexcept
     return 0;
 }
 
-void VxAudioProcessorEditor::updateEditorWidthState()
+void VxAudioProcessorEditor::syncEditorWidthToBounds()
 {
     const auto restoredWidth = juce::jmax(minimumEditorWidth, getWidth());
     setResizeLimits(minimumEditorWidth,
@@ -316,6 +306,4 @@ void VxAudioProcessorEditor::updateEditorWidthState()
 
     if (restoredWidth != getWidth())
         setSize(restoredWidth, getHeight());
-
-    lastCollapsedEditorWidth = restoredWidth;
 }

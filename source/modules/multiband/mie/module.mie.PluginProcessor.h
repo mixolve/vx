@@ -2,7 +2,7 @@
 
 #include <JuceHeader.h>
 
-#include "module.mie.MultibandProcessor.h"
+#include "module.mie.DspCore.h"
 #include "module.mie.PluginParameters.h"
 
 #include <array>

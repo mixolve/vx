@@ -103,6 +103,10 @@ private:
     size_t getActiveBandCount() const;
     bool setParameterPlainValue(const juce::String& parameterId, float plainValue);
     bool setParameterNormalisedValue(juce::RangedAudioParameter& parameter, float normalisedValue);
+    bool assignButtonHostSlot(const juce::String& parameterId,
+                              const juce::String& fallbackName,
+                              const BoxTextButton* button,
+                              const juce::ModifierKeys& modifiers);
     void clearFocus();
 
     Config config;

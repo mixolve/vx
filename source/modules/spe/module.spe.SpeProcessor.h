@@ -4,21 +4,36 @@
 
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <memory>
 #include <utility>
-
-#include "module.spe.SpeShared.h"
 
 class SpeModuleProcessor final : private juce::AudioProcessorValueTreeState::Listener
 {
 public:
-    static constexpr auto analyserScopeSize = spe::analyserScopeSize;
-    using DisplaySettings = spe::DisplaySettings;
-    using AnalysisSettings = spe::AnalysisSettings;
+    static constexpr std::size_t analyserScopeSize = 512;
+
+    struct DisplaySettings
+    {
+        float leftFrequencyHz = 21.0f;
+        float rightFrequencyHz = 20000.0f;
+        float rangeLowDb = -60.0f;
+        float rangeHighDb = 10.0f;
+        float leftThresholdDb = 0.0f;
+        float rightThresholdDb = 0.0f;
+        float slopeDbPerOct = 4.5f;
+    };
+
+    struct AnalysisSettings
+    {
+        int fftSize = 4096;
+        int overlapFactor = 32;
+        float averagingTimeMs = 50.0f;
+    };
 
     struct CompressorSettings
     {
-        struct PhaseFilter
+        struct SpectralFilter
         {
             bool bypassed = false;
             int type = 1;
@@ -44,9 +59,9 @@ public:
         float ratio = 100.0f;
         float makeupDb = 0.0f;
         int phaseFilterCount = 0;
-        std::array<PhaseFilter, 16> phaseFilters {};
+        std::array<SpectralFilter, 16> phaseFilters {};
         int amplitudeFilterCount = 0;
-        std::array<PhaseFilter, 16> amplitudeFilters {};
+        std::array<SpectralFilter, 16> amplitudeFilters {};
     };
 
     inline static constexpr auto paramFftSizeId = "spe_fft_size";
@@ -74,7 +89,7 @@ public:
     inline static constexpr auto paramDspSlopeId = "spe_dsp_slope";
     inline static constexpr auto paramPhaseFilterCountId = "spe_phase_filter_count";
     inline static constexpr auto paramAmplitudeFilterCountId = "spe_amplitude_filter_count";
-    static constexpr int maxPhaseFilterCount = 16;
+    static constexpr int maxSpeFilterCount = 16;
     static juce::String getPhaseFilterTypeParamId(int filterIndex);
     static juce::String getPhaseFilterPlaceParamId(int filterIndex);
     static juce::String getPhaseFilterSlopeParamId(int filterIndex);
@@ -290,20 +305,20 @@ private:
     std::atomic<float>* dspSlopeParam = nullptr;
     std::atomic<float>* phaseFilterCountParam = nullptr;
     std::atomic<float>* amplitudeFilterCountParam = nullptr;
-    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseTypeParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> phasePlaceParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseSlopeParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseFrequencyParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseBandwidthParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseImpactParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> phaseBypassParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> amplitudeTypeParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> amplitudePlaceParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> amplitudeSlopeParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> amplitudeFrequencyParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> amplitudeBandwidthParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> amplitudeImpactParams {};
-    std::array<std::atomic<float>*, maxPhaseFilterCount> amplitudeBypassParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> phaseTypeParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> phasePlaceParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> phaseSlopeParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> phaseFrequencyParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> phaseBandwidthParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> phaseImpactParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> phaseBypassParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> amplitudeTypeParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> amplitudePlaceParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> amplitudeSlopeParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> amplitudeFrequencyParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> amplitudeBandwidthParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> amplitudeImpactParams {};
+    std::array<std::atomic<float>*, maxSpeFilterCount> amplitudeBypassParams {};
     std::atomic<bool> linkedDualMonoPropagationInProgress { false };
     SpectralCompressor spectralCompressor;
     static constexpr int deltaDelayBufferSize = SpectralCompressor::maxFftSize + 1;

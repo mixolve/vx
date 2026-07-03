@@ -64,7 +64,7 @@ void VxAudioProcessorEditor::closeActiveModule()
     mxeModuleLoaded = false;
     tseModuleLoaded = false;
 
-    shellGlobalHostExpanded = false;
+    hostParametersExpanded = false;
     for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
         clearHostSlot(slotIndex);
 
@@ -107,7 +107,7 @@ void VxAudioProcessorEditor::closeActiveModule()
         hideComponent(section->moveDownButton.get());
         hideComponent(section->header.get());
         hideComponent(section->typeControl.get());
-        hideComponent(section->lrmsControl.get());
+        hideComponent(section->placeControl.get());
         hideComponent(section->slopeControl.get());
         hideComponent(section->frequencyControl.get());
         hideComponent(section->bandwidthControl.get());
@@ -116,7 +116,7 @@ void VxAudioProcessorEditor::closeActiveModule()
     }
 
     rebindActiveModuleEditors();
-    updateEditorWidthState();
+    syncEditorWidthToBounds();
     refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
@@ -135,11 +135,11 @@ void VxAudioProcessorEditor::loadEqeModule()
     mxeModuleLoaded = false;
     tseModuleLoaded = false;
 
-    shellGlobalHostExpanded = false;
+    hostParametersExpanded = false;
 
     rebindActiveModuleEditors();
     enforceSingleExpandedFilterSection();
-    updateEditorWidthState();
+    syncEditorWidthToBounds();
     refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
@@ -158,10 +158,10 @@ void VxAudioProcessorEditor::loadMieModule()
     mxeModuleLoaded = false;
     tseModuleLoaded = false;
 
-    shellGlobalHostExpanded = false;
+    hostParametersExpanded = false;
 
     rebindActiveModuleEditors();
-    updateEditorWidthState();
+    syncEditorWidthToBounds();
     refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
@@ -180,10 +180,10 @@ void VxAudioProcessorEditor::loadMxeModule()
     mieModuleLoaded = false;
     tseModuleLoaded = false;
 
-    shellGlobalHostExpanded = false;
+    hostParametersExpanded = false;
 
     rebindActiveModuleEditors();
-    updateEditorWidthState();
+    syncEditorWidthToBounds();
     refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
@@ -202,10 +202,10 @@ void VxAudioProcessorEditor::loadTseModule()
     mieModuleLoaded = false;
     mxeModuleLoaded = false;
 
-    shellGlobalHostExpanded = false;
+    hostParametersExpanded = false;
 
     rebindActiveModuleEditors();
-    updateEditorWidthState();
+    syncEditorWidthToBounds();
     refreshModuleTabButton();
     storeEditorStateToValueTree();
     updateSectionStates();
@@ -227,9 +227,9 @@ void VxAudioProcessorEditor::refreshModuleTabButton()
     moduleTabButton->setVisible(audioProcessor.getActiveModule() != VxAudioProcessor::ActiveModule::none);
 }
 
-void VxAudioProcessorEditor::openShellGlobalHostSection()
+void VxAudioProcessorEditor::toggleHostParametersSection()
 {
-    shellGlobalHostExpanded = ! shellGlobalHostExpanded;
+    hostParametersExpanded = ! hostParametersExpanded;
 
     storeEditorStateToValueTree();
     updateSectionStates();

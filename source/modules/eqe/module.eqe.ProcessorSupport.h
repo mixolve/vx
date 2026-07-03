@@ -17,7 +17,7 @@ inline constexpr auto defaultTiltFrequency = 632.0f;
 inline constexpr auto nyquistSafetyFactor = 0.98;
 inline constexpr auto flatTiltStageCount = 16;
 inline const juce::StringArray filterTypeChoices { "LCT", "LSH", "BEL", "FTL", "HSH", "HCT", "VOL" };
-inline const juce::StringArray filterLrmsChoices { "LR", "LL", "RR", "MM", "SS", "PHS", "PHL", "PHR" };
+inline const juce::StringArray filterPlaceChoices { "LR", "LL", "RR", "MM", "SS", "PHS", "PHL", "PHR" };
 
 inline constexpr auto filterPresetsRootTag = "FILTER_PRESETS";
 inline constexpr auto presetTag = "PRESET";
@@ -42,7 +42,7 @@ juce::String formatDecibelValue(float value);
 juce::String formatFrequencyValue(float value);
 juce::String formatBandwidthValue(float value);
 juce::String makeFilterTypeName(int filterIndex);
-juce::String makeFilterLrmsName(int filterIndex);
+juce::String makeFilterPlaceName(int filterIndex);
 juce::String makeFilterParameterId(const char* suffix, int filterIndex);
 juce::StringArray getBellSlopeDisplayChoicesForType(EqeModuleProcessor::FilterType type) noexcept;
 int clampActiveFilterCount(int filterCount);
@@ -55,7 +55,6 @@ juce::XmlElement* findPresetElement(juce::XmlElement& rootElement, const juce::S
 std::unique_ptr<juce::XmlElement> createSerializableStateXml(juce::AudioProcessorValueTreeState& parameters,
                                                              int activeFilterCount);
 std::unique_ptr<juce::XmlElement> createSerializableStateXml(const EqeModuleProcessor& processor);
-void rewriteFilterParameterIds(juce::XmlElement& element, bool toStorageFormat);
 juce::File getEqeAppGroupContainerDirectory();
 
 bool isShelfFilterType(EqeModuleProcessor::FilterType type) noexcept;

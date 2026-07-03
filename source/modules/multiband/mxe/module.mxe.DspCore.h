@@ -1,6 +1,7 @@
 #pragma once
 
 #include "module.mxe.DspSupport.h"
+#include "../module.multiband.Processor.h"
 
 #include <JuceHeader.h>
 
@@ -110,4 +111,6 @@ private:
     std::vector<double> dryL;
     std::vector<double> dryR;
 };
+
+using MultibandProcessor = vx::multiband::Processor<DspCore>;
 } // namespace mxe::dsp

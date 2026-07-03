@@ -270,7 +270,7 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->rebind(speState);
         if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->rebind(speState);
         if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->rebind(speState);
-        for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
         {
             if (spePhaseTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
                 spePhaseTypeControls[static_cast<size_t>(filterIndex)]->rebind(speState);
@@ -310,7 +310,7 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
             speDualMonoLinkAttachment = std::make_unique<ButtonAttachment>(speState,
                                                                            SpeModuleProcessor::paramDualMonoLinkId,
                                                                            *speDualMonoLinkButton);
-        for (auto filterIndex = 0; filterIndex < spePhaseFilterControlCount; ++filterIndex)
+        for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
         {
             if (spePhaseBypassButtons[static_cast<size_t>(filterIndex)] != nullptr)
                 spePhaseBypassAttachments[static_cast<size_t>(filterIndex)] = std::make_unique<ButtonAttachment>(

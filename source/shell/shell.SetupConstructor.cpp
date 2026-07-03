@@ -145,11 +145,11 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     setWantsKeyboardFocus(true);
     setMouseClickGrabsKeyboardFocus(false);
     tooltipWindow = std::make_unique<DelayedTooltipWindow>(this, 1500);
-    shellGlobalHostViewport.setViewedComponent(&shellGlobalHostContent, false);
-    shellGlobalHostViewport.setScrollBarsShown(false, true);
-    shellGlobalHostViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
-    shellGlobalHostViewport.setWantsKeyboardFocus(false);
-    addAndMakeVisible(shellGlobalHostViewport);
+    hostParametersViewport.setViewedComponent(&hostParametersContent, false);
+    hostParametersViewport.setScrollBarsShown(false, true);
+    hostParametersViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
+    hostParametersViewport.setWantsKeyboardFocus(false);
+    addAndMakeVisible(hostParametersViewport);
     speAnalyserViewport.setViewedComponent(&speAnalyserContent, false);
     speAnalyserViewport.setScrollBarsShown(false, false);
     speAnalyserViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
@@ -199,28 +199,28 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     };
     addAndMakeVisible(*focusedParameterControl);
 
-    shellGlobalHeader = std::make_unique<BoxTextButton>(uiClip);
-    shellGlobalHeader->setButtonText("C");
-    shellGlobalHeader->setTooltip("CLIP INDICATOR");
-    shellGlobalHeader->setTextJustification(juce::Justification::centred);
-    shellGlobalHeader->setClickingTogglesState(false);
-    shellGlobalHeader->onClick = [this]
+    clipButton = std::make_unique<BoxTextButton>(uiClip);
+    clipButton->setButtonText("C");
+    clipButton->setTooltip("CLIP INDICATOR");
+    clipButton->setTextJustification(juce::Justification::centred);
+    clipButton->setClickingTogglesState(false);
+    clipButton->onClick = [this]
     {
         clearKeyboardFocus(*this);
     };
-    addAndMakeVisible(*shellGlobalHeader);
+    addAndMakeVisible(*clipButton);
 
-    shellGlobalHostHeader = std::make_unique<BoxTextButton>(uiAccent);
-    shellGlobalHostHeader->setButtonText("H");
-    shellGlobalHostHeader->setTooltip("CLICK: HOST PARAMETERS -- LONG PRESS: TURN ON/OFF HINTS");
-    shellGlobalHostHeader->setTextJustification(juce::Justification::centred);
-    shellGlobalHostHeader->setClickingTogglesState(true);
-    shellGlobalHostHeader->onClick = [this]
+    hostButton = std::make_unique<BoxTextButton>(uiAccent);
+    hostButton->setButtonText("H");
+    hostButton->setTooltip("CLICK: HOST PARAMETERS -- LONG PRESS: TURN ON/OFF HINTS");
+    hostButton->setTextJustification(juce::Justification::centred);
+    hostButton->setClickingTogglesState(true);
+    hostButton->onClick = [this]
     {
-        openShellGlobalHostSection();
+        toggleHostParametersSection();
         clearKeyboardFocus(*this);
     };
-    addAndMakeVisible(*shellGlobalHostHeader);
+    addAndMakeVisible(*hostButton);
 
     moduleAddButton = std::make_unique<BoxTextButton>(uiClip);
     moduleAddButton->setButtonText("ADD MODULE");
@@ -281,7 +281,6 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     setResizeLimits(minimumEditorWidth, minimumEditorHeight, maximumEditorWidth, maximumEditorHeight);
 
     const auto restoredEditorSize = getRestoredEditorSize();
-    lastCollapsedEditorWidth = juce::jlimit(minimumEditorWidth, maximumEditorWidth, lastCollapsedEditorWidth);
     setResizeLimits(minimumEditorWidth, minimumEditorHeight, maximumEditorWidth, maximumEditorHeight);
     setSize(restoredEditorSize.x, restoredEditorSize.y);
     audioProcessor.setLastEditorSize(restoredEditorSize.x, restoredEditorSize.y);

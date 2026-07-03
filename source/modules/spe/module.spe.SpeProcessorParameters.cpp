@@ -79,6 +79,133 @@ juce::String makeAmplitudeFilterParameterId(const int filterIndex, const char* s
     return "spe_amplitude_filter_" + juce::String(filterIndex + 1) + "_" + suffix;
 }
 
+struct FilterParameterIds
+{
+    juce::String type;
+    juce::String place;
+    juce::String slope;
+    juce::String frequency;
+    juce::String bandwidth;
+    juce::String impact;
+    juce::String bypass;
+};
+
+FilterParameterIds makePhaseFilterParameterIds(const int filterIndex)
+{
+    return {
+        SpeModuleProcessor::getPhaseFilterTypeParamId(filterIndex),
+        SpeModuleProcessor::getPhaseFilterPlaceParamId(filterIndex),
+        SpeModuleProcessor::getPhaseFilterSlopeParamId(filterIndex),
+        SpeModuleProcessor::getPhaseFilterFrequencyParamId(filterIndex),
+        SpeModuleProcessor::getPhaseFilterBandwidthParamId(filterIndex),
+        SpeModuleProcessor::getPhaseFilterImpactParamId(filterIndex),
+        SpeModuleProcessor::getPhaseFilterBypassParamId(filterIndex)
+    };
+}
+
+FilterParameterIds makeAmplitudeFilterParameterIds(const int filterIndex)
+{
+    return {
+        SpeModuleProcessor::getAmplitudeFilterTypeParamId(filterIndex),
+        SpeModuleProcessor::getAmplitudeFilterPlaceParamId(filterIndex),
+        SpeModuleProcessor::getAmplitudeFilterSlopeParamId(filterIndex),
+        SpeModuleProcessor::getAmplitudeFilterFrequencyParamId(filterIndex),
+        SpeModuleProcessor::getAmplitudeFilterBandwidthParamId(filterIndex),
+        SpeModuleProcessor::getAmplitudeFilterImpactParamId(filterIndex),
+        SpeModuleProcessor::getAmplitudeFilterBypassParamId(filterIndex)
+    };
+}
+
+void setPlainParameterValue(juce::AudioProcessorValueTreeState& parameters,
+                            const juce::String& parameterId,
+                            const float value)
+{
+    if (auto* parameter = parameters.getParameter(parameterId))
+        parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+}
+
+float getPlainParameterValue(juce::AudioProcessorValueTreeState& parameters,
+                             const juce::String& parameterId,
+                             const float fallback) noexcept
+{
+    if (const auto* value = parameters.getRawParameterValue(parameterId))
+        return value->load(std::memory_order_relaxed);
+
+    return fallback;
+}
+
+template <typename Callback>
+void forEachSpectralFilterParameter(const FilterParameterIds& parameterIds, Callback&& callback)
+{
+    callback(parameterIds.type, 1.0f);
+    callback(parameterIds.place, 0.0f);
+    callback(parameterIds.slope, 1.0f);
+    callback(parameterIds.frequency, 632.0f);
+    callback(parameterIds.bandwidth, 1.0f);
+    callback(parameterIds.impact, 0.0f);
+    callback(parameterIds.bypass, 0.0f);
+}
+
+void resetSpectralFilterParameters(juce::AudioProcessorValueTreeState& parameters,
+                                   const FilterParameterIds& parameterIds)
+{
+    forEachSpectralFilterParameter(parameterIds,
+                                   [&parameters] (const juce::String& parameterId, const float defaultValue)
+                                   {
+                                       setPlainParameterValue(parameters, parameterId, defaultValue);
+                                   });
+}
+
+void copySpectralFilterParameters(juce::AudioProcessorValueTreeState& parameters,
+                                  const FilterParameterIds& destinationIds,
+                                  const FilterParameterIds& sourceIds)
+{
+    const std::array<const juce::String*, 7> destinationIdsByIndex
+    {
+        &destinationIds.type,
+        &destinationIds.place,
+        &destinationIds.slope,
+        &destinationIds.frequency,
+        &destinationIds.bandwidth,
+        &destinationIds.impact,
+        &destinationIds.bypass
+    };
+    auto destinationIndex = 0;
+
+    forEachSpectralFilterParameter(sourceIds,
+                                   [&parameters, &destinationIdsByIndex, &destinationIndex] (const juce::String& sourceId, const float fallback)
+                                   {
+                                       setPlainParameterValue(parameters,
+                                                              *destinationIdsByIndex[static_cast<size_t>(destinationIndex)],
+                                                              getPlainParameterValue(parameters, sourceId, fallback));
+                                       ++destinationIndex;
+                                   });
+}
+
+struct FilterParameterValues
+{
+    std::atomic<float>* type = nullptr;
+    std::atomic<float>* place = nullptr;
+    std::atomic<float>* slope = nullptr;
+    std::atomic<float>* frequency = nullptr;
+    std::atomic<float>* bandwidth = nullptr;
+    std::atomic<float>* impact = nullptr;
+    std::atomic<float>* bypass = nullptr;
+};
+
+void readSpectralFilterSettings(SpeModuleProcessor::CompressorSettings::SpectralFilter& filter,
+                                const FilterParameterValues& values) noexcept
+{
+    filter.bypassed = values.bypass != nullptr
+        && values.bypass->load(std::memory_order_relaxed) >= 0.5f;
+    filter.type = juce::jlimit(0, 4, values.type != nullptr ? juce::roundToInt(values.type->load(std::memory_order_relaxed)) : 1);
+    filter.place = juce::jlimit(0, 2, values.place != nullptr ? juce::roundToInt(values.place->load(std::memory_order_relaxed)) : 0);
+    filter.slope = juce::jlimit(0, 5, values.slope != nullptr ? juce::roundToInt(values.slope->load(std::memory_order_relaxed)) : 1);
+    filter.frequency = juce::jlimit(20.0f, 20000.0f, values.frequency != nullptr ? values.frequency->load(std::memory_order_relaxed) : 632.0f);
+    filter.bandwidth = juce::jlimit(0.05f, 5.0f, values.bandwidth != nullptr ? values.bandwidth->load(std::memory_order_relaxed) : 1.0f);
+    filter.impactPercent = juce::jlimit(-100.0f, 100.0f, values.impact != nullptr ? values.impact->load(std::memory_order_relaxed) : 0.0f);
+}
+
 }
 
 juce::String SpeModuleProcessor::getPhaseFilterTypeParamId(const int filterIndex)
@@ -219,14 +346,15 @@ SpeModuleProcessor::CompressorSettings SpeModuleProcessor::getCompressorSettings
     for (auto filterIndex = 0; filterIndex < settings.phaseFilterCount; ++filterIndex)
     {
         auto& phaseFilter = settings.phaseFilters[static_cast<size_t>(filterIndex)];
-        phaseFilter.bypassed = phaseBypassParams[static_cast<size_t>(filterIndex)] != nullptr
-                            && phaseBypassParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed) >= 0.5f;
-        phaseFilter.type = juce::jlimit(0, 4, phaseTypeParams[static_cast<size_t>(filterIndex)] != nullptr ? juce::roundToInt(phaseTypeParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed)) : 1);
-        phaseFilter.place = juce::jlimit(0, 2, phasePlaceParams[static_cast<size_t>(filterIndex)] != nullptr ? juce::roundToInt(phasePlaceParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed)) : 0);
-        phaseFilter.slope = juce::jlimit(0, 5, phaseSlopeParams[static_cast<size_t>(filterIndex)] != nullptr ? juce::roundToInt(phaseSlopeParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed)) : 1);
-        phaseFilter.frequency = juce::jlimit(20.0f, 20000.0f, phaseFrequencyParams[static_cast<size_t>(filterIndex)] != nullptr ? phaseFrequencyParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed) : 632.0f);
-        phaseFilter.bandwidth = juce::jlimit(0.05f, 5.0f, phaseBandwidthParams[static_cast<size_t>(filterIndex)] != nullptr ? phaseBandwidthParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed) : 1.0f);
-        phaseFilter.impactPercent = juce::jlimit(-100.0f, 100.0f, phaseImpactParams[static_cast<size_t>(filterIndex)] != nullptr ? phaseImpactParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed) : 0.0f);
+        const auto arrayIndex = static_cast<size_t>(filterIndex);
+        readSpectralFilterSettings(phaseFilter,
+                                   { phaseTypeParams[arrayIndex],
+                                     phasePlaceParams[arrayIndex],
+                                     phaseSlopeParams[arrayIndex],
+                                     phaseFrequencyParams[arrayIndex],
+                                     phaseBandwidthParams[arrayIndex],
+                                     phaseImpactParams[arrayIndex],
+                                     phaseBypassParams[arrayIndex] });
     }
 
     settings.amplitudeFilterCount = getActiveAmplitudeFilterCount();
@@ -234,14 +362,15 @@ SpeModuleProcessor::CompressorSettings SpeModuleProcessor::getCompressorSettings
     for (auto filterIndex = 0; filterIndex < settings.amplitudeFilterCount; ++filterIndex)
     {
         auto& amplitudeFilter = settings.amplitudeFilters[static_cast<size_t>(filterIndex)];
-        amplitudeFilter.bypassed = amplitudeBypassParams[static_cast<size_t>(filterIndex)] != nullptr
-                                && amplitudeBypassParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed) >= 0.5f;
-        amplitudeFilter.type = juce::jlimit(0, 4, amplitudeTypeParams[static_cast<size_t>(filterIndex)] != nullptr ? juce::roundToInt(amplitudeTypeParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed)) : 1);
-        amplitudeFilter.place = juce::jlimit(0, 2, amplitudePlaceParams[static_cast<size_t>(filterIndex)] != nullptr ? juce::roundToInt(amplitudePlaceParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed)) : 0);
-        amplitudeFilter.slope = juce::jlimit(0, 5, amplitudeSlopeParams[static_cast<size_t>(filterIndex)] != nullptr ? juce::roundToInt(amplitudeSlopeParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed)) : 1);
-        amplitudeFilter.frequency = juce::jlimit(20.0f, 20000.0f, amplitudeFrequencyParams[static_cast<size_t>(filterIndex)] != nullptr ? amplitudeFrequencyParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed) : 632.0f);
-        amplitudeFilter.bandwidth = juce::jlimit(0.05f, 5.0f, amplitudeBandwidthParams[static_cast<size_t>(filterIndex)] != nullptr ? amplitudeBandwidthParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed) : 1.0f);
-        amplitudeFilter.impactPercent = juce::jlimit(-100.0f, 100.0f, amplitudeImpactParams[static_cast<size_t>(filterIndex)] != nullptr ? amplitudeImpactParams[static_cast<size_t>(filterIndex)]->load(std::memory_order_relaxed) : 0.0f);
+        const auto arrayIndex = static_cast<size_t>(filterIndex);
+        readSpectralFilterSettings(amplitudeFilter,
+                                   { amplitudeTypeParams[arrayIndex],
+                                     amplitudePlaceParams[arrayIndex],
+                                     amplitudeSlopeParams[arrayIndex],
+                                     amplitudeFrequencyParams[arrayIndex],
+                                     amplitudeBandwidthParams[arrayIndex],
+                                     amplitudeImpactParams[arrayIndex],
+                                     amplitudeBypassParams[arrayIndex] });
     }
 
     return settings;
@@ -256,7 +385,7 @@ bool SpeModuleProcessor::isDeltaEnabled() const noexcept
 int SpeModuleProcessor::getActivePhaseFilterCount() const noexcept
 {
     return juce::jlimit(0,
-                        maxPhaseFilterCount,
+                        maxSpeFilterCount,
                         phaseFilterCountParam != nullptr ? juce::roundToInt(phaseFilterCountParam->load(std::memory_order_relaxed)) : 0);
 }
 
@@ -264,23 +393,11 @@ bool SpeModuleProcessor::addPhaseFilter() noexcept
 {
     const auto currentCount = getActivePhaseFilterCount();
 
-    if (currentCount >= maxPhaseFilterCount)
+    if (currentCount >= maxSpeFilterCount)
         return false;
 
-    const auto setParameterValue = [this] (const juce::String& parameterId, const float value)
-    {
-        if (auto* parameter = parameters.getParameter(parameterId))
-            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
-    };
-
-    setParameterValue(getPhaseFilterTypeParamId(currentCount), 1.0f);
-    setParameterValue(getPhaseFilterPlaceParamId(currentCount), 0.0f);
-    setParameterValue(getPhaseFilterSlopeParamId(currentCount), 1.0f);
-    setParameterValue(getPhaseFilterFrequencyParamId(currentCount), 632.0f);
-    setParameterValue(getPhaseFilterBandwidthParamId(currentCount), 1.0f);
-    setParameterValue(getPhaseFilterImpactParamId(currentCount), 0.0f);
-    setParameterValue(getPhaseFilterBypassParamId(currentCount), 0.0f);
-    setParameterValue(paramPhaseFilterCountId, static_cast<float>(currentCount + 1));
+    resetSpectralFilterParameters(parameters, makePhaseFilterParameterIds(currentCount));
+    setPlainParameterValue(parameters, paramPhaseFilterCountId, static_cast<float>(currentCount + 1));
     return true;
 }
 
@@ -291,48 +408,23 @@ bool SpeModuleProcessor::removePhaseFilter(const int filterIndex) noexcept
     if (filterIndex < 0 || filterIndex >= currentCount)
         return false;
 
-    const auto setParameterValue = [this] (const juce::String& parameterId, const float value)
-    {
-        if (auto* parameter = parameters.getParameter(parameterId))
-            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
-    };
-
-    const auto getParameterValue = [this] (const juce::String& parameterId, const float fallback) noexcept
-    {
-        if (const auto* value = parameters.getRawParameterValue(parameterId))
-            return value->load(std::memory_order_relaxed);
-
-        return fallback;
-    };
-
     for (auto sourceIndex = filterIndex + 1; sourceIndex < currentCount; ++sourceIndex)
     {
         const auto destinationIndex = sourceIndex - 1;
-        setParameterValue(getPhaseFilterTypeParamId(destinationIndex), getParameterValue(getPhaseFilterTypeParamId(sourceIndex), 1.0f));
-        setParameterValue(getPhaseFilterPlaceParamId(destinationIndex), getParameterValue(getPhaseFilterPlaceParamId(sourceIndex), 0.0f));
-        setParameterValue(getPhaseFilterSlopeParamId(destinationIndex), getParameterValue(getPhaseFilterSlopeParamId(sourceIndex), 1.0f));
-        setParameterValue(getPhaseFilterFrequencyParamId(destinationIndex), getParameterValue(getPhaseFilterFrequencyParamId(sourceIndex), 632.0f));
-        setParameterValue(getPhaseFilterBandwidthParamId(destinationIndex), getParameterValue(getPhaseFilterBandwidthParamId(sourceIndex), 1.0f));
-        setParameterValue(getPhaseFilterImpactParamId(destinationIndex), getParameterValue(getPhaseFilterImpactParamId(sourceIndex), 0.0f));
-        setParameterValue(getPhaseFilterBypassParamId(destinationIndex), getParameterValue(getPhaseFilterBypassParamId(sourceIndex), 0.0f));
+        copySpectralFilterParameters(parameters,
+                                     makePhaseFilterParameterIds(destinationIndex),
+                                     makePhaseFilterParameterIds(sourceIndex));
     }
 
-    const auto lastIndex = currentCount - 1;
-    setParameterValue(getPhaseFilterTypeParamId(lastIndex), 1.0f);
-    setParameterValue(getPhaseFilterPlaceParamId(lastIndex), 0.0f);
-    setParameterValue(getPhaseFilterSlopeParamId(lastIndex), 1.0f);
-    setParameterValue(getPhaseFilterFrequencyParamId(lastIndex), 632.0f);
-    setParameterValue(getPhaseFilterBandwidthParamId(lastIndex), 1.0f);
-    setParameterValue(getPhaseFilterImpactParamId(lastIndex), 0.0f);
-    setParameterValue(getPhaseFilterBypassParamId(lastIndex), 0.0f);
-    setParameterValue(paramPhaseFilterCountId, static_cast<float>(currentCount - 1));
+    resetSpectralFilterParameters(parameters, makePhaseFilterParameterIds(currentCount - 1));
+    setPlainParameterValue(parameters, paramPhaseFilterCountId, static_cast<float>(currentCount - 1));
     return true;
 }
 
 int SpeModuleProcessor::getActiveAmplitudeFilterCount() const noexcept
 {
     return juce::jlimit(0,
-                        maxPhaseFilterCount,
+                        maxSpeFilterCount,
                         amplitudeFilterCountParam != nullptr ? juce::roundToInt(amplitudeFilterCountParam->load(std::memory_order_relaxed)) : 0);
 }
 
@@ -340,23 +432,11 @@ bool SpeModuleProcessor::addAmplitudeFilter() noexcept
 {
     const auto currentCount = getActiveAmplitudeFilterCount();
 
-    if (currentCount >= maxPhaseFilterCount)
+    if (currentCount >= maxSpeFilterCount)
         return false;
 
-    const auto setParameterValue = [this] (const juce::String& parameterId, const float value)
-    {
-        if (auto* parameter = parameters.getParameter(parameterId))
-            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
-    };
-
-    setParameterValue(getAmplitudeFilterTypeParamId(currentCount), 1.0f);
-    setParameterValue(getAmplitudeFilterPlaceParamId(currentCount), 0.0f);
-    setParameterValue(getAmplitudeFilterSlopeParamId(currentCount), 1.0f);
-    setParameterValue(getAmplitudeFilterFrequencyParamId(currentCount), 632.0f);
-    setParameterValue(getAmplitudeFilterBandwidthParamId(currentCount), 1.0f);
-    setParameterValue(getAmplitudeFilterImpactParamId(currentCount), 0.0f);
-    setParameterValue(getAmplitudeFilterBypassParamId(currentCount), 0.0f);
-    setParameterValue(paramAmplitudeFilterCountId, static_cast<float>(currentCount + 1));
+    resetSpectralFilterParameters(parameters, makeAmplitudeFilterParameterIds(currentCount));
+    setPlainParameterValue(parameters, paramAmplitudeFilterCountId, static_cast<float>(currentCount + 1));
     return true;
 }
 
@@ -367,41 +447,16 @@ bool SpeModuleProcessor::removeAmplitudeFilter(const int filterIndex) noexcept
     if (filterIndex < 0 || filterIndex >= currentCount)
         return false;
 
-    const auto setParameterValue = [this] (const juce::String& parameterId, const float value)
-    {
-        if (auto* parameter = parameters.getParameter(parameterId))
-            parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
-    };
-
-    const auto getParameterValue = [this] (const juce::String& parameterId, const float fallback) noexcept
-    {
-        if (const auto* value = parameters.getRawParameterValue(parameterId))
-            return value->load(std::memory_order_relaxed);
-
-        return fallback;
-    };
-
     for (auto sourceIndex = filterIndex + 1; sourceIndex < currentCount; ++sourceIndex)
     {
         const auto destinationIndex = sourceIndex - 1;
-        setParameterValue(getAmplitudeFilterTypeParamId(destinationIndex), getParameterValue(getAmplitudeFilterTypeParamId(sourceIndex), 1.0f));
-        setParameterValue(getAmplitudeFilterPlaceParamId(destinationIndex), getParameterValue(getAmplitudeFilterPlaceParamId(sourceIndex), 0.0f));
-        setParameterValue(getAmplitudeFilterSlopeParamId(destinationIndex), getParameterValue(getAmplitudeFilterSlopeParamId(sourceIndex), 1.0f));
-        setParameterValue(getAmplitudeFilterFrequencyParamId(destinationIndex), getParameterValue(getAmplitudeFilterFrequencyParamId(sourceIndex), 632.0f));
-        setParameterValue(getAmplitudeFilterBandwidthParamId(destinationIndex), getParameterValue(getAmplitudeFilterBandwidthParamId(sourceIndex), 1.0f));
-        setParameterValue(getAmplitudeFilterImpactParamId(destinationIndex), getParameterValue(getAmplitudeFilterImpactParamId(sourceIndex), 0.0f));
-        setParameterValue(getAmplitudeFilterBypassParamId(destinationIndex), getParameterValue(getAmplitudeFilterBypassParamId(sourceIndex), 0.0f));
+        copySpectralFilterParameters(parameters,
+                                     makeAmplitudeFilterParameterIds(destinationIndex),
+                                     makeAmplitudeFilterParameterIds(sourceIndex));
     }
 
-    const auto lastIndex = currentCount - 1;
-    setParameterValue(getAmplitudeFilterTypeParamId(lastIndex), 1.0f);
-    setParameterValue(getAmplitudeFilterPlaceParamId(lastIndex), 0.0f);
-    setParameterValue(getAmplitudeFilterSlopeParamId(lastIndex), 1.0f);
-    setParameterValue(getAmplitudeFilterFrequencyParamId(lastIndex), 632.0f);
-    setParameterValue(getAmplitudeFilterBandwidthParamId(lastIndex), 1.0f);
-    setParameterValue(getAmplitudeFilterImpactParamId(lastIndex), 0.0f);
-    setParameterValue(getAmplitudeFilterBypassParamId(lastIndex), 0.0f);
-    setParameterValue(paramAmplitudeFilterCountId, static_cast<float>(currentCount - 1));
+    resetSpectralFilterParameters(parameters, makeAmplitudeFilterParameterIds(currentCount - 1));
+    setPlainParameterValue(parameters, paramAmplitudeFilterCountId, static_cast<float>(currentCount - 1));
     return true;
 }
 
@@ -626,11 +681,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpeModuleProcessor::createPa
         juce::ParameterID { paramPhaseFilterCountId, 1 },
         "SPE - PHASE FILTER COUNT",
         0,
-        maxPhaseFilterCount,
+        maxSpeFilterCount,
         0,
         juce::AudioParameterIntAttributes()));
 
-    for (auto filterIndex = 0; filterIndex < maxPhaseFilterCount; ++filterIndex)
+    for (auto filterIndex = 0; filterIndex < maxSpeFilterCount; ++filterIndex)
     {
         const auto prefix = "SPE - PHASE " + juce::String(filterIndex + 1) + " - ";
 
@@ -701,11 +756,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpeModuleProcessor::createPa
         juce::ParameterID { paramAmplitudeFilterCountId, 1 },
         "SPE - AMPLITUDE FILTER COUNT",
         0,
-        maxPhaseFilterCount,
+        maxSpeFilterCount,
         0,
         juce::AudioParameterIntAttributes()));
 
-    for (auto filterIndex = 0; filterIndex < maxPhaseFilterCount; ++filterIndex)
+    for (auto filterIndex = 0; filterIndex < maxSpeFilterCount; ++filterIndex)
     {
         const auto prefix = "SPE - AMPLITUDE " + juce::String(filterIndex + 1) + " - ";
 

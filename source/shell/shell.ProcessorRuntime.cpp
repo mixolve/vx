@@ -146,7 +146,7 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
 
     const auto active = activeModule.load(std::memory_order_acquire);
 
-    auto applyShellGlobalOutputStage = [this, &buffer]
+    auto applyGlobalOutputStage = [this, &buffer]
     {
         const auto outputProcessChannels = juce::jmin(buffer.getNumChannels(), preparedNumChannels);
 
@@ -178,7 +178,7 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
 
     if (active == ActiveModule::none)
     {
-        applyShellGlobalOutputStage();
+        applyGlobalOutputStage();
         return;
     }
 
@@ -248,6 +248,6 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
             break;
     }
 
-    applyShellGlobalOutputStage();
+    applyGlobalOutputStage();
     updateShellLatency();
 }

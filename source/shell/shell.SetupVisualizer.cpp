@@ -54,9 +54,9 @@ public:
                                             sourceMaximumHz,
                                             displaySettings.rightFrequencyHz);
 
-        for (auto index = 0; index < static_cast<int>(spe::analyserScopeSize); ++index)
+        for (auto index = 0; index < static_cast<int>(SpeModuleProcessor::analyserScopeSize); ++index)
         {
-            const auto proportion = static_cast<float>(index) / static_cast<float>(spe::analyserScopeSize - 1);
+            const auto proportion = static_cast<float>(index) / static_cast<float>(SpeModuleProcessor::analyserScopeSize - 1);
             const auto x = plotBounds.getX() + proportion * plotBounds.getWidth();
             const auto frequency = juce::mapToLog10(proportion, minimumHz, maximumHz);
             const auto sampledDecibels = sampleScopeAtFrequency(scopeData, frequency, sourceMaximumHz);
@@ -102,9 +102,9 @@ public:
         spectrumFillPath.lineTo(plotBounds.getX(), plotBounds.getBottom());
         spectrumFillPath.closeSubPath();
 
-        for (auto index = static_cast<int>(spe::analyserScopeSize) - 1; index >= 0; --index)
+        for (auto index = static_cast<int>(SpeModuleProcessor::analyserScopeSize) - 1; index >= 0; --index)
         {
-            const auto proportion = static_cast<float>(index) / static_cast<float>(spe::analyserScopeSize - 1);
+            const auto proportion = static_cast<float>(index) / static_cast<float>(SpeModuleProcessor::analyserScopeSize - 1);
             const auto x = plotBounds.getX() + proportion * plotBounds.getWidth();
             leftReductionPath.lineTo(x, decibelsToY(displaySettings.leftThresholdDb, plotBounds));
             rightReductionPath.lineTo(x, decibelsToY(displaySettings.rightThresholdDb, plotBounds));
@@ -128,7 +128,7 @@ public:
     }
 
 private:
-    static float sampleScopeAtFrequency(const std::array<float, spe::analyserScopeSize>& data,
+    static float sampleScopeAtFrequency(const std::array<float, SpeModuleProcessor::analyserScopeSize>& data,
                                         const float frequency,
                                         const float sourceMaximumHz)
     {
@@ -136,13 +136,13 @@ private:
         const auto sourceProportion = std::log10(clampedFrequency / 20.0f)
                                     / std::log10(sourceMaximumHz / 20.0f);
         const auto scopePosition = juce::jlimit(0.0f,
-                                                static_cast<float>(spe::analyserScopeSize - 1),
-                                                sourceProportion * static_cast<float>(spe::analyserScopeSize - 1));
+                                                static_cast<float>(SpeModuleProcessor::analyserScopeSize - 1),
+                                                sourceProportion * static_cast<float>(SpeModuleProcessor::analyserScopeSize - 1));
         const auto lowerIndex = juce::jlimit(0,
-                                             static_cast<int>(spe::analyserScopeSize) - 1,
+                                             static_cast<int>(SpeModuleProcessor::analyserScopeSize) - 1,
                                              static_cast<int>(std::floor(scopePosition)));
         const auto upperIndex = juce::jlimit(0,
-                                             static_cast<int>(spe::analyserScopeSize) - 1,
+                                             static_cast<int>(SpeModuleProcessor::analyserScopeSize) - 1,
                                              lowerIndex + 1);
         const auto interpolation = scopePosition - static_cast<float>(lowerIndex);
         return juce::jmap(interpolation,
@@ -162,10 +162,10 @@ private:
     }
 
     SpeModuleProcessor& processor;
-    std::array<float, spe::analyserScopeSize> scopeData {};
-    std::array<float, spe::analyserScopeSize> leftGainReductionData {};
-    std::array<float, spe::analyserScopeSize> rightGainReductionData {};
-    spe::DisplaySettings displaySettings;
+    std::array<float, SpeModuleProcessor::analyserScopeSize> scopeData {};
+    std::array<float, SpeModuleProcessor::analyserScopeSize> leftGainReductionData {};
+    std::array<float, SpeModuleProcessor::analyserScopeSize> rightGainReductionData {};
+    SpeModuleProcessor::DisplaySettings displaySettings;
     double sampleRate = 44100.0;
 };
 

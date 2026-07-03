@@ -28,7 +28,7 @@ juce::String makeFilterTypeName(const int filterIndex)
     return makeEqeFilterName(filterIndex, "TYPE");
 }
 
-juce::String makeFilterLrmsName(const int filterIndex)
+juce::String makeFilterPlaceName(const int filterIndex)
 {
     return makeEqeFilterName(filterIndex, "PLACE");
 }

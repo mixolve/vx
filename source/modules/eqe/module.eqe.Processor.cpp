@@ -13,8 +13,8 @@ void EqeModuleProcessor::prepareToPlay(const double sampleRate, const int sample
     preparedNumChannels = static_cast<int>(maxSupportedChannels);
     filterProcessBufferA.setSize(preparedNumChannels, juce::jmax(1, samplesPerBlock));
     filterProcessBufferB.setSize(preparedNumChannels, juce::jmax(1, samplesPerBlock));
-    lrmsWorkBuffer.setSize(1, juce::jmax(1, samplesPerBlock));
-    lrmsAuxBuffer.setSize(preparedNumChannels, juce::jmax(1, samplesPerBlock));
+    placeWorkBuffer.setSize(1, juce::jmax(1, samplesPerBlock));
+    placeAuxBuffer.setSize(preparedNumChannels, juce::jmax(1, samplesPerBlock));
 
     resetFilters();
     markEqeFiltersDirty();
@@ -55,8 +55,8 @@ void EqeModuleProcessor::resetProcessingState() noexcept
 
     filterProcessBufferA.clear();
     filterProcessBufferB.clear();
-    lrmsWorkBuffer.clear();
-    lrmsAuxBuffer.clear();
+    placeWorkBuffer.clear();
+    placeAuxBuffer.clear();
 }
 
 void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
@@ -77,15 +77,15 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
 
     filterProcessBufferA.setSize(processChannels, processSamples, false, false, true);
     filterProcessBufferB.setSize(processChannels, processSamples, false, false, true);
-    lrmsWorkBuffer.setSize(1, processSamples, false, false, true);
-    lrmsAuxBuffer.setSize(processChannels, processSamples, false, false, true);
+    placeWorkBuffer.setSize(1, processSamples, false, false, true);
+    placeAuxBuffer.setSize(processChannels, processSamples, false, false, true);
 
     if (eqeFiltersDirty.exchange(false, std::memory_order_acq_rel))
         updateFilters();
 
     const auto filterCount = getActiveFilterCount();
 
-    auto processLrmsWrapped = [this, processChannels] (juce::AudioBuffer<float>& targetBuffer,
+    auto processPlacedSignal = [this, processChannels] (juce::AudioBuffer<float>& targetBuffer,
                                                        const int bandIndex,
                                                        const std::function<void(juce::AudioBuffer<float>&, int)>& processor)
     {
@@ -95,8 +95,8 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
             return;
         }
 
-        const auto mode = filterLrmsParams[static_cast<size_t>(bandIndex)] != nullptr
-            ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterLrmsParams[static_cast<size_t>(bandIndex)]->load(std::memory_order_relaxed))))
+        const auto mode = filterPlaceParams[static_cast<size_t>(bandIndex)] != nullptr
+            ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterPlaceParams[static_cast<size_t>(bandIndex)]->load(std::memory_order_relaxed))))
             : 0;
 
         if (mode == 0 || mode == 5)
@@ -105,8 +105,8 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
             return;
         }
 
-        auto& workBuffer = lrmsWorkBuffer;
-        auto& auxBuffer = lrmsAuxBuffer;
+        auto& workBuffer = placeWorkBuffer;
+        auto& auxBuffer = placeAuxBuffer;
 
         switch (mode)
         {
@@ -178,7 +178,7 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
         }
     };
 
-    auto processBandBuffer = [this, &processLrmsWrapped] (juce::AudioBuffer<float>& targetBuffer,
+    auto processBandBuffer = [this, &processPlacedSignal] (juce::AudioBuffer<float>& targetBuffer,
                                                           const int filterIndex)
     {
         const auto bandArrayIndex = static_cast<size_t>(filterIndex);
@@ -189,8 +189,8 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
         if (bandBypassed)
             return;
 
-        const auto placeChoice = filterLrmsParams[bandArrayIndex] != nullptr
-            ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterLrmsParams[bandArrayIndex]->load(std::memory_order_relaxed))))
+        const auto placeChoice = filterPlaceParams[bandArrayIndex] != nullptr
+            ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterPlaceParams[bandArrayIndex]->load(std::memory_order_relaxed))))
             : 0;
 
         if (isPhasePlaceChoice(placeChoice) && ! isCutFilterType(filterType))
@@ -237,7 +237,7 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
                 return;
 
             const auto gain = juce::Decibels::decibelsToGain(gainDb);
-            processLrmsWrapped(targetBuffer, static_cast<int>(bandArrayIndex), [gain] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
+            processPlacedSignal(targetBuffer, static_cast<int>(bandArrayIndex), [gain] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
             {
                 for (int channel = 0; channel < targetChannels; ++channel)
                     targetBufferToProcess.applyGain(channel, 0, targetBufferToProcess.getNumSamples(), gain);
@@ -264,7 +264,7 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
             const auto blend = bellSlopeBlend.blend;
             auto& bandFilters = bellOrderFilters[bandArrayIndex];
 
-            processLrmsWrapped(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
+            processPlacedSignal(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
             {
                 if (lowerOrder == upperOrder || blend < 1.0e-6)
                 {
@@ -307,7 +307,7 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
             if (tiltFilters[bandArrayIndex].stageCount <= 0)
                 return;
 
-            processLrmsWrapped(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
+            processPlacedSignal(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
             {
                 tiltFilters[bandArrayIndex].process(targetBufferToProcess, targetChannels);
             });
@@ -319,7 +319,7 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
             if (shelfOrderFilters[bandArrayIndex].front().stageCount <= 0)
                 return;
 
-            processLrmsWrapped(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
+            processPlacedSignal(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
             {
                 auto& bandFilters = shelfOrderFilters[bandArrayIndex];
                 const auto slopeBlend = mapShelfSlopeToBlend(slopeDbPerOct);
@@ -357,7 +357,7 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
             if (cutBlendFilters[bandArrayIndex].stageCount <= 0)
                 return;
 
-            processLrmsWrapped(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
+            processPlacedSignal(targetBuffer, static_cast<int>(bandArrayIndex), [&] (juce::AudioBuffer<float>& targetBufferToProcess, int targetChannels)
             {
                 cutBlendFilters[bandArrayIndex].process(targetBufferToProcess, targetChannels);
             });
@@ -375,8 +375,8 @@ int EqeModuleProcessor::getLatencySamples() const noexcept
     for (int filterIndex = 0; filterIndex < filterCount; ++filterIndex)
     {
         const auto bandArrayIndex = static_cast<size_t>(filterIndex);
-        const auto placeChoice = filterLrmsParams[bandArrayIndex] != nullptr
-            ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterLrmsParams[bandArrayIndex]->load(std::memory_order_relaxed))))
+        const auto placeChoice = filterPlaceParams[bandArrayIndex] != nullptr
+            ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterPlaceParams[bandArrayIndex]->load(std::memory_order_relaxed))))
             : 0;
 
         if (isPhasePlaceChoice(placeChoice) && phaseFirFilters[bandArrayIndex].active)

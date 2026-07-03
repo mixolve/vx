@@ -31,13 +31,13 @@ public:
 
 private:
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
-    static constexpr int spePhaseFilterControlCount = 16;
+    static constexpr int speFilterControlCount = 16;
 
     class VxLookAndFeel;
     struct PresetsSection;
     struct FilterSection;
 
-    void openShellGlobalHostSection();
+    void toggleHostParametersSection();
     void updateTooltipTogglePrompt();
     void showModulePicker();
     void closeActiveModule();
@@ -96,7 +96,7 @@ private:
     void resetFilterSectionStoredValues(int filterIndex);
     void removeFilterSectionStoredValues(int removedIndex, int previousCount);
     void updateSectionStates();
-    void updateEditorWidthState();
+    void syncEditorWidthToBounds();
     void refreshSpeAnalyserResponse();
     void syncFocusedParameterControl();
     double getFocusedParameterControlValueForTarget() const noexcept;
@@ -148,7 +148,7 @@ private:
     int getSpeSectionContentHeight() const;
     int getActiveFilterCount() const noexcept;
     void resetAnalyserPanelBounds();
-    void layoutShellGlobalSection(juce::Rectangle<int>& bounds, int editorInsetX);
+    void layoutGlobalControlsSection(juce::Rectangle<int>& bounds, int editorInsetX);
     void layoutFooter(juce::Rectangle<int>& bounds, int editorInsetX);
     void layoutModuleTabButton(juce::Rectangle<int>& bounds, int editorInsetX);
     void finalizeLayout() noexcept;
@@ -173,8 +173,8 @@ private:
     std::vector<ObservedModuleParameterListeners> observedModuleParameterListeners;
     std::unique_ptr<VxLookAndFeel> lookAndFeel;
     std::unique_ptr<DelayedTooltipWindow> tooltipWindow;
-    std::unique_ptr<BoxTextButton> shellGlobalHeader;
-    std::unique_ptr<BoxTextButton> shellGlobalHostHeader;
+    std::unique_ptr<BoxTextButton> clipButton;
+    std::unique_ptr<BoxTextButton> hostButton;
     std::unique_ptr<BoxTextButton> moduleAddButton;
     std::unique_ptr<BoxTextButton> moduleTabButton;
     std::unique_ptr<BoxTextButton> addFilterButton;
@@ -201,29 +201,28 @@ private:
     std::unique_ptr<BoxTextButton> speAmplitudeProcessorHeader;
     std::unique_ptr<ParameterControl> speDspHopDivisorControl;
     std::unique_ptr<BoxTextButton> spePhaseAddButton;
-    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> spePhaseBypassButtons;
-    std::array<std::unique_ptr<ButtonAttachment>, spePhaseFilterControlCount> spePhaseBypassAttachments;
-    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> spePhaseRemoveButtons;
-    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> spePhaseHeaderButtons;
-    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> spePhaseTypeControls;
-    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> spePhasePlaceControls;
-    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> spePhaseSlopeControls;
-    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> spePhaseFrequencyControls;
-    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> spePhaseBandwidthControls;
-    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> spePhaseImpactControls;
-    std::array<bool, spePhaseFilterControlCount> spePhaseExpanded {};
+    std::array<std::unique_ptr<BoxTextButton>, speFilterControlCount> spePhaseBypassButtons;
+    std::array<std::unique_ptr<ButtonAttachment>, speFilterControlCount> spePhaseBypassAttachments;
+    std::array<std::unique_ptr<BoxTextButton>, speFilterControlCount> spePhaseHeaderButtons;
+    std::array<std::unique_ptr<ChoiceControl>, speFilterControlCount> spePhaseTypeControls;
+    std::array<std::unique_ptr<ChoiceControl>, speFilterControlCount> spePhasePlaceControls;
+    std::array<std::unique_ptr<ChoiceControl>, speFilterControlCount> spePhaseSlopeControls;
+    std::array<std::unique_ptr<ParameterControl>, speFilterControlCount> spePhaseFrequencyControls;
+    std::array<std::unique_ptr<ParameterControl>, speFilterControlCount> spePhaseBandwidthControls;
+    std::array<std::unique_ptr<ParameterControl>, speFilterControlCount> spePhaseImpactControls;
+    std::array<bool, speFilterControlCount> spePhaseExpanded {};
     std::unique_ptr<BoxTextButton> speAmplitudeAddButton;
-    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> speAmplitudeBypassButtons;
-    std::array<std::unique_ptr<ButtonAttachment>, spePhaseFilterControlCount> speAmplitudeBypassAttachments;
-    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> speAmplitudeRemoveButtons;
-    std::array<std::unique_ptr<BoxTextButton>, spePhaseFilterControlCount> speAmplitudeHeaderButtons;
-    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> speAmplitudeTypeControls;
-    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> speAmplitudePlaceControls;
-    std::array<std::unique_ptr<ChoiceControl>, spePhaseFilterControlCount> speAmplitudeSlopeControls;
-    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> speAmplitudeFrequencyControls;
-    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> speAmplitudeBandwidthControls;
-    std::array<std::unique_ptr<ParameterControl>, spePhaseFilterControlCount> speAmplitudeImpactControls;
-    std::array<bool, spePhaseFilterControlCount> speAmplitudeExpanded {};
+    std::array<std::unique_ptr<BoxTextButton>, speFilterControlCount> speAmplitudeBypassButtons;
+    std::array<std::unique_ptr<ButtonAttachment>, speFilterControlCount> speAmplitudeBypassAttachments;
+    std::array<std::unique_ptr<BoxTextButton>, speFilterControlCount> speAmplitudeHeaderButtons;
+    std::array<std::unique_ptr<ChoiceControl>, speFilterControlCount> speAmplitudeTypeControls;
+    std::array<std::unique_ptr<ChoiceControl>, speFilterControlCount> speAmplitudePlaceControls;
+    std::array<std::unique_ptr<ChoiceControl>, speFilterControlCount> speAmplitudeSlopeControls;
+    std::array<std::unique_ptr<ParameterControl>, speFilterControlCount> speAmplitudeFrequencyControls;
+    std::array<std::unique_ptr<ParameterControl>, speFilterControlCount> speAmplitudeBandwidthControls;
+    std::array<std::unique_ptr<ParameterControl>, speFilterControlCount> speAmplitudeImpactControls;
+    std::array<bool, speFilterControlCount> speAmplitudeExpanded {};
+    std::unique_ptr<BoxTextButton> speAnalyserSettingsHeader;
     std::unique_ptr<LocalParameterControl> speAnalyserFftSizeControl;
     std::unique_ptr<LocalParameterControl> speAnalyserOverlapControl;
     std::unique_ptr<LocalParameterControl> speAnalyserLeftControl;
@@ -242,8 +241,8 @@ private:
     std::unique_ptr<BoxTextButton> sortDuoButton;
     std::array<std::unique_ptr<BoxTextButton>, VxAudioProcessor::hostAutomationSlotCount> hostSlotButtons;
     std::array<std::unique_ptr<FilterSection>, VxAudioProcessor::maxEqeFilterCount> filterSections;
-    juce::Viewport shellGlobalHostViewport;
-    juce::Component shellGlobalHostContent;
+    juce::Viewport hostParametersViewport;
+    juce::Component hostParametersContent;
     juce::Viewport speAnalyserViewport;
     juce::Component speAnalyserContent;
     juce::Viewport filterViewport;
@@ -260,9 +259,8 @@ private:
     bool mieModuleLoaded = false;
     bool mxeModuleLoaded = false;
     bool tseModuleLoaded = false;
-    bool shellGlobalHostExpanded = false;
+    bool hostParametersExpanded = false;
     bool tooltipsEnabled = true;
-    int lastCollapsedEditorWidth = 0;
     std::vector<int> filterDisplayOrder;
     bool suppressFilterSectionValueChangeHandlers = false;
     bool suppressSpeAnalyserControlChangeHandlers = false;

@@ -151,85 +151,12 @@ static std::unique_ptr<juce::XmlElement> loadXmlFile(const juce::File& file)
     return juce::XmlDocument::parse(file);
 }
 
-static juce::String formatStoredFilterParameterId(const juce::String& parameterId)
-{
-    const auto trimmedId = parameterId.trim();
-
-    const auto prefix = trimmedId.startsWithIgnoreCase("bell_") ? juce::String("bell_")
-                                                                 : trimmedId.startsWithIgnoreCase("filter_") ? juce::String("filter_")
-                                                                                                                : juce::String();
-
-    if (prefix.isEmpty())
-        return trimmedId;
-
-    const auto remainder = trimmedId.substring(prefix.length());
-    const auto separatorIndex = remainder.indexOfChar('_');
-
-    if (separatorIndex <= 0)
-        return trimmedId;
-
-    const auto numberText = remainder.substring(0, separatorIndex);
-
-    if (! numberText.containsOnly("0123456789"))
-        return trimmedId;
-
-    const auto suffix = remainder.substring(separatorIndex + 1);
-
-    if (suffix.isEmpty())
-        return trimmedId;
-
-    if (suffix.equalsIgnoreCase("lrms"))
-        return "filter_" + juce::String::formatted("%02d", numberText.getIntValue()) + "_place";
-
-    if (suffix.equalsIgnoreCase("frequency"))
-        return "filter_" + juce::String::formatted("%02d", numberText.getIntValue()) + "_freq";
-
-    return "filter_" + juce::String::formatted("%02d", numberText.getIntValue()) + "_" + suffix;
-}
-
-static juce::String unformatStoredFilterParameterId(const juce::String& parameterId)
-{
-    const auto trimmedId = parameterId.trim();
-
-    const auto prefix = trimmedId.startsWithIgnoreCase("bell_") ? juce::String("bell_")
-                                                                 : trimmedId.startsWithIgnoreCase("filter_") ? juce::String("filter_")
-                                                                                                                : juce::String();
-
-    if (prefix.isEmpty())
-        return trimmedId;
-
-    const auto remainder = trimmedId.substring(prefix.length());
-    const auto separatorIndex = remainder.indexOfChar('_');
-
-    if (separatorIndex <= 0)
-        return trimmedId;
-
-    const auto numberText = remainder.substring(0, separatorIndex);
-
-    if (! numberText.containsOnly("0123456789"))
-        return trimmedId;
-
-    const auto suffix = remainder.substring(separatorIndex + 1);
-
-    if (suffix.isEmpty())
-        return trimmedId;
-
-    if (suffix.equalsIgnoreCase("place"))
-        return "filter_" + juce::String(numberText.getIntValue()) + "_lrms";
-
-    if (suffix.equalsIgnoreCase("freq"))
-        return "filter_" + juce::String(numberText.getIntValue()) + "_frequency";
-
-    return "filter_" + juce::String(numberText.getIntValue()) + "_" + suffix;
-}
-
 static int getStoredFilterParameterIndex(const juce::String& parameterId)
 {
     const auto trimmedId = parameterId.trim();
 
-    const auto prefix = trimmedId.startsWithIgnoreCase("bell_") ? juce::String("bell_")
-                                                                 : trimmedId.startsWithIgnoreCase("filter_") ? juce::String("filter_")
-                                                                                                               : juce::String();
+    const auto prefix = trimmedId.startsWithIgnoreCase("filter_") ? juce::String("filter_")
+                                                                  : juce::String();
 
     if (prefix.isEmpty())
         return -1;
@@ -253,7 +180,7 @@ static int getStoredFilterParameterIndex(const juce::String& parameterId)
     if (normalizedSuffix != "type"
         && normalizedSuffix != "place"
         && normalizedSuffix != "slope"
-        && normalizedSuffix != "freq"
+        && normalizedSuffix != "frequency"
         && normalizedSuffix != "bandwidth"
         && normalizedSuffix != "gain"
         && normalizedSuffix != "bypass")
@@ -294,7 +221,7 @@ static int getStoredFilterParameterSortRank(const juce::String& parameterId)
     const auto parameterRank = suffix == "type" ? 0
         : suffix == "place" ? 1
         : suffix == "slope" ? 2
-        : suffix == "freq" ? 3
+        : suffix == "frequency" ? 3
         : suffix == "bandwidth" ? 4
         : suffix == "gain" ? 5
         : suffix == "bypass" ? 6
@@ -360,7 +287,7 @@ static bool shouldStoreFilterParameter(const juce::String& parameterId,
 static bool shouldFormatFilterParameterValueAsTwoDecimals(const juce::String& parameterId)
 {
     const auto trimmedId = parameterId.trim().toLowerCase();
-    return trimmedId.endsWith("_freq")
+    return trimmedId.endsWith("_frequency")
         || trimmedId.endsWith("_gain")
         || trimmedId.endsWith("_bandwidth");
 }
@@ -390,22 +317,6 @@ static void formatStoredParameterValue(juce::XmlElement& element)
 
     const auto value = element.getDoubleAttribute("value", 0.0);
     element.setAttribute("value", juce::String::formatted("%.2f", static_cast<double>(value)));
-}
-
-void rewriteFilterParameterIds(juce::XmlElement& element, const bool toStorageFormat)
-{
-    if (element.hasTagName("PARAM"))
-    {
-        const auto currentId = element.getStringAttribute("id").trim();
-        const auto rewrittenId = toStorageFormat ? formatStoredFilterParameterId(currentId)
-                                                 : unformatStoredFilterParameterId(currentId);
-
-        if (rewrittenId.isNotEmpty() && rewrittenId != currentId)
-            element.setAttribute("id", rewrittenId);
-    }
-
-    for (auto* child : element.getChildIterator())
-        rewriteFilterParameterIds(*child, toStorageFormat);
 }
 
 static juce::StringArray collectPresetFileNames(const juce::XmlElement& rootElement,
@@ -575,7 +486,6 @@ std::unique_ptr<juce::XmlElement> createSerializableStateXml(juce::AudioProcesso
 
         auto childCopy = std::make_unique<juce::XmlElement>(*child);
 
-        rewriteFilterParameterIds(*childCopy, true);
         formatStoredParameterValue(*childCopy);
 
         const auto parameterId = childCopy->getStringAttribute("id").trim();

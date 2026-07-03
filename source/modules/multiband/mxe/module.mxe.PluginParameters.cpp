@@ -1,6 +1,6 @@
 #include "module.mxe.PluginParameters.h"
 
-#include "module.mxe.MultibandProcessor.h"
+#include "module.mxe.DspCore.h"
 #include "module.mxe.ParameterIds.h"
 
 #include <array>

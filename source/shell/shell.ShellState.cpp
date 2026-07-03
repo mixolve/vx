@@ -6,11 +6,10 @@
 
 namespace
 {
-const std::array<juce::Identifier, 3> editorWindowStateProperties
+const std::array<juce::Identifier, 2> editorWindowStateProperties
 {
     VxAudioProcessor::editorWidthStateKey,
-    VxAudioProcessor::editorHeightStateKey,
-    "editor_last_collapsed_width"
+    VxAudioProcessor::editorHeightStateKey
 };
 
 }

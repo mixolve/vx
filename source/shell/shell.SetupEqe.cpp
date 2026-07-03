@@ -38,14 +38,14 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
 
             clearKeyboardFocus(*this);
         };
-        section->lrmsControl->onTitleClick = [this, filterIndex]
+        section->placeControl->onTitleClick = [this, filterIndex]
         {
             auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get();
 
             if (filterSection == nullptr)
                 return;
 
-            filterSection->lrmsControl->setSelectedChoiceIndex(0, true);
+            filterSection->placeControl->setSelectedChoiceIndex(0, true);
         };
         section->frequencyControl->onTitleClick = [this, filterIndex]
         {
@@ -119,7 +119,7 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
                 updateSectionStates();
             }
         };
-        section->lrmsControl->onValueChanged = [this, filterIndex]
+        section->placeControl->onValueChanged = [this, filterIndex]
         {
             if (suppressFilterSectionValueChangeHandlers)
                 return;
@@ -201,7 +201,7 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
         filterContent.addAndMakeVisible(*section->header);
         filterContent.addAndMakeVisible(*section->moveDownButton);
         filterContent.addAndMakeVisible(*section->typeControl);
-        filterContent.addAndMakeVisible(*section->lrmsControl);
+        filterContent.addAndMakeVisible(*section->placeControl);
         filterContent.addAndMakeVisible(*section->frequencyControl);
         filterContent.addAndMakeVisible(*section->bandwidthControl);
         filterContent.addAndMakeVisible(*section->slopeControl);

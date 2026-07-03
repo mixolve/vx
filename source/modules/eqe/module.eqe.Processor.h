@@ -29,7 +29,7 @@ public:
     static constexpr int maxFilterCount = 64;
 
     static juce::String getFilterTypeParamId(int filterIndex);
-    static juce::String getFilterLrmsParamId(int filterIndex);
+    static juce::String getFilterPlaceParamId(int filterIndex);
     static juce::String getFilterFrequencyParamId(int filterIndex);
     static juce::String getFilterBandwidthParamId(int filterIndex);
     static juce::String getFilterSlopeParamId(int filterIndex);
@@ -233,7 +233,7 @@ private:
     juce::AudioProcessorValueTreeState parameters;
     mutable juce::CriticalSection filterProcessLock;
     std::array<std::atomic<float>*, maxFilterCount> filterTypeParams {};
-    std::array<std::atomic<float>*, maxFilterCount> filterLrmsParams {};
+    std::array<std::atomic<float>*, maxFilterCount> filterPlaceParams {};
     std::array<std::atomic<float>*, maxFilterCount> filterFrequencyParams {};
     std::array<std::atomic<float>*, maxFilterCount> filterBandwidthParams {};
     std::array<juce::AudioParameterChoice*, maxFilterCount> filterSlopeChoiceParams {};
@@ -248,8 +248,8 @@ private:
     std::array<FilterDesignState, maxFilterCount> cachedFilterStates {};
     juce::AudioBuffer<float> filterProcessBufferA;
     juce::AudioBuffer<float> filterProcessBufferB;
-    juce::AudioBuffer<float> lrmsWorkBuffer;
-    juce::AudioBuffer<float> lrmsAuxBuffer;
+    juce::AudioBuffer<float> placeWorkBuffer;
+    juce::AudioBuffer<float> placeAuxBuffer;
     int preparedNumChannels = 2;
     int lastProcessedBlockSize = 0;
     double currentSampleRate = 0.0;
