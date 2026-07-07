@@ -5,7 +5,6 @@
 
 #include <array>
 #include <algorithm>
-#include <cmath>
 #include <memory>
 
 namespace mie::parameters
@@ -28,33 +27,34 @@ inline constexpr auto mieCrossoverFullbandOrder = std::to_array<ParameterOrderEn
 });
 
 inline constexpr auto mieBandOrder = std::to_array<ParameterOrderEntry>({
-    { "wide", "WIDE" },
-    { "gainL", "GAIN-L" },
-    { "gainR", "GAIN-R" },
-    { "gainLr", "GAIN-LR" },
-    { "rectPlus", "RECT+" },
-    { "rectMinus", "RECT-" },
-    { "rectFoldPlus", "RECTF+" },
-    { "rectFoldMinus", "RECTF-" },
-    { "panL", "PAN-L" },
-    { "panR", "PAN-R" },
+    { "gainMid", "MID" },
+    { "gainSide", "SIDE" },
+    { "gainL", "LEFT" },
+    { "gainR", "RIGHT" },
+    { "gainLr", "STEREO" },
+    { "halfPositive", "HALF POSITIVE" },
+    { "halfNegative", "HALF NEGATIVE" },
+    { "fullPositive", "FULL POSITIVE" },
+    { "fullNegative", "FULL NEGATIVE" },
+    { "left", "LEFT" },
+    { "right", "RIGHT" },
     { "law", "LAW" },
-    { "shear", "SHEAR" },
-    { "shearMode", "TO-L/TO-R" },
-    { "midBal", "MID-BAL" },
-    { "sideBal", "SIDE-BAL" },
-    { "ortDegRotation", "ORT-DEG" },
-    { "ortFlipR", "ORT-FLIP-R" },
-    { "listenL", "L" },
-    { "listenR", "R" },
-    { "listenM", "M" },
-    { "listenS", "S" },
-    { "listenInPlace", "INPL" },
-    { "depStereo", "D-STEREO" },
-    { "depRight", "D-RIGHT" },
+    { "impact", "IMPACT" },
+    { "impactDirection", "TO LEFT CHANNEL/TO RIGHT CHANNEL" },
+    { "mid", "MID" },
+    { "side", "SIDE" },
+    { "degree", "DEGREE" },
+    { "flipRight", "FLIP RIGHT" },
+    { "listenL", "LEFT" },
+    { "listenR", "RIGHT" },
+    { "listenM", "MID" },
+    { "listenS", "SIDE" },
+    { "listenInPlace", "IN PLACE" },
+    { "depStereo", "DELAY ST" },
+    { "depRight", "DELAY R" },
     { "depBuffer", "BUFFER" },
-    { "depPhaseL", "PHASE-L" },
-    { "depPhaseR", "PHASE-R" },
+    { "depPhaseL", "PHASE L" },
+    { "depPhaseR", "PHASE R" },
 });
 
 constexpr size_t numBands = mie::dsp::MultibandProcessor::numBands;
@@ -69,8 +69,11 @@ juce::String makeBandHostName(const size_t bandIndex, const juce::String& sectio
     return "BAND " + juce::String(static_cast<int>(bandIndex + 1)) + " - " + sectionName + " - " + parameterName;
 }
 
-juce::String formatParameterValue(const float value, const int decimalPlaces)
+juce::String formatParameterValue(const float value, const int decimalPlaces, const bool muteAtMinimum, const float minimum)
 {
+    if (muteAtMinimum && value <= minimum)
+        return "MUTED";
+
     return juce::String(value, juce::jmax(0, decimalPlaces));
 }
 
@@ -90,20 +93,25 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                           const float defaultValue,
                           const juce::String& label,
                           const int displayDecimals,
+                          const bool muteAtMinimum,
                           const bool isAutomatable,
                           const bool isMeta = false) -> Parameter
     {
+        const auto minimum = min;
         auto range = juce::NormalisableRange<float> { min, max, step };
         auto attributes = juce::AudioParameterFloatAttributes()
                               .withLabel(label)
                               .withAutomatable(isAutomatable)
                               .withMeta(isMeta)
-                              .withStringFromValueFunction([displayDecimals] (float value, int)
+                              .withStringFromValueFunction([displayDecimals, muteAtMinimum, minimum] (float value, int)
                               {
-                                  return formatParameterValue(value, displayDecimals);
+                                  return formatParameterValue(value, displayDecimals, muteAtMinimum, minimum);
                               })
-                              .withValueFromStringFunction([] (const juce::String& text)
+                              .withValueFromStringFunction([minimum] (const juce::String& text)
                               {
+                                  if (text.trim().equalsIgnoreCase("MUTED"))
+                                      return minimum;
+
                                   return text.trim().getFloatValue();
                               });
         return std::make_unique<juce::AudioParameterFloat>(juce::ParameterID { id, 1 }, name, range, defaultValue, attributes);
@@ -155,6 +163,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                                         "",
                                                         0,
                                                         false,
+                                                        false,
                                                         true));
             continue;
         }
@@ -174,6 +183,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                                         crossoverIt->defaultValue,
                                                         crossoverIt->label,
                                                         crossoverIt->displayDecimals,
+                                                        crossoverIt->muteAtMinimum,
                                                         false,
                                                         true));
         }
@@ -213,6 +223,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                            it->defaultValue,
                                            it->label,
                                            it->displayDecimals,
+                                           it->muteAtMinimum,
                                            false));
         }
 

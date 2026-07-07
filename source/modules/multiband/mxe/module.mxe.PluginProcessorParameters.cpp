@@ -129,8 +129,11 @@ mxe::dsp::MultibandProcessor::SoloMask MxeAudioProcessor::readSoloMask() const
 
 bool MxeAudioProcessor::syncParameters(const bool force)
 {
-    juce::ignoreUnused(force);
-    parametersDirty.store(false, std::memory_order_relaxed);
+    if (! force && ! parametersDirty.exchange(false, std::memory_order_acq_rel))
+        return false;
+
+    if (force)
+        parametersDirty.store(false, std::memory_order_release);
 
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
         currentBandParameters[bandIndex] = readBandParameters(bandIndex);

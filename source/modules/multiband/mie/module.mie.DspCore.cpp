@@ -29,9 +29,8 @@ void DspCore::setParameters(const Parameters& newParameters)
     updateDerivedParameters();
 }
 
-void DspCore::beginBlock(const int numSamples)
+void DspCore::beginBlock(const int)
 {
-    juce::ignoreUnused(numSamples);
 }
 
 int DspCore::getLatencySamples() const noexcept

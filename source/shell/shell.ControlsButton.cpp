@@ -1,4 +1,5 @@
 #include "shell.EditorControls.h"
+#include "shell.EditorParameterControls.h"
 
 #include <cmath>
 
@@ -92,6 +93,11 @@ void BoxTextButton::setAlwaysAccentOutline(const bool shouldAlwaysAccent)
 void BoxTextButton::setPressFillEnabled(const bool shouldEnable) noexcept
 {
     pressFillEnabled = shouldEnable;
+}
+
+void BoxTextButton::setClearsParameterFocusOnMouseDown(const bool shouldClear) noexcept
+{
+    clearsParameterFocusOnMouseDown = shouldClear;
 }
 
 void BoxTextButton::setFillVisible(const bool shouldShow) noexcept
@@ -309,6 +315,9 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
 
 void BoxTextButton::mouseDown(const juce::MouseEvent& event)
 {
+    if (clearsParameterFocusOnMouseDown)
+        shell_parameter_focus::clearFocus();
+
     if (! manualInteractionEnabled)
     {
         if (event.mods.isPopupMenu() || ! event.mods.isLeftButtonDown())
@@ -320,6 +329,7 @@ void BoxTextButton::mouseDown(const juce::MouseEvent& event)
         pressHighlight = true;
         longPressEligible = longPressAction != nullptr;
         longPressArmed = false;
+        setViewportIgnoreDragFlag(false);
         longPressOriginalText = getButtonText();
         if (longPressEligible)
             startTimer(longPressDelayMs);
@@ -340,6 +350,9 @@ void BoxTextButton::mouseDrag(const juce::MouseEvent& event)
     if (! manualInteractionEnabled)
     {
         if (! pointerDown)
+            return;
+
+        if (longPressArmed)
             return;
 
         if (cancelClickOnLeave && ! pressCanceled && ! contains(event.getPosition()))
@@ -401,6 +414,7 @@ void BoxTextButton::mouseUp(const juce::MouseEvent& event)
         longPressEligible = false;
         longPressArmed = false;
         pressCanceled = false;
+        setViewportIgnoreDragFlag(false);
         repaint();
 
         if (wasLongPressArmed)
@@ -471,6 +485,8 @@ void BoxTextButton::mouseExit(const juce::MouseEvent&)
     {
         pressCanceled = true;
         longPressEligible = false;
+        if (! longPressArmed)
+            setViewportIgnoreDragFlag(false);
         stopTimer();
     }
 
@@ -478,6 +494,7 @@ void BoxTextButton::mouseExit(const juce::MouseEvent&)
     if (! longPressArmed)
     {
         longPressEligible = false;
+        setViewportIgnoreDragFlag(false);
         stopTimer();
     }
     repaint();
@@ -499,6 +516,7 @@ void BoxTextButton::timerCallback()
 
     longPressEligible = false;
     longPressArmed = true;
+    setViewportIgnoreDragFlag(true);
     longPressOriginalText = getButtonText();
     setButtonText(longPressPromptText);
     repaint();

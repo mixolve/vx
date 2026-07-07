@@ -4,79 +4,13 @@
 #include <cmath>
 #include <vector>
 
-#if JUCE_IOS
-static juce::File getDocumentsPresetStorageRootDirectory()
-{
-    auto directory = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
-        .getChildFile(eqePresetStorageModuleFolder)
-        .getChildFile(presetStorageRootFolder);
-    directory.createDirectory();
-    return directory;
-}
+static bool writeXmlToFile(const juce::XmlElement& element, const juce::File& file);
 
-static bool shouldCopyPresetFile(const juce::File& sourceFile, const juce::File& targetFile)
-{
-    if (! targetFile.existsAsFile())
-        return true;
-
-    if (sourceFile.hasIdenticalContentTo(targetFile))
-        return false;
-
-    return sourceFile.getLastModificationTime() >= targetFile.getLastModificationTime();
-}
-
-static void copyUpdatedPresetFiles(const juce::File& sourceDirectory, const juce::File& targetDirectory)
-{
-    if (! sourceDirectory.isDirectory())
-        return;
-
-    if (sourceDirectory.getFullPathName().equalsIgnoreCase(targetDirectory.getFullPathName()))
-        return;
-
-    targetDirectory.createDirectory();
-
-    if (! targetDirectory.isDirectory())
-        return;
-
-    juce::Array<juce::File> sourceFiles;
-    sourceDirectory.findChildFiles(sourceFiles, juce::File::findFiles, false, "*.xml");
-
-    for (const auto& sourceFile : sourceFiles)
-    {
-        auto targetFile = targetDirectory.getChildFile(sourceFile.getFileName());
-
-        if (shouldCopyPresetFile(sourceFile, targetFile))
-        {
-            if (targetFile.existsAsFile())
-                targetFile.deleteFile();
-
-            sourceFile.copyFileTo(targetFile);
-        }
-    }
-}
-
-static void syncDocumentsPresetsWithAppGroup(const juce::File& presetStorageRootDirectory)
-{
-    const auto documentsRootDirectory = getDocumentsPresetStorageRootDirectory();
-
-    if (documentsRootDirectory.getFullPathName().equalsIgnoreCase(presetStorageRootDirectory.getFullPathName()))
-        return;
-
-    copyUpdatedPresetFiles(documentsRootDirectory, presetStorageRootDirectory);
-    copyUpdatedPresetFiles(presetStorageRootDirectory, documentsRootDirectory);
-}
-#endif
-
-static juce::File getPresetStorageRootDirectory()
+static juce::File getDocumentsPresetStorageDirectory()
 {
     auto directory = juce::File::getSpecialLocation(juce::File::userDocumentsDirectory);
 
-#if JUCE_IOS
-    const auto appGroupContainer = getEqeAppGroupContainerDirectory();
-
-    if (appGroupContainer.isDirectory())
-        directory = appGroupContainer;
-#else
+#if ! JUCE_IOS
     directory = directory.getChildFile(presetStorageVendorFolder)
                          .getChildFile(presetStorageProductFolder);
 #endif
@@ -88,15 +22,121 @@ static juce::File getPresetStorageRootDirectory()
     return directory;
 }
 
+#if JUCE_IOS
+static juce::File getAppGroupPresetStorageDirectory()
+{
+    auto directory = getEqeAppGroupContainerDirectory();
+
+    if (! directory.isDirectory())
+        return {};
+
+    directory = directory.getChildFile(eqePresetStorageModuleFolder)
+                         .getChildFile(presetStorageRootFolder);
+    directory.createDirectory();
+
+    return directory;
+}
+
+static void deleteObsoleteSyncStateFile(const juce::File& directory)
+{
+    directory.getChildFile("sync-state").deleteFile();
+}
+
+#if ! VX_APP_EXTENSION
+static bool shouldCopyPresetFile(const juce::File& sourceFile, const juce::File& targetFile)
+{
+    return ! targetFile.existsAsFile() || ! sourceFile.hasIdenticalContentTo(targetFile);
+}
+
+static void copyPresetFilesExactly(const juce::File& sourceDirectory, const juce::File& targetDirectory)
+{
+    targetDirectory.createDirectory();
+
+    if (! sourceDirectory.isDirectory() || ! targetDirectory.isDirectory())
+        return;
+
+    juce::Array<juce::File> sourceFiles;
+    sourceDirectory.findChildFiles(sourceFiles, juce::File::findFiles, false, "*.xml");
+
+    juce::StringArray expectedFileNames;
+
+    for (const auto& sourceFile : sourceFiles)
+    {
+        expectedFileNames.add(sourceFile.getFileName());
+
+        const auto targetFile = targetDirectory.getChildFile(sourceFile.getFileName());
+
+        if (shouldCopyPresetFile(sourceFile, targetFile))
+        {
+            if (targetFile.existsAsFile())
+                targetFile.deleteFile();
+
+            sourceFile.copyFileTo(targetFile);
+        }
+    }
+
+    juce::Array<juce::File> existingFiles;
+    targetDirectory.findChildFiles(existingFiles, juce::File::findFiles, false, "*.xml");
+
+    for (const auto& existingFile : existingFiles)
+    {
+        if (! expectedFileNames.contains(existingFile.getFileName(), true))
+            existingFile.deleteFile();
+    }
+}
+
+static void mirrorDocumentsPresetsToAppGroup(const juce::File& documentsDirectory)
+{
+    const auto appGroupDirectory = getAppGroupPresetStorageDirectory();
+
+    if (! appGroupDirectory.isDirectory())
+        return;
+
+    deleteObsoleteSyncStateFile(documentsDirectory);
+    deleteObsoleteSyncStateFile(appGroupDirectory);
+
+    if (documentsDirectory.getFullPathName().equalsIgnoreCase(appGroupDirectory.getFullPathName()))
+        return;
+
+    copyPresetFilesExactly(documentsDirectory, appGroupDirectory);
+}
+#endif
+
+#endif
+
+void syncEqePresetStorageWithSharedContainer()
+{
+#if JUCE_IOS && ! VX_APP_EXTENSION
+    mirrorDocumentsPresetsToAppGroup(getDocumentsPresetStorageDirectory());
+#endif
+}
+
+static juce::File getPresetStorageRootDirectory()
+{
+#if JUCE_IOS && VX_APP_EXTENSION
+    auto appGroupDirectory = getAppGroupPresetStorageDirectory();
+
+    if (appGroupDirectory.isDirectory())
+        return appGroupDirectory;
+#endif
+
+    return getDocumentsPresetStorageDirectory();
+}
+
 static juce::File getFilterPresetsDirectory()
 {
     auto directory = getPresetStorageRootDirectory();
 
+    directory.createDirectory();
+
 #if JUCE_IOS
-    syncDocumentsPresetsWithAppGroup(directory);
+    deleteObsoleteSyncStateFile(directory);
 #endif
 
-    directory.createDirectory();
+#if JUCE_IOS && ! VX_APP_EXTENSION
+    mirrorDocumentsPresetsToAppGroup(directory);
+#endif
+
     return directory;
 }
 
@@ -363,6 +403,12 @@ static bool writePresetCollectionToDirectory(const juce::File& directory,
         presetCopy->removeAttribute("last_selected");
         presetCopy->removeAttribute("default_selected");
 
+        if (auto* stateElement = presetCopy->getChildByName("eqe_state"))
+        {
+            stateElement->removeAttribute(EqeModuleProcessor::filterPresetLastSelectedStateKey);
+            stateElement->removeAttribute(EqeModuleProcessor::filterPresetDefaultSelectedStateKey);
+        }
+
         if (! writeXmlToFile(*presetCopy, getPresetFileForName(directory, presetName)))
             return false;
     }
@@ -445,6 +491,10 @@ bool writeFilterPresetsXml(const juce::XmlElement& rootElement)
     if (! writePresetCollectionToDirectory(filterPresetsDirectory, rootElement, presetTag))
         return false;
 
+#if JUCE_IOS && ! VX_APP_EXTENSION
+    mirrorDocumentsPresetsToAppGroup(filterPresetsDirectory);
+#endif
+
     return true;
 }
 
@@ -459,8 +509,6 @@ std::unique_ptr<juce::XmlElement> createSerializableStateXml(juce::AudioProcesso
 {
     auto state = parameters.copyState();
     state.setProperty(EqeModuleProcessor::activeFilterCountStateKey, activeFilterCount, nullptr);
-    state.removeProperty(EqeModuleProcessor::filterPresetLastSelectedStateKey, nullptr);
-    state.removeProperty(EqeModuleProcessor::filterPresetDefaultSelectedStateKey, nullptr);
 
     auto stateXml = state.createXml();
 
@@ -515,6 +563,14 @@ std::unique_ptr<juce::XmlElement> createSerializableStateXml(juce::AudioProcesso
 
     auto storageState = std::make_unique<juce::XmlElement>(stateXml->getTagName());
     storageState->setAttribute(EqeModuleProcessor::activeFilterCountStateKey, activeFilterCount);
+
+    const auto lastSelectedPreset = state.getProperty(EqeModuleProcessor::filterPresetLastSelectedStateKey).toString().trim();
+    if (lastSelectedPreset.isNotEmpty())
+        storageState->setAttribute(EqeModuleProcessor::filterPresetLastSelectedStateKey, lastSelectedPreset);
+
+    const auto defaultSelectedPreset = state.getProperty(EqeModuleProcessor::filterPresetDefaultSelectedStateKey).toString().trim();
+    if (defaultSelectedPreset.isNotEmpty())
+        storageState->setAttribute(EqeModuleProcessor::filterPresetDefaultSelectedStateKey, defaultSelectedPreset);
 
     for (auto& childElement : childElements)
         storageState->addChildElement(childElement.element.release());

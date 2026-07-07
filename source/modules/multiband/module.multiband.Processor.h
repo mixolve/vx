@@ -116,6 +116,12 @@ public:
         if (buffer.getNumSamples() == 0 || buffer.getNumChannels() == 0)
             return;
 
+        if (canPassThrough())
+        {
+            reset();
+            return;
+        }
+
         auto* leftChannel = buffer.getWritePointer(0);
         auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
 
@@ -180,6 +186,22 @@ private:
         const auto activeBandCount = activeSplitCount + 1;
         targetLatencySamples = *std::max_element(bandLatencies.begin(), bandLatencies.begin() + static_cast<std::ptrdiff_t>(activeBandCount));
         jassert(targetLatencySamples < alignmentBufferSize);
+    }
+
+    bool canPassThrough() const noexcept
+    {
+        if (anySoloActive)
+            return false;
+
+        const auto activeBandCount = activeSplitCount + 1;
+
+        for (size_t bandIndex = 0; bandIndex < activeBandCount; ++bandIndex)
+        {
+            if (! bandProcessors[bandIndex].isNeutral())
+                return false;
+        }
+
+        return true;
     }
 
     BandParameters parameters {};

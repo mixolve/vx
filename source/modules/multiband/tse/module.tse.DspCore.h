@@ -37,6 +37,7 @@ public:
     StereoSample processSample(double leftInput, double rightInput);
     static int getMaximumLatencySamples(double sampleRate) noexcept;
     int getLatencySamples() const noexcept;
+    bool isNeutral() const noexcept;
 
 private:
     struct DerivedParameters

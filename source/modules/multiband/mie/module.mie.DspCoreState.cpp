@@ -2,6 +2,16 @@
 
 namespace mie::dsp
 {
+namespace
+{
+constexpr double neutralEpsilon = 1.0e-9;
+
+bool isNear(const double value, const double target) noexcept
+{
+    return std::abs(value - target) <= neutralEpsilon;
+}
+} // namespace
+
 int DspCore::msToSamples(const double ms, const double sampleRate) noexcept
 {
     return static_cast<int>(std::floor(ms * sampleRate / 1000.0 + 0.5));
@@ -38,45 +48,47 @@ void DspCore::clearState()
 
 void DspCore::updateDerivedParameters()
 {
-    juce::ignoreUnused(currentSampleRate);
-    derived.wideAmount = roundToJsfxStep(parameters.wide) / 100.0;
+    const auto midGainDb = juce::jlimit(-48.0, 48.0, roundToJsfxStep(parameters.gainMid));
+    const auto sideGainDb = juce::jlimit(-48.0, 48.0, roundToJsfxStep(parameters.gainSide));
+    derived.midGain = midGainDb <= -48.0 ? 0.0 : dbToAmp(midGainDb);
+    derived.sideGain = sideGainDb <= -48.0 ? 0.0 : dbToAmp(sideGainDb);
     derived.leftGain = dbToAmp(roundToJsfxStep(parameters.gainL));
     derived.rightGain = dbToAmp(roundToJsfxStep(parameters.gainR));
     derived.linkedGain = dbToAmp(roundToJsfxStep(parameters.gainLr));
-    const auto panLPos = roundToJsfxStep(parameters.panL) * 0.01;
-    const auto panRPos = roundToJsfxStep(parameters.panR) * 0.01;
-    const auto panLTheta = (panLPos + 1.0) * juce::MathConstants<double>::pi * 0.25;
-    const auto panRTheta = (panRPos + 1.0) * juce::MathConstants<double>::pi * 0.25;
+    const auto leftPosition = roundToJsfxStep(parameters.left) * 0.01;
+    const auto rightPosition = roundToJsfxStep(parameters.right) * 0.01;
+    const auto leftTheta = (leftPosition + 1.0) * juce::MathConstants<double>::pi * 0.25;
+    const auto rightTheta = (rightPosition + 1.0) * juce::MathConstants<double>::pi * 0.25;
     const auto law = dbToAmp(-juce::jlimit(0.0f, 6.0f, parameters.law));
 
-    derived.gLL = std::cos(panLTheta);
-    derived.gLR = std::sin(panLTheta);
-    derived.gRL = std::cos(panRTheta);
-    derived.gRR = std::sin(panRTheta);
+    derived.gLL = std::cos(leftTheta);
+    derived.gLR = std::sin(leftTheta);
+    derived.gRL = std::cos(rightTheta);
+    derived.gRR = std::sin(rightTheta);
 
-    if (std::abs(panLPos) < 0.0000001)
+    if (std::abs(leftPosition) < 0.0000001)
     {
         derived.gLL *= law;
         derived.gLR *= law;
     }
 
-    if (std::abs(panRPos) < 0.0000001)
+    if (std::abs(rightPosition) < 0.0000001)
     {
         derived.gRL *= law;
         derived.gRR *= law;
     }
 
-    derived.shearAmount = roundToJsfxStep(parameters.shear) * 0.01;
-    derived.midBalance = roundToJsfxStep(parameters.midBal) * 0.01;
-    derived.sideBalance = roundToJsfxStep(parameters.sideBal) * 0.01;
+    derived.impactAmount = roundToJsfxStep(parameters.impact) * 0.01;
+    derived.midAmount = roundToJsfxStep(parameters.mid) * 0.01;
+    derived.sideAmount = roundToJsfxStep(parameters.side) * 0.01;
 
-    const auto ortTheta = roundToJsfxStep(parameters.ortDegRotation) * (juce::MathConstants<double>::pi / 180.0);
-    const auto c = std::cos(ortTheta);
-    const auto s = std::sin(ortTheta);
-    derived.ortM11 = c;
-    derived.ortM12 = parameters.ortFlipR ? s : -s;
-    derived.ortM21 = s;
-    derived.ortM22 = parameters.ortFlipR ? -c : c;
+    const auto orthogonalTheta = roundToJsfxStep(parameters.degree) * (juce::MathConstants<double>::pi / 180.0);
+    const auto c = std::cos(orthogonalTheta);
+    const auto s = std::sin(orthogonalTheta);
+    derived.orthogonalM11 = c;
+    derived.orthogonalM12 = parameters.flipRight ? s : -s;
+    derived.orthogonalM21 = s;
+    derived.orthogonalM22 = parameters.flipRight ? -c : c;
 
     derived.listenMode = -1;
     if (parameters.listenL)
@@ -90,9 +102,9 @@ void DspCore::updateDerivedParameters()
 
     const auto lookaheadMs = juce::jlimit(0.0f, 200.0f, parameters.depBufferMs);
     const auto lookaheadSamples = msToSamples(lookaheadMs, currentSampleRate);
-    derived.depLookaheadSamples = lookaheadSamples;
+    derived.depDelayEnabled = lookaheadSamples > 0;
 
-    if (lookaheadSamples == 0)
+    if (! derived.depDelayEnabled)
     {
         derived.depDelayLeftSamples = 0;
         derived.depDelayRightSamples = 0;
@@ -106,13 +118,42 @@ void DspCore::updateDerivedParameters()
         derived.depDelayRightSamples = juce::jlimit(0, maxDelaySamples, lookaheadSamples + stereoDelaySamples + rightDelaySamples);
     }
 
-    derived.latencySamples = lookaheadSamples + depPhaseMid;
-
     const auto phaseL = juce::jlimit(-180.0f, 180.0f, parameters.depPhaseL) * (juce::MathConstants<double>::pi / 180.0);
     const auto phaseR = juce::jlimit(-180.0f, 180.0f, parameters.depPhaseR) * (juce::MathConstants<double>::pi / 180.0);
+    derived.depPhaseEnabled = std::abs(phaseL) > neutralEpsilon || std::abs(phaseR) > neutralEpsilon;
+    derived.latencySamples = (derived.depDelayEnabled ? lookaheadSamples : 0)
+                           + (derived.depPhaseEnabled ? depPhaseMid : 0);
     derived.depPhaseCosL = std::cos(phaseL);
     derived.depPhaseSinL = std::sin(phaseL);
     derived.depPhaseCosR = std::cos(phaseR);
     derived.depPhaseSinR = std::sin(phaseR);
+}
+
+bool DspCore::isNeutral() const noexcept
+{
+    return isNear(derived.midGain, 1.0)
+        && isNear(derived.sideGain, 1.0)
+        && isNear(derived.leftGain, 1.0)
+        && isNear(derived.rightGain, 1.0)
+        && isNear(derived.linkedGain, 1.0)
+        && isNear(derived.gLL, 1.0)
+        && isNear(derived.gLR, 0.0)
+        && isNear(derived.gRL, 0.0)
+        && isNear(derived.gRR, 1.0)
+        && isNear(derived.impactAmount, 0.0)
+        && isNear(derived.midAmount, 0.0)
+        && isNear(derived.sideAmount, 0.0)
+        && isNear(derived.orthogonalM11, 1.0)
+        && isNear(derived.orthogonalM12, 0.0)
+        && isNear(derived.orthogonalM21, 0.0)
+        && isNear(derived.orthogonalM22, 1.0)
+        && derived.listenMode < 0
+        && ! derived.depDelayEnabled
+        && ! derived.depPhaseEnabled
+        && ! parameters.halfPositive
+        && ! parameters.halfNegative
+        && ! parameters.fullPositive
+        && ! parameters.fullNegative
+        && ! parameters.listenInPlace;
 }
 } // namespace mie::dsp

@@ -6,55 +6,55 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
 {
     const auto gainedL = leftInput * derived.linkedGain * derived.leftGain;
     const auto gainedR = rightInput * derived.linkedGain * derived.rightGain;
-    const auto mid = 0.5 * (gainedL + gainedR);
-    const auto side = 0.5 * (gainedL - gainedR) * derived.wideAmount;
+    const auto mid = 0.5 * (gainedL + gainedR) * derived.midGain;
+    const auto side = 0.5 * (gainedL - gainedR) * derived.sideGain;
     auto left = mid + side;
     auto right = mid - side;
 
-    const auto pannedLeft = (left * derived.gLL) + (right * derived.gRL);
-    const auto pannedRight = (left * derived.gLR) + (right * derived.gRR);
+    const auto panoramaLeft = (left * derived.gLL) + (right * derived.gRL);
+    const auto panoramaRight = (left * derived.gLR) + (right * derived.gRR);
 
-    if (parameters.shearToRight)
+    if (parameters.impactToRight)
     {
-        left = pannedLeft;
-        right = pannedRight + (derived.shearAmount * pannedLeft);
+        left = panoramaLeft;
+        right = panoramaRight + (derived.impactAmount * panoramaLeft);
     }
     else
     {
-        left = pannedLeft + (derived.shearAmount * pannedRight);
-        right = pannedRight;
+        left = panoramaLeft + (derived.impactAmount * panoramaRight);
+        right = panoramaRight;
     }
 
     const auto linMid = (left + right) * 0.7071067811865476;
     const auto linSide = (left - right) * 0.7071067811865476;
-    const auto midLeft = linMid * (derived.midBalance > 0.0 ? 1.0 - derived.midBalance : 1.0);
-    const auto midRight = linMid * (derived.midBalance < 0.0 ? 1.0 + derived.midBalance : 1.0);
-    const auto sideLeft = linSide * (derived.sideBalance > 0.0 ? 1.0 - derived.sideBalance : 1.0);
-    const auto sideRight = linSide * (derived.sideBalance < 0.0 ? 1.0 + derived.sideBalance : 1.0);
+    const auto midLeft = linMid * (derived.midAmount > 0.0 ? 1.0 - derived.midAmount : 1.0);
+    const auto midRight = linMid * (derived.midAmount < 0.0 ? 1.0 + derived.midAmount : 1.0);
+    const auto sideLeft = linSide * (derived.sideAmount > 0.0 ? 1.0 - derived.sideAmount : 1.0);
+    const auto sideRight = linSide * (derived.sideAmount < 0.0 ? 1.0 + derived.sideAmount : 1.0);
     left = (midLeft + sideLeft) * 0.7071067811865476;
     right = (midRight - sideRight) * 0.7071067811865476;
 
-    const auto rotatedLeft = (derived.ortM11 * left) + (derived.ortM12 * right);
-    const auto rotatedRight = (derived.ortM21 * left) + (derived.ortM22 * right);
+    const auto rotatedLeft = (derived.orthogonalM11 * left) + (derived.orthogonalM12 * right);
+    const auto rotatedRight = (derived.orthogonalM21 * left) + (derived.orthogonalM22 * right);
     left = rotatedLeft;
     right = rotatedRight;
 
-    if (parameters.rectPlus)
+    if (parameters.halfPositive)
     {
         left = juce::jmax(left, 0.0);
         right = juce::jmax(right, 0.0);
     }
-    else if (parameters.rectMinus)
+    else if (parameters.halfNegative)
     {
         left = juce::jmin(left, 0.0);
         right = juce::jmin(right, 0.0);
     }
-    else if (parameters.rectFoldPlus)
+    else if (parameters.fullPositive)
     {
         left = std::abs(left);
         right = std::abs(right);
     }
-    else if (parameters.rectFoldMinus)
+    else if (parameters.fullNegative)
     {
         left = -std::abs(left);
         right = -std::abs(right);
@@ -90,7 +90,7 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
         }
     }
 
-    if (derived.depLookaheadSamples > 0 && ! depDelayLeft.empty() && ! depDelayRight.empty())
+    if (derived.depDelayEnabled && ! depDelayLeft.empty() && ! depDelayRight.empty())
     {
         depDelayLeft[static_cast<size_t>(depDelayWritePosition)] = left;
         depDelayRight[static_cast<size_t>(depDelayWritePosition)] = right;
@@ -102,25 +102,28 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
         depDelayWritePosition = wrapIndex(depDelayWritePosition + 1, depDelayBufferSize);
     }
 
-    depPhaseLeft[static_cast<size_t>(depPhaseWritePosition)] = left;
-    depPhaseRight[static_cast<size_t>(depPhaseWritePosition)] = right;
-
-    const auto delayedLeft = depPhaseLeft[static_cast<size_t>(wrapIndex(depPhaseWritePosition - depPhaseMid, depPhaseBufferSize))];
-    const auto delayedRight = depPhaseRight[static_cast<size_t>(wrapIndex(depPhaseWritePosition - depPhaseMid, depPhaseBufferSize))];
-    auto hilbertLeft = 0.0;
-    auto hilbertRight = 0.0;
-
-    for (int tapIndex = 0; tapIndex < depPhaseTaps; ++tapIndex)
+    if (derived.depPhaseEnabled)
     {
-        const auto readPosition = wrapIndex(depPhaseWritePosition - tapIndex, depPhaseBufferSize);
-        const auto coefficient = depPhaseCoefficients[static_cast<size_t>(tapIndex)];
-        hilbertLeft += coefficient * depPhaseLeft[static_cast<size_t>(readPosition)];
-        hilbertRight += coefficient * depPhaseRight[static_cast<size_t>(readPosition)];
-    }
+        depPhaseLeft[static_cast<size_t>(depPhaseWritePosition)] = left;
+        depPhaseRight[static_cast<size_t>(depPhaseWritePosition)] = right;
 
-    left = (delayedLeft * derived.depPhaseCosL) + (hilbertLeft * derived.depPhaseSinL);
-    right = (delayedRight * derived.depPhaseCosR) + (hilbertRight * derived.depPhaseSinR);
-    depPhaseWritePosition = wrapIndex(depPhaseWritePosition + 1, depPhaseBufferSize);
+        const auto delayedLeft = depPhaseLeft[static_cast<size_t>(wrapIndex(depPhaseWritePosition - depPhaseMid, depPhaseBufferSize))];
+        const auto delayedRight = depPhaseRight[static_cast<size_t>(wrapIndex(depPhaseWritePosition - depPhaseMid, depPhaseBufferSize))];
+        auto hilbertLeft = 0.0;
+        auto hilbertRight = 0.0;
+
+        for (int tapIndex = 0; tapIndex < depPhaseTaps; ++tapIndex)
+        {
+            const auto readPosition = wrapIndex(depPhaseWritePosition - tapIndex, depPhaseBufferSize);
+            const auto coefficient = depPhaseCoefficients[static_cast<size_t>(tapIndex)];
+            hilbertLeft += coefficient * depPhaseLeft[static_cast<size_t>(readPosition)];
+            hilbertRight += coefficient * depPhaseRight[static_cast<size_t>(readPosition)];
+        }
+
+        left = (delayedLeft * derived.depPhaseCosL) + (hilbertLeft * derived.depPhaseSinL);
+        right = (delayedRight * derived.depPhaseCosR) + (hilbertRight * derived.depPhaseSinR);
+        depPhaseWritePosition = wrapIndex(depPhaseWritePosition + 1, depPhaseBufferSize);
+    }
 
     return { left, right };
 }

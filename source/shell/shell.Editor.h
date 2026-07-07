@@ -14,6 +14,20 @@ class DelayedTooltipWindow;
 class LocalParameterControl;
 class ParameterControl;
 
+namespace shell_parameter_focus
+{
+void clearFocus() noexcept;
+}
+
+class ParameterFocusClearingComponent : public juce::Component
+{
+public:
+    void mouseDown(const juce::MouseEvent&) override
+    {
+        shell_parameter_focus::clearFocus();
+    }
+};
+
 class VxAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                       private juce::Timer,
                                       private juce::AudioProcessorValueTreeState::Listener,
@@ -242,11 +256,11 @@ private:
     std::array<std::unique_ptr<BoxTextButton>, VxAudioProcessor::hostAutomationSlotCount> hostSlotButtons;
     std::array<std::unique_ptr<FilterSection>, VxAudioProcessor::maxEqeFilterCount> filterSections;
     juce::Viewport hostParametersViewport;
-    juce::Component hostParametersContent;
+    ParameterFocusClearingComponent hostParametersContent;
     juce::Viewport speAnalyserViewport;
-    juce::Component speAnalyserContent;
+    ParameterFocusClearingComponent speAnalyserContent;
     juce::Viewport filterViewport;
-    juce::Component filterContent;
+    ParameterFocusClearingComponent filterContent;
     std::unique_ptr<juce::Slider> focusedParameterControl;
     std::unique_ptr<BoxTextButton> footerTab;
     std::unique_ptr<juce::Component> speAnalyserComponent;

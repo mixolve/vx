@@ -161,6 +161,7 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
 void VxAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
 {
     juce::ignoreUnused(event);
+    shell_parameter_focus::clearFocus();
     clearKeyboardFocus(*this);
 }
 

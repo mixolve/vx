@@ -505,6 +505,12 @@ public:
         cancel();
     }
 
+    bool keyPressed(const juce::KeyPress& key) override
+    {
+        textEditor.grabKeyboardFocus();
+        return textEditor.keyPressed(key);
+    }
+
 private:
     juce::Rectangle<int> getVisibleBounds() const
     {
@@ -1019,10 +1025,16 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
         speAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedSpeAnalyserScrollY));
     }
 
-    prompt->grabEditorFocus();
-    prompt->toFront(true);
-
     juce::MessageManager::callAsync([safePrompt = juce::Component::SafePointer<FloatingTextPrompt>(prompt)]
+                                    {
+                                        if (safePrompt != nullptr)
+                                        {
+                                            safePrompt->toFront(false);
+                                            safePrompt->grabEditorFocus();
+                                        }
+                                    });
+
+    juce::Timer::callAfterDelay(25, [safePrompt = juce::Component::SafePointer<FloatingTextPrompt>(prompt)]
                                     {
                                         if (safePrompt != nullptr)
                                             safePrompt->grabEditorFocus();

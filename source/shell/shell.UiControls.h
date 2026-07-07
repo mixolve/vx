@@ -77,6 +77,7 @@ public:
     std::function<juce::String()> displayTextProvider;
     std::function<juce::String()> editorTextProvider;
     std::function<double(const juce::String&)> textToValueParser;
+    std::function<void()> onBeforeShowEditor;
 
 private:
     void updateMouseCursor();
@@ -118,6 +119,7 @@ public:
     void setManualInteractionEnabled(bool shouldEnable) noexcept;
     void setAlwaysAccentOutline(bool shouldAlwaysAccent);
     void setPressFillEnabled(bool shouldEnable) noexcept;
+    void setClearsParameterFocusOnMouseDown(bool shouldClear) noexcept;
     void setFillVisible(bool shouldShow) noexcept;
     void setDividerLineVisible(bool shouldShow) noexcept;
     void setTextJustification(juce::Justification justification) noexcept;
@@ -146,6 +148,7 @@ private:
     juce::Colour accentColour;
     bool alwaysAccentOutline = false;
     bool pressFillEnabled = true;
+    bool clearsParameterFocusOnMouseDown = true;
     bool fillVisible = true;
     bool dividerLineVisible = false;
     bool manualInteractionEnabled = false;

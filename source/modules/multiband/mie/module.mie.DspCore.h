@@ -21,23 +21,24 @@ public:
 
     struct Parameters
     {
-        float wide = 100.0f;
+        float gainMid = 0.0f;
+        float gainSide = 0.0f;
         float gainL = 0.0f;
         float gainR = 0.0f;
         float gainLr = 0.0f;
-        bool rectPlus = false;
-        bool rectMinus = false;
-        bool rectFoldPlus = false;
-        bool rectFoldMinus = false;
-        float panL = -100.0f;
-        float panR = 100.0f;
+        bool halfPositive = false;
+        bool halfNegative = false;
+        bool fullPositive = false;
+        bool fullNegative = false;
+        float left = -100.0f;
+        float right = 100.0f;
         float law = 0.0f;
-        float shear = 0.0f;
-        bool shearToRight = false;
-        float midBal = 0.0f;
-        float sideBal = 0.0f;
-        float ortDegRotation = 0.0f;
-        bool ortFlipR = false;
+        float impact = 0.0f;
+        bool impactToRight = false;
+        float mid = 0.0f;
+        float side = 0.0f;
+        float degree = 0.0f;
+        bool flipRight = false;
         bool listenL = false;
         bool listenR = false;
         bool listenM = false;
@@ -57,11 +58,13 @@ public:
     StereoSample processSample(double leftInput, double rightInput);
     static int getMaximumLatencySamples(double sampleRate) noexcept;
     int getLatencySamples() const noexcept;
+    bool isNeutral() const noexcept;
 
 private:
     struct DerivedParameters
     {
-        double wideAmount = 1.0;
+        double midGain = 1.0;
+        double sideGain = 1.0;
         double leftGain = 1.0;
         double rightGain = 1.0;
         double linkedGain = 1.0;
@@ -69,17 +72,18 @@ private:
         double gLR = 0.0;
         double gRL = 0.0;
         double gRR = 1.0;
-        double shearAmount = 0.0;
-        double midBalance = 0.0;
-        double sideBalance = 0.0;
-        double ortM11 = 1.0;
-        double ortM12 = 0.0;
-        double ortM21 = 0.0;
-        double ortM22 = 1.0;
+        double impactAmount = 0.0;
+        double midAmount = 0.0;
+        double sideAmount = 0.0;
+        double orthogonalM11 = 1.0;
+        double orthogonalM12 = 0.0;
+        double orthogonalM21 = 0.0;
+        double orthogonalM22 = 1.0;
         int listenMode = -1;
-        int depLookaheadSamples = 0;
         int depDelayLeftSamples = 0;
         int depDelayRightSamples = 0;
+        bool depDelayEnabled = false;
+        bool depPhaseEnabled = false;
         int latencySamples = 0;
         double depPhaseCosL = 1.0;
         double depPhaseSinL = 0.0;

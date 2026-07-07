@@ -1,4 +1,5 @@
 #include "shell.EditorControls.h"
+#include "shell.EditorParameterControls.h"
 
 #include <utility>
 
@@ -253,6 +254,8 @@ void NoTickComboBox::mouseDown(const juce::MouseEvent& event)
 {
     if (! isEnabled())
         return;
+
+    shell_parameter_focus::clearFocus();
 
     pointerDown = true;
     dragDetected = false;

@@ -15,6 +15,7 @@ class MultibandModuleComponent final : public juce::Component
 public:
     enum class ControlKind
     {
+        heading,
         parameter,
         toggle,
         time
@@ -26,7 +27,6 @@ public:
         const char* suffix = "";
         const char* label = "";
         int decimals = 1;
-        double resetValue = 0.0;
         const char* enabledLabel = "";
         const char* disabledLabel = "";
         const char* modeSuffix = "";
@@ -72,6 +72,7 @@ public:
 
     void paint(juce::Graphics&) override;
     void resized() override;
+    void mouseDown(const juce::MouseEvent& event) override;
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
     juce::Rectangle<int> getContentBounds() const noexcept;
     void refreshCurrentPageLayout();
@@ -91,6 +92,7 @@ private:
     void toggleManualSolo(size_t bandIndex);
     void setAllBandsMonitoring();
     void setAutoSoloEnabled(bool shouldBeEnabled);
+    void setManualSoloInclusive(bool shouldBeInclusive);
     void changeActiveSplitCount(int delta);
     void syncMonitorParameters();
     void updateMonitorButtons();
@@ -101,6 +103,7 @@ private:
     int getCurrentPagePreferredHeight() const noexcept;
     size_t getActiveSplitCount() const;
     size_t getActiveBandCount() const;
+    bool constrainCrossoverFrequency(size_t crossoverIndex);
     bool setParameterPlainValue(const juce::String& parameterId, float plainValue);
     bool setParameterNormalisedValue(juce::RangedAudioParameter& parameter, float normalisedValue);
     bool assignButtonHostSlot(const juce::String& parameterId,
@@ -121,7 +124,8 @@ private:
     size_t visibleBandIndex = 0;
     std::array<bool, numBands> manualSoloMask {};
     bool allBandsActive = true;
-    bool autoSoloEnabled = true;
+    bool autoSoloEnabled = false;
+    bool manualSoloInclusive = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MultibandModuleComponent)
 };

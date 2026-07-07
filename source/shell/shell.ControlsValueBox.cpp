@@ -104,15 +104,15 @@ void ValueBoxComponent::setScrollGesturesPassThrough(const bool shouldPassThroug
 
 void ValueBoxComponent::updateMouseCursor()
 {
-    if (customPromptAction != nullptr)
-    {
-        setMouseCursor(juce::MouseCursor::PointingHandCursor);
-        return;
-    }
-
     if (interactionEnabled)
     {
         setMouseCursor(juce::MouseCursor::IBeamCursor);
+        return;
+    }
+
+    if (customPromptAction != nullptr)
+    {
+        setMouseCursor(juce::MouseCursor::PointingHandCursor);
         return;
     }
 
@@ -234,17 +234,21 @@ void ValueBoxComponent::mouseUp(const juce::MouseEvent& event)
 
     const auto shouldOpenPrompt = contains(event.getPosition())
         && ! dragDetected
-        && ! event.mods.isPopupMenu();
+        && (! event.mods.isPopupMenu() || event.mods.isCtrlDown());
 
     pointerDown = false;
     dragDetected = false;
 
-    if (shouldOpenPrompt && (interactionEnabled || customPromptAction != nullptr))
+    if (shouldOpenPrompt && customPromptAction != nullptr && (! interactionEnabled || event.mods.isCtrlDown()))
     {
-        if (customPromptAction != nullptr)
-            customPromptAction();
-        else
+        customPromptAction();
+    }
+    else if (shouldOpenPrompt && (interactionEnabled || customPromptAction != nullptr))
+    {
+        if (interactionEnabled)
             showEditor();
+        else if (customPromptAction != nullptr)
+            customPromptAction();
     }
 
     pressHighlight = false;
@@ -287,6 +291,9 @@ void ValueBoxComponent::showEditor()
 {
     if (editor != nullptr)
         return;
+
+    if (onBeforeShowEditor != nullptr)
+        onBeforeShowEditor();
 
     if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
     {

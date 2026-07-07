@@ -25,11 +25,13 @@ inline constexpr auto eqeFilterOrder = std::to_array<ParameterOrderEntry>({
 
 void ensureDefaultPresetFilesExist(EqeModuleProcessor& processor)
 {
-    if (loadFilterPresetsXml() == nullptr)
-    {
-        if (processor.saveFilterPreset("default"))
-            processor.setDefaultFilterPreset("default");
-    }
+    auto presetsXml = loadFilterPresetsXml();
+
+    if (presetsXml != nullptr && findPresetElement(*presetsXml, "default") != nullptr)
+        return;
+
+    if (processor.saveFilterPreset("default"))
+        processor.setDefaultFilterPreset("default");
 }
 
 void setParameterValue(juce::AudioProcessorValueTreeState& state,
@@ -308,7 +310,9 @@ void removeUnknownStateAttributes(juce::XmlElement& stateElement)
     {
         const auto attributeName = stateElement.getAttributeName(attributeIndex);
 
-        if (attributeName != EqeModuleProcessor::activeFilterCountStateKey)
+        if (attributeName != EqeModuleProcessor::activeFilterCountStateKey
+            && attributeName != EqeModuleProcessor::filterPresetLastSelectedStateKey
+            && attributeName != EqeModuleProcessor::filterPresetDefaultSelectedStateKey)
             stateElement.removeAttribute(attributeName);
     }
 }
@@ -777,6 +781,7 @@ bool EqeModuleProcessor::loadFilterPreset(const juce::String& presetName) noexce
     if (stateElement == nullptr)
         return false;
 
+    const auto previousDefaultPresetName = parameters.state.getProperty(filterPresetDefaultSelectedStateKey).toString().trim();
     auto normalizedStateElement = std::make_unique<juce::XmlElement>(*stateElement);
     normalizeRestoredStateElement(*normalizedStateElement, parameters);
 
@@ -800,6 +805,10 @@ bool EqeModuleProcessor::loadFilterPreset(const juce::String& presetName) noexce
     }
 
     parameters.state.setProperty(filterPresetLastSelectedStateKey, trimmedName, nullptr);
+
+    if (previousDefaultPresetName.isNotEmpty() && findPresetElement(*presetsXml, previousDefaultPresetName) != nullptr)
+        parameters.state.setProperty(filterPresetDefaultSelectedStateKey, previousDefaultPresetName, nullptr);
+
     return true;
 }
 

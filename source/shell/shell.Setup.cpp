@@ -8,12 +8,19 @@
 #include "../modules/spe/module.spe.SpeProcessor.h"
 #include "../modules/multiband/tse/module.tse.TseProcessor.h"
 
-#include <array>
-
 namespace
 {
 using BandControlSpec = MultibandModuleComponent::BandControlSpec;
 using ControlKind = MultibandModuleComponent::ControlKind;
+
+BandControlSpec headingControl(const char* label, const int topGapMultiplier = 1)
+{
+    BandControlSpec spec;
+    spec.kind = ControlKind::heading;
+    spec.label = label;
+    spec.topGapMultiplier = topGapMultiplier;
+    return spec;
+}
 
 BandControlSpec parameterControl(const char* suffix,
                                  const char* label,
@@ -89,33 +96,49 @@ MultibandModuleComponent::Config makeMieMultibandConfig(MieAudioProcessor& proce
         return mie::parameters::makeActiveSplitCountParameterId();
     };
     config.bandControls = {
-        parameterControl("wide", "WIDE", 1, -1, 2),
-        parameterControl("gainL", "GAIN-L", 1),
-        parameterControl("gainR", "GAIN-R", 1),
-        parameterControl("gainLr", "GAIN-LR", 1),
-        toggleControl("rectPlus", "RECT+", "", "", "rect", 2),
-        toggleControl("rectMinus", "RECT-", "", "", "rect"),
-        toggleControl("rectFoldPlus", "RECTF+", "", "", "rect"),
-        toggleControl("rectFoldMinus", "RECTF-", "", "", "rect"),
-        parameterControl("panL", "PAN-L", 1, -1, 2),
-        parameterControl("panR", "PAN-R", 1),
+        headingControl("GAIN", 2),
+        parameterControl("gainMid", "MID", 1),
+        parameterControl("gainSide", "SIDE", 1),
+        parameterControl("gainL", "LEFT", 1),
+        parameterControl("gainR", "RIGHT", 1),
+        parameterControl("gainLr", "STEREO", 1),
+
+        headingControl("RECTIFICATION", 2),
+        toggleControl("halfPositive", "HALF POSITIVE", "", "", "rectification"),
+        toggleControl("halfNegative", "HALF NEGATIVE", "", "", "rectification"),
+        toggleControl("fullPositive", "FULL POSITIVE", "", "", "rectification"),
+        toggleControl("fullNegative", "FULL NEGATIVE", "", "", "rectification"),
+
+        headingControl("PANORAMA", 2),
+        parameterControl("left", "LEFT", 1),
+        parameterControl("right", "RIGHT", 1),
         parameterControl("law", "LAW", 2),
-        parameterControl("shear", "SHEAR", 1, -1, 2),
-        toggleControl("shearMode", "TO-L", "TO-L", "TO-R"),
-        parameterControl("midBal", "MID-BAL", 1, -1, 2),
-        parameterControl("sideBal", "SIDE-BAL", 1),
-        parameterControl("ortDegRotation", "ORT-DEG", 1, -1, 2),
-        toggleControl("ortFlipR", "ORT-FLIP-R"),
-        toggleControl("listenL", "L", "", "", "listen", 2),
-        toggleControl("listenR", "R", "", "", "listen"),
-        toggleControl("listenM", "M", "", "", "listen"),
-        toggleControl("listenS", "S", "", "", "listen"),
-        toggleControl("listenInPlace", "INPL"),
-        parameterControl("depStereo", "D-STEREO", 2, -1, 2),
-        parameterControl("depRight", "D-RIGHT", 2),
+
+        headingControl("SHEAR", 2),
+        parameterControl("impact", "IMPACT", 1),
+        toggleControl("impactDirection", "TO LEFT CHANNEL", "TO LEFT CHANNEL", "TO RIGHT CHANNEL"),
+
+        headingControl("MS BALANCE", 2),
+        parameterControl("mid", "MID", 1),
+        parameterControl("side", "SIDE", 1),
+
+        headingControl("ORTHOGONAL", 2),
+        parameterControl("degree", "DEGREE", 1),
+        toggleControl("flipRight", "FLIP RIGHT"),
+
+        headingControl("LISTEN", 2),
+        toggleControl("listenL", "LEFT", "", "", "listen"),
+        toggleControl("listenR", "RIGHT", "", "", "listen"),
+        toggleControl("listenM", "MID", "", "", "listen"),
+        toggleControl("listenS", "SIDE", "", "", "listen"),
+        toggleControl("listenInPlace", "IN PLACE"),
+
+        headingControl("DELAY & PHASE", 2),
+        parameterControl("depStereo", "DELAY ST", 2),
+        parameterControl("depRight", "DELAY R", 2),
         parameterControl("depBuffer", "BUFFER", 2),
-        parameterControl("depPhaseL", "PHASE-L", 1),
-        parameterControl("depPhaseR", "PHASE-R", 1),
+        parameterControl("depPhaseL", "PHASE L", 1),
+        parameterControl("depPhaseR", "PHASE R", 1),
     };
     return config;
 }

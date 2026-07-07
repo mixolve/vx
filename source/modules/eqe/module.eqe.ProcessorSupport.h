@@ -56,6 +56,7 @@ std::unique_ptr<juce::XmlElement> createSerializableStateXml(juce::AudioProcesso
                                                              int activeFilterCount);
 std::unique_ptr<juce::XmlElement> createSerializableStateXml(const EqeModuleProcessor& processor);
 juce::File getEqeAppGroupContainerDirectory();
+void syncEqePresetStorageWithSharedContainer();
 
 bool isShelfFilterType(EqeModuleProcessor::FilterType type) noexcept;
 bool isCutFilterType(EqeModuleProcessor::FilterType type) noexcept;

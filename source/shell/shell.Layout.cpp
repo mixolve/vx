@@ -276,7 +276,7 @@ void VxAudioProcessorEditor::finalizeLayout() noexcept
     if (textPromptOverlay != nullptr)
     {
         textPromptOverlay->setBounds(getLocalBounds());
-        textPromptOverlay->toFront(true);
+        textPromptOverlay->toFront(false);
     }
 
     storeEditorStateToValueTree();

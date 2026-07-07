@@ -229,4 +229,9 @@ float DspCore::processDetectorSample(const float level) noexcept
     detector.wasAboveThreshold = aboveThreshold;
     return juce::jlimit(0.0f, 1.0f, detector.transientEnvelope);
 }
+
+bool DspCore::isNeutral() const noexcept
+{
+    return false;
+}
 } // namespace tse::dsp

@@ -2,17 +2,12 @@
 
 #include "module.mie.ParameterIds.h"
 
-#include <array>
-#include <cmath>
-#include <optional>
-
-MieAudioProcessor::MieAudioProcessor(juce::AudioProcessor& ownerProcessor)
+MieAudioProcessor::MieAudioProcessor(juce::AudioProcessor&)
     : juce::AudioProcessor(BusesProperties()
                                .withInput("Input", juce::AudioChannelSet::stereo(), true)
                                .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       valueTreeState(*this, &undoManager, "PARAMETERS", createParameterLayout())
 {
-    juce::ignoreUnused(ownerProcessor);
     cacheParameterPointers();
     registerParameterListeners();
 }
@@ -107,20 +102,17 @@ int MieAudioProcessor::getCurrentProgram()
     return 0;
 }
 
-void MieAudioProcessor::setCurrentProgram(const int index)
+void MieAudioProcessor::setCurrentProgram(const int)
 {
-    juce::ignoreUnused(index);
 }
 
-const juce::String MieAudioProcessor::getProgramName(const int index)
+const juce::String MieAudioProcessor::getProgramName(const int)
 {
-    juce::ignoreUnused(index);
     return {};
 }
 
-void MieAudioProcessor::changeProgramName(const int index, const juce::String& newName)
+void MieAudioProcessor::changeProgramName(const int, const juce::String&)
 {
-    juce::ignoreUnused(index, newName);
 }
 
 void MieAudioProcessor::getStateInformation(juce::MemoryBlock& destData)

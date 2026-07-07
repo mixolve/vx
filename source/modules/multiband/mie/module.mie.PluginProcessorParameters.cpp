@@ -62,23 +62,24 @@ mie::dsp::DspCore::Parameters MieAudioProcessor::readBandParameters(const size_t
     };
 
     mie::dsp::DspCore::Parameters parameters;
-    parameters.wide = loadFloat(ParameterSlot::wide);
+    parameters.gainMid = loadFloat(ParameterSlot::gainMid);
+    parameters.gainSide = loadFloat(ParameterSlot::gainSide);
     parameters.gainL = loadFloat(ParameterSlot::gainL);
     parameters.gainR = loadFloat(ParameterSlot::gainR);
     parameters.gainLr = loadFloat(ParameterSlot::gainLr);
-    parameters.rectPlus = loadBool(ParameterSlot::rectPlus);
-    parameters.rectMinus = loadBool(ParameterSlot::rectMinus);
-    parameters.rectFoldPlus = loadBool(ParameterSlot::rectFoldPlus);
-    parameters.rectFoldMinus = loadBool(ParameterSlot::rectFoldMinus);
-    parameters.panL = loadFloat(ParameterSlot::panL);
-    parameters.panR = loadFloat(ParameterSlot::panR);
+    parameters.halfPositive = loadBool(ParameterSlot::halfPositive);
+    parameters.halfNegative = loadBool(ParameterSlot::halfNegative);
+    parameters.fullPositive = loadBool(ParameterSlot::fullPositive);
+    parameters.fullNegative = loadBool(ParameterSlot::fullNegative);
+    parameters.left = loadFloat(ParameterSlot::left);
+    parameters.right = loadFloat(ParameterSlot::right);
     parameters.law = loadFloat(ParameterSlot::law);
-    parameters.shear = loadFloat(ParameterSlot::shear);
-    parameters.shearToRight = loadBool(ParameterSlot::shearMode);
-    parameters.midBal = loadFloat(ParameterSlot::midBal);
-    parameters.sideBal = loadFloat(ParameterSlot::sideBal);
-    parameters.ortDegRotation = loadFloat(ParameterSlot::ortDegRotation);
-    parameters.ortFlipR = loadBool(ParameterSlot::ortFlipR);
+    parameters.impact = loadFloat(ParameterSlot::impact);
+    parameters.impactToRight = loadBool(ParameterSlot::impactDirection);
+    parameters.mid = loadFloat(ParameterSlot::mid);
+    parameters.side = loadFloat(ParameterSlot::side);
+    parameters.degree = loadFloat(ParameterSlot::degree);
+    parameters.flipRight = loadBool(ParameterSlot::flipRight);
     parameters.listenL = loadBool(ParameterSlot::listenL);
     parameters.listenR = loadBool(ParameterSlot::listenR);
     parameters.listenM = loadBool(ParameterSlot::listenM);
@@ -134,8 +135,11 @@ mie::dsp::MultibandProcessor::SoloMask MieAudioProcessor::readSoloMask() const
 
 bool MieAudioProcessor::syncParameters(const bool force)
 {
-    juce::ignoreUnused(force);
-    parametersDirty.store(false, std::memory_order_relaxed);
+    if (! force && ! parametersDirty.exchange(false, std::memory_order_acq_rel))
+        return false;
+
+    if (force)
+        parametersDirty.store(false, std::memory_order_release);
 
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
         currentBandParameters[bandIndex] = readBandParameters(bandIndex);

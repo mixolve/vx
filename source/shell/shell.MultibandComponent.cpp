@@ -1,6 +1,7 @@
 #include "shell.MultibandComponent.h"
 
 #include "shell.EditorControls.h"
+#include "shell.EditorParameterControls.h"
 #include "shell.UiParameterControls.h"
 #include "shell.UiStyle.h"
 
@@ -11,12 +12,6 @@
 
 namespace
 {
-enum class TimeTarget
-{
-    hold,
-    release
-};
-
 inline constexpr size_t multibandCrossoverSlotCount = 5;
 
 inline constexpr std::array<const char*, multibandCrossoverSlotCount> crossoverSuffixes {
@@ -26,6 +21,8 @@ inline constexpr std::array<const char*, multibandCrossoverSlotCount> crossoverS
 inline constexpr std::array<const char*, multibandCrossoverSlotCount> crossoverLabels {
     "XOVER-1", "XOVER-2", "XOVER-3", "XOVER-4", "XOVER-5"
 };
+
+inline constexpr float minCrossoverFrequencyGapHz = 1.0f;
 
 std::unique_ptr<BoxTextButton> makeTextButton(const juce::String& text, const juce::Colour accent = uiAccent)
 {
@@ -107,7 +104,6 @@ public:
                       juce::Colour accent)
         : owner(ownerIn),
           bandIndex(bandIndexIn),
-          accentColour(accent),
           soloButton(accent)
     {
         soloButton.setButtonText("SOLO");
@@ -173,12 +169,22 @@ public:
         }
     }
 
+    void mouseDown(const juce::MouseEvent&) override
+    {
+        owner.clearFocus();
+    }
+
 private:
     struct RowBase : public juce::Component
     {
         virtual int getPreferredHeight() const = 0;
         virtual void refreshExternalState() {}
         int getTopGap() const noexcept { return juce::jmax(0, topGapMultiplier) * verticalGap; }
+
+        void mouseDown(const juce::MouseEvent&) override
+        {
+            shell_parameter_focus::clearFocus();
+        }
 
         int topGapMultiplier = 1;
     };
@@ -188,12 +194,10 @@ private:
         ParameterRow(MultibandModuleComponent& ownerIn,
                      juce::String parameterId,
                      const BandControlSpec& spec)
-            : owner(ownerIn),
-              parameterIdToReset(std::move(parameterId))
         {
             control = std::make_unique<ParameterControl>(
-                owner.valueTreeState,
-                parameterIdToReset,
+                ownerIn.valueTreeState,
+                parameterId,
                 spec.label,
                 spec.decimals);
             topGapMultiplier = spec.topGapMultiplier;
@@ -208,9 +212,34 @@ private:
                 control->setBounds(getLocalBounds());
         }
 
-        MultibandModuleComponent& owner;
-        juce::String parameterIdToReset;
         std::unique_ptr<ParameterControl> control;
+    };
+
+    struct HeadingRow final : public RowBase
+    {
+        explicit HeadingRow(const BandControlSpec& spec)
+        {
+            heading = makeTextButton(spec.label, uiAccent);
+            heading->setClickingTogglesState(false);
+            heading->setBorderVisible(false);
+            heading->setFillVisible(false);
+            heading->setDividerLineVisible(true);
+            heading->setPressFillEnabled(false);
+            heading->setTextJustification(juce::Justification::centredLeft);
+            heading->setInterceptsMouseClicks(false, false);
+            topGapMultiplier = spec.topGapMultiplier;
+            addAndMakeVisible(*heading);
+        }
+
+        int getPreferredHeight() const override { return rowHeight; }
+
+        void resized() override
+        {
+            if (heading != nullptr)
+                heading->setBounds(getLocalBounds());
+        }
+
+        std::unique_ptr<BoxTextButton> heading;
     };
 
     struct ToggleRow final : public RowBase
@@ -449,6 +478,14 @@ private:
     {
         for (const auto& spec : specs)
         {
+            if (spec.kind == ControlKind::heading)
+            {
+                auto row = std::make_unique<HeadingRow>(spec);
+                addAndMakeVisible(*row);
+                rows.push_back(std::move(row));
+                continue;
+            }
+
             if (spec.kind == ControlKind::toggle)
             {
                 auto row = std::make_unique<ToggleRow>(*this, owner, getBandParameterId(spec), spec);
@@ -532,7 +569,6 @@ private:
 
     MultibandModuleComponent& owner;
     size_t bandIndex = 0;
-    juce::Colour accentColour;
     BoxTextButton soloButton;
     std::vector<std::unique_ptr<RowBase>> rows;
     std::vector<juce::String> listenedParameterIds;
@@ -570,6 +606,16 @@ public:
         };
         addAndMakeVisible(*autoSoloButton);
 
+        soloModeButton = makeTextButton("EXCLUSIVE");
+        soloModeButton->setClickingTogglesState(true);
+        soloModeButton->setToggleState(owner.manualSoloInclusive, juce::dontSendNotification);
+        soloModeButton->onClick = [this]
+        {
+            owner.setManualSoloInclusive(soloModeButton->getToggleState());
+            owner.clearFocus();
+        };
+        addAndMakeVisible(*soloModeButton);
+
         addCrossoverButton = makeTextButton("XOV-ADD");
         addCrossoverButton->onClick = [this]
         {
@@ -593,6 +639,10 @@ public:
                 owner.config.makeFullbandParameterId(crossoverSuffixes[index]),
                 crossoverLabels[index],
                 0);
+            control->onValueChanged = [this, index]
+            {
+                owner.constrainCrossoverFrequency(index);
+            };
             addAndMakeVisible(*control);
             crossoverControls[index] = std::move(control);
         }
@@ -614,6 +664,8 @@ public:
 
         if (owner.config.showAutoSolo)
             height += verticalGap + rowHeight;
+
+        height += verticalGap + rowHeight;
 
         return height + moduleContentBottomGap;
     }
@@ -637,6 +689,7 @@ public:
         }
 
         refreshAutoSoloButtonState();
+        refreshSoloModeButtonState();
 
         for (size_t index = 0; index < crossoverControls.size(); ++index)
         {
@@ -693,7 +746,14 @@ public:
         else if (autoSoloButton != nullptr)
             autoSoloButton->setBounds({});
 
+        placeButton(soloModeButton.get());
+
         refreshExternalState();
+    }
+
+    void mouseDown(const juce::MouseEvent&) override
+    {
+        owner.clearFocus();
     }
 
 private:
@@ -715,8 +775,21 @@ private:
         autoSoloButton->setAlpha(available ? 1.0f : 0.45f);
     }
 
+    void refreshSoloModeButtonState()
+    {
+        if (soloModeButton == nullptr)
+            return;
+
+        soloModeButton->setButtonText(owner.manualSoloInclusive ? "INCLUSIVE" : "EXCLUSIVE");
+        soloModeButton->setToggleState(owner.manualSoloInclusive, juce::dontSendNotification);
+        const auto available = ! owner.autoSoloEnabled && owner.getActiveSplitCount() > 0;
+        soloModeButton->setEnabled(available);
+        soloModeButton->setAlpha(available ? 1.0f : 0.45f);
+    }
+
     MultibandModuleComponent& owner;
     std::unique_ptr<BoxTextButton> autoSoloButton;
+    std::unique_ptr<BoxTextButton> soloModeButton;
     std::unique_ptr<BoxTextButton> addCrossoverButton;
     std::unique_ptr<BoxTextButton> removeCrossoverButton;
     std::array<std::unique_ptr<ParameterControl>, numCrossoverSlots> crossoverControls;
@@ -754,7 +827,7 @@ MultibandModuleComponent::MultibandModuleComponent(Config configIn)
 
             ++activeSoloCount;
 
-            if (! uiStateLoaded)
+            if (! uiStateLoaded && activeSoloCount == 1)
                 manualSoloMask[bandIndex] = true;
         }
 
@@ -799,7 +872,8 @@ MultibandModuleComponent::~MultibandModuleComponent()
 void MultibandModuleComponent::loadUiState()
 {
     auto& state = valueTreeState.state;
-    autoSoloEnabled = getBool(state, config.moduleKey, "autoSoloEnabled", true);
+    autoSoloEnabled = getBool(state, config.moduleKey, "autoSoloEnabled", false);
+    manualSoloInclusive = getBool(state, config.moduleKey, "manualSoloInclusive", false);
     allBandsActive = getBool(state, config.moduleKey, "allBandsActive", true);
     visibleBandIndex = static_cast<size_t>(juce::jlimit(0,
                                                        static_cast<int>(numBands - 1),
@@ -822,6 +896,7 @@ void MultibandModuleComponent::saveUiState()
 {
     auto& state = valueTreeState.state;
     setBool(state, config.moduleKey, "autoSoloEnabled", autoSoloEnabled);
+    setBool(state, config.moduleKey, "manualSoloInclusive", manualSoloInclusive);
     setBool(state, config.moduleKey, "allBandsActive", allBandsActive);
     setInt(state, config.moduleKey, "visibleBandIndex", static_cast<int>(visibleBandIndex));
     setBool(state, config.moduleKey, "hasUiState", true);
@@ -866,6 +941,11 @@ void MultibandModuleComponent::resized()
     pageViewport.setBounds(bounds);
     updatePageViewport();
     saveUiState();
+}
+
+void MultibandModuleComponent::mouseDown(const juce::MouseEvent&)
+{
+    clearFocus();
 }
 
 void MultibandModuleComponent::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
@@ -935,7 +1015,12 @@ void MultibandModuleComponent::toggleManualSolo(const size_t bandIndex)
 
     visibleBandIndex = juce::jmin(bandIndex, numBands - 1);
     allBandsActive = false;
-    manualSoloMask[visibleBandIndex] = ! manualSoloMask[visibleBandIndex];
+    const auto shouldSoloBand = ! manualSoloMask[visibleBandIndex];
+
+    if (! manualSoloInclusive)
+        manualSoloMask = {};
+
+    manualSoloMask[visibleBandIndex] = shouldSoloBand;
     updateMonitorButtons();
     updatePageVisibility();
     syncMonitorParameters();
@@ -958,6 +1043,9 @@ void MultibandModuleComponent::changeActiveSplitCount(const int delta)
     setParameterPlainValue(config.makeActiveSplitCountParameterId(), static_cast<float>(newValue));
     visibleBandIndex = juce::jmin(visibleBandIndex, getActiveBandCount() - 1);
     manualSoloMask = {};
+
+    for (size_t crossoverIndex = 0; crossoverIndex < static_cast<size_t>(newValue); ++crossoverIndex)
+        constrainCrossoverFrequency(crossoverIndex);
 
     if (allBandsPage != nullptr)
         allBandsPage->refreshExternalState();
@@ -983,6 +1071,45 @@ void MultibandModuleComponent::setAutoSoloEnabled(const bool shouldBeEnabled)
 {
     autoSoloEnabled = shouldBeEnabled;
     manualSoloMask = {};
+
+    if (allBandsPage != nullptr)
+        allBandsPage->refreshExternalState();
+
+    updateMonitorButtons();
+    syncMonitorParameters();
+    saveUiState();
+}
+
+void MultibandModuleComponent::setManualSoloInclusive(const bool shouldBeInclusive)
+{
+    manualSoloInclusive = shouldBeInclusive;
+
+    if (! manualSoloInclusive)
+    {
+        size_t soloBandToKeep = visibleBandIndex;
+
+        if (! manualSoloMask[soloBandToKeep])
+        {
+            for (size_t bandIndex = 0; bandIndex < getActiveBandCount(); ++bandIndex)
+            {
+                if (manualSoloMask[bandIndex])
+                {
+                    soloBandToKeep = bandIndex;
+                    break;
+                }
+            }
+        }
+
+        const auto shouldKeepSolo = soloBandToKeep < getActiveBandCount() && manualSoloMask[soloBandToKeep];
+        manualSoloMask = {};
+
+        if (shouldKeepSolo)
+            manualSoloMask[soloBandToKeep] = true;
+    }
+
+    if (allBandsPage != nullptr)
+        allBandsPage->refreshExternalState();
+
     updateMonitorButtons();
     syncMonitorParameters();
     saveUiState();
@@ -1118,6 +1245,49 @@ bool MultibandModuleComponent::setParameterPlainValue(const juce::String& parame
     return false;
 }
 
+bool MultibandModuleComponent::constrainCrossoverFrequency(const size_t crossoverIndex)
+{
+    const auto activeSplitCount = getActiveSplitCount();
+
+    if (crossoverIndex >= activeSplitCount || crossoverIndex >= crossoverSuffixes.size())
+        return false;
+
+    const auto parameterId = config.makeFullbandParameterId(crossoverSuffixes[crossoverIndex]);
+    auto* parameter = valueTreeState.getParameter(parameterId);
+
+    if (parameter == nullptr)
+        return false;
+
+    auto lowerBound = parameter->convertFrom0to1(0.0f);
+    auto upperBound = parameter->convertFrom0to1(1.0f);
+
+    if (crossoverIndex > 0)
+    {
+        const auto previousId = config.makeFullbandParameterId(crossoverSuffixes[crossoverIndex - 1]);
+
+        if (auto* previousParameter = valueTreeState.getParameter(previousId))
+            lowerBound = juce::jmax(lowerBound,
+                                    previousParameter->convertFrom0to1(previousParameter->getValue()) + minCrossoverFrequencyGapHz);
+    }
+
+    if (crossoverIndex + 1 < activeSplitCount)
+    {
+        const auto nextId = config.makeFullbandParameterId(crossoverSuffixes[crossoverIndex + 1]);
+
+        if (auto* nextParameter = valueTreeState.getParameter(nextId))
+            upperBound = juce::jmin(upperBound,
+                                    nextParameter->convertFrom0to1(nextParameter->getValue()) - minCrossoverFrequencyGapHz);
+    }
+
+    const auto currentValue = parameter->convertFrom0to1(parameter->getValue());
+    const auto constrainedValue = juce::jlimit(lowerBound, juce::jmax(lowerBound, upperBound), currentValue);
+
+    if (std::abs(currentValue - constrainedValue) <= 1.0e-6f)
+        return false;
+
+    return setParameterPlainValue(parameterId, constrainedValue);
+}
+
 bool MultibandModuleComponent::setParameterNormalisedValue(juce::RangedAudioParameter& parameter, const float normalisedValue)
 {
     const auto value = juce::jlimit(0.0f, 1.0f, normalisedValue);
@@ -1159,6 +1329,8 @@ bool MultibandModuleComponent::assignButtonHostSlot(const juce::String& paramete
 
 void MultibandModuleComponent::clearFocus()
 {
+    shell_parameter_focus::clearFocus();
+
     if (config.clearKeyboardFocus != nullptr)
         config.clearKeyboardFocus();
     else

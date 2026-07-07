@@ -25,6 +25,14 @@ void focusParameterTitleButton(BoxTextButton* button, juce::Slider* valueSlider)
     focusedParameterTitleButton->setAlwaysAccentOutline(true);
 }
 
+bool isFocusedParameterTitleButton(const BoxTextButton* button, const juce::Slider* valueSlider) noexcept
+{
+    return button != nullptr
+        && valueSlider != nullptr
+        && focusedParameterTitleButton == button
+        && focusedParameterValueSlider == valueSlider;
+}
+
 void clearFocusedParameterTitleButton(BoxTextButton* button, juce::Slider* valueSlider)
 {
     if (valueSlider != nullptr && focusedParameterValueSlider == valueSlider)
@@ -115,16 +123,20 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
 
     titleButton = std::make_unique<BoxTextButton>(parameterTitleFocusColour);
     titleButton->setButtonText(titleText);
-    titleButton->setTextJustification(juce::Justification::centred);
+    titleButton->setTextJustification(juce::Justification::centredLeft);
+    titleButton->setClearsParameterFocusOnMouseDown(false);
     titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
     {
         return assignParameterTitleToHostSlot(*this, titleButton.get(), parameterId, parameter, modifiers);
     };
     titleButton->onClick = [this]
     {
+        if (isFocusedParameterTitleButton(titleButton.get(), &slider))
+            return;
+
         if (valueClickAction != nullptr)
         {
-            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+            shell_parameter_focus::clearFocus();
             clearKeyboardFocus(*this);
             return;
         }
@@ -132,7 +144,7 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
         if (interactionEnabled && canUseFocusedPotentiometer(parameter, valueClickAction))
             focusParameterTitleButton(titleButton.get(), &slider);
         else
-            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+            shell_parameter_focus::clearFocus();
 
         clearKeyboardFocus(*this);
     };
@@ -170,6 +182,9 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     };
     slider.valueFromTextFunction = [this] (const juce::String& text)
     {
+        if (text.trim().equalsIgnoreCase("MUTED"))
+            return slider.getMinimum();
+
         if (customTextParser != nullptr)
             return customTextParser(text);
 
@@ -206,8 +221,18 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     {
         return formatEditorValue();
     };
+    valueBox->onBeforeShowEditor = [this]
+    {
+        if (interactionEnabled && canUseFocusedPotentiometer(parameter, valueClickAction))
+            focusParameterTitleButton(titleButton.get(), &slider);
+        else
+            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+    };
     valueBox->textToValueParser = [this] (const juce::String& text)
     {
+        if (text.trim().equalsIgnoreCase("MUTED"))
+            return slider.getMinimum();
+
         if (customTextParser != nullptr)
             return customTextParser(text);
 
@@ -423,6 +448,9 @@ juce::String ParameterControl::formatDisplayValue(const double value) const
         return formatFixedDecimalValue(parseNumericInput(parameterText), editorDecimals);
     }
 
+    if (parameterText.isNotEmpty())
+        return parameterText;
+
     return formatFixedDecimalValue(value, editorDecimals);
 }
 
@@ -436,6 +464,15 @@ juce::String ParameterControl::formatEditorValue() const
 
     if (parameter != nullptr && dynamic_cast<juce::AudioParameterChoice*>(parameter) != nullptr)
         return parameter->getText(parameter->convertTo0to1(static_cast<float>(slider.getValue())), 64).trim();
+
+    if (parameter != nullptr)
+    {
+        const auto parameterText = parameter->getText(parameter->convertTo0to1(static_cast<float>(slider.getValue())), 64).trim();
+        const auto numericText = parameterText.retainCharacters("0123456789+-.");
+
+        if (numericText.isEmpty() && parameterText.isNotEmpty())
+            return parameterText;
+    }
 
     return formatFixedDecimalValue(slider.getValue(), editorDecimals);
 }
@@ -454,7 +491,7 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
 
     titleButton = std::make_unique<BoxTextButton>(parameterTitleFocusColour);
     titleButton->setButtonText(titleText);
-    titleButton->setTextJustification(juce::Justification::centred);
+    titleButton->setTextJustification(juce::Justification::centredLeft);
     titleButton->setPressFillEnabled(false);
     titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
     {
@@ -773,12 +810,16 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
 
     titleButton = std::make_unique<BoxTextButton>(parameterTitleFocusColour);
     titleButton->setButtonText(titleText);
-    titleButton->setTextJustification(juce::Justification::centred);
+    titleButton->setTextJustification(juce::Justification::centredLeft);
+    titleButton->setClearsParameterFocusOnMouseDown(false);
     titleButton->onClick = [this]
     {
+        if (isFocusedParameterTitleButton(titleButton.get(), &slider))
+            return;
+
         if (valueClickAction != nullptr)
         {
-            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+            shell_parameter_focus::clearFocus();
             valueClickAction();
             clearKeyboardFocus(*this);
             return;
@@ -787,7 +828,7 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
         if (interactionEnabled && valueClickAction == nullptr)
             focusParameterTitleButton(titleButton.get(), &slider);
         else
-            clearFocusedParameterTitleButton(titleButton.get(), &slider);
+            shell_parameter_focus::clearFocus();
 
         clearKeyboardFocus(*this);
     };
@@ -854,6 +895,13 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
     valueBox->editorTextProvider = [this]
     {
         return formatEditorValue();
+    };
+    valueBox->onBeforeShowEditor = [this]
+    {
+        if (interactionEnabled && valueClickAction == nullptr)
+            focusParameterTitleButton(titleButton.get(), &slider);
+        else
+            clearFocusedParameterTitleButton(titleButton.get(), &slider);
     };
     valueBox->textToValueParser = [this] (const juce::String& text)
     {

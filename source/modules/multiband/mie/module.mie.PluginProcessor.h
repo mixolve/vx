@@ -7,8 +7,6 @@
 
 #include <array>
 #include <atomic>
-#include <functional>
-#include <vector>
 
 class MieAudioProcessor final : public juce::AudioProcessor,
                                 private juce::AudioProcessorValueTreeState::Listener
