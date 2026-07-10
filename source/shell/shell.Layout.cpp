@@ -273,6 +273,12 @@ void VxAudioProcessorEditor::finalizeLayout() noexcept
     if (focusedParameterControl != nullptr)
         focusedParameterControl->toFront(false);
 
+    if (horizontalResizeHandle != nullptr)
+        horizontalResizeHandle->toFront(false);
+
+    if (verticalResizeHandle != nullptr)
+        verticalResizeHandle->toFront(false);
+
     if (textPromptOverlay != nullptr)
     {
         textPromptOverlay->setBounds(getLocalBounds());
@@ -307,6 +313,14 @@ void VxAudioProcessorEditor::resized()
     }
 
     auto bounds = getLocalBounds();
+
+    constexpr int resizeHandleThickness = 8;
+
+    if (horizontalResizeHandle != nullptr)
+        horizontalResizeHandle->setBounds(bounds.withLeft(juce::jmax(0, bounds.getRight() - resizeHandleThickness)));
+
+    if (verticalResizeHandle != nullptr)
+        verticalResizeHandle->setBounds(bounds.withTop(juce::jmax(0, bounds.getBottom() - resizeHandleThickness)));
 
     resetAnalyserPanelBounds();
 

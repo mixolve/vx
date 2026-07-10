@@ -173,6 +173,7 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     slider.setSliderStyle(juce::Slider::LinearHorizontal);
     slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     slider.setInterceptsMouseClicks(false, false);
+    slider.setScrollWheelEnabled(false);
     slider.setAlpha(0.0f);
     slider.setWantsKeyboardFocus(false);
     slider.setMouseClickGrabsKeyboardFocus(false);
@@ -848,6 +849,7 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
     slider.setSliderStyle(juce::Slider::LinearHorizontal);
     slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
     slider.setInterceptsMouseClicks(false, false);
+    slider.setScrollWheelEnabled(false);
     slider.setAlpha(0.0f);
     slider.setWantsKeyboardFocus(false);
     slider.setMouseClickGrabsKeyboardFocus(false);

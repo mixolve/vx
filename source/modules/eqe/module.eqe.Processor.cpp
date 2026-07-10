@@ -64,7 +64,10 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
     if (! prepared.load(std::memory_order_acquire))
         return;
 
-    const juce::ScopedLock lock(filterProcessLock);
+    const juce::ScopedTryLock lock(filterProcessLock);
+
+    if (! lock.isLocked())
+        return;
 
     if (! prepared.load(std::memory_order_acquire))
         return;

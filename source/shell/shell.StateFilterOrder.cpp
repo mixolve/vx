@@ -130,6 +130,7 @@ struct FilterSortKey
     int place = 0;
     double frequency = 0.0;
 };
+
 }
 
 void VxAudioProcessorEditor::sortFilterSectionsByPlace()
@@ -149,7 +150,9 @@ void VxAudioProcessorEditor::sortFilterSectionsByPlace()
         if (section == nullptr)
             return;
 
-        sortKeys.push_back({ filterIndex, juce::jlimit(0, 7, section->getPlace()), section->getFrequency() });
+        const auto sortFrequency = section->getFilterType() == EqeModuleProcessor::FilterType::volume ? 0.0
+                                                                                                      : section->getFrequency();
+        sortKeys.push_back({ filterIndex, juce::jlimit(0, 7, section->getPlace()), sortFrequency });
     }
 
     std::stable_sort(sortKeys.begin(),
@@ -185,7 +188,9 @@ void VxAudioProcessorEditor::sortFilterSectionsByFrequency()
         if (section == nullptr)
             return;
 
-        sortKeys.push_back({ filterIndex, juce::jlimit(0, 7, section->getPlace()), section->getFrequency() });
+        const auto sortFrequency = section->getFilterType() == EqeModuleProcessor::FilterType::volume ? 0.0
+                                                                                                      : section->getFrequency();
+        sortKeys.push_back({ filterIndex, juce::jlimit(0, 7, section->getPlace()), sortFrequency });
     }
 
     std::stable_sort(sortKeys.begin(),
@@ -221,7 +226,9 @@ void VxAudioProcessorEditor::sortFilterSectionsByDuo()
         if (section == nullptr)
             return;
 
-        sortKeys.push_back({ filterIndex, juce::jlimit(0, 7, section->getPlace()), section->getFrequency() });
+        const auto sortFrequency = section->getFilterType() == EqeModuleProcessor::FilterType::volume ? 0.0
+                                                                                                      : section->getFrequency();
+        sortKeys.push_back({ filterIndex, juce::jlimit(0, 7, section->getPlace()), sortFrequency });
     }
 
     std::stable_sort(sortKeys.begin(),

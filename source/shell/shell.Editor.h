@@ -263,6 +263,8 @@ private:
     ParameterFocusClearingComponent filterContent;
     std::unique_ptr<juce::Slider> focusedParameterControl;
     std::unique_ptr<BoxTextButton> footerTab;
+    std::unique_ptr<juce::Component> horizontalResizeHandle;
+    std::unique_ptr<juce::Component> verticalResizeHandle;
     std::unique_ptr<juce::Component> speAnalyserComponent;
     std::unique_ptr<juce::Component> textPromptOverlay;
     std::unique_ptr<juce::Component> mieModuleEditor;

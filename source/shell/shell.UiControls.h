@@ -125,6 +125,7 @@ public:
     void setTextJustification(juce::Justification justification) noexcept;
     void setArrowDirection(ArrowDirection direction) noexcept;
     void setBorderVisible(bool shouldShow) noexcept;
+    void setEqeFilterHeaderColouringEnabled(bool shouldEnable) noexcept;
     void setCancelClickOnLeave(bool shouldEnable) noexcept;
     void setTextColourOverride(juce::Colour colour);
     void clearTextColourOverride();
@@ -162,6 +163,7 @@ private:
     juce::Justification textJustification = juce::Justification::centred;
     ArrowDirection arrowDirection = ArrowDirection::none;
     bool borderVisible = true;
+    bool eqeFilterHeaderColouringEnabled = false;
     bool hasTextColourOverride = false;
     juce::Colour textColourOverride;
     bool hostAssignmentFlashActive = false;

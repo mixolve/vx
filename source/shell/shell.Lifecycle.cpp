@@ -167,14 +167,24 @@ void VxAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
 
 void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
 {
+    const auto clearFocusedParameterForViewportScroll = [this]
+    {
+        shell_parameter_focus::clearFocus();
+        syncFocusedParameterControl();
+    };
+
     if (hostParametersViewport.getBounds().contains(event.getPosition()))
     {
+        clearFocusedParameterForViewportScroll();
+
         if (scrollViewportWithWheel(hostParametersViewport, hostParametersContent.getHeight(), wheel))
             return;
     }
 
     if (speAnalyserViewport.getBounds().contains(event.getPosition()))
     {
+        clearFocusedParameterForViewportScroll();
+
         if (scrollViewportWithWheel(speAnalyserViewport, speAnalyserContent.getHeight(), wheel))
             return;
     }
@@ -182,6 +192,7 @@ void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const
     if (! filterViewport.getBounds().contains(event.getPosition()))
         return;
 
+    clearFocusedParameterForViewportScroll();
     scrollViewportWithWheel(filterViewport, getActiveFilterContentHeight(), wheel);
 }
 

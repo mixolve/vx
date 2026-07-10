@@ -383,7 +383,11 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
     const juce::ScopedValueSetter<bool> suppressHistory(suppressHistorySnapshots, true);
     pendingHistorySnapshot.store(false, std::memory_order_relaxed);
     detachModuleEditorBindings();
-    audioProcessor.setStateInformation(mergedSnapshot.getData(), static_cast<int>(mergedSnapshot.getSize()));
+    if (! audioProcessor.setStateInformationPreservingLoadedModule(mergedSnapshot.getData(),
+                                                                    static_cast<int>(mergedSnapshot.getSize())))
+    {
+        audioProcessor.setStateInformation(mergedSnapshot.getData(), static_cast<int>(mergedSnapshot.getSize()));
+    }
     if (bypassParameter != nullptr)
         bypassParameter->setValueNotifyingHost(preservedBypassValue);
 

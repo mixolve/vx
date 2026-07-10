@@ -57,6 +57,7 @@ VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTr
 
     header->setButtonText({});
     header->setTextJustification(juce::Justification::centred);
+    header->setEqeFilterHeaderColouringEnabled(true);
     header->setClickingTogglesState(true);
     header->setCancelClickOnLeave(true);
 

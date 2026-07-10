@@ -1,4 +1,5 @@
 #include "shell.EditorControls.h"
+#include "shell.EditorParameterControls.h"
 
 bool scrollViewportWithWheel(juce::Viewport& viewport, const int contentHeight, const juce::MouseWheelDetails& wheel)
 {
@@ -204,6 +205,8 @@ void ValueBoxComponent::mouseDrag(const juce::MouseEvent& event)
 
     if (scrollGesturesPassThrough)
     {
+        shell_parameter_focus::clearFocus();
+
         if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
         {
             const auto viewedHeight = viewport->getViewedComponent() != nullptr
@@ -273,6 +276,8 @@ void ValueBoxComponent::mouseWheelMove(const juce::MouseEvent& event, const juce
 
     if (scrollGesturesPassThrough)
     {
+        shell_parameter_focus::clearFocus();
+
         if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
         {
             const auto viewedHeight = viewport->getViewedComponent() != nullptr

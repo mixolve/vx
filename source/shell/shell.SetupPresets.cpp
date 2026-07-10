@@ -43,9 +43,13 @@ void VxAudioProcessorEditor::setupPresetControls()
     };
     presetsSection->deleteButton->onClick = [this]
     {
-        deleteSelectedFilterPreset();
         clearKeyboardFocus(*this);
     };
+    presetsSection->deleteButton->setLongPressAction([this]
+    {
+        deleteSelectedFilterPreset();
+        clearKeyboardFocus(*this);
+    }, 500, "S?");
     addAndMakeVisible(presetsSection->presetCombo);
     addAndMakeVisible(*presetsSection->adButton);
     addAndMakeVisible(*presetsSection->saveButton);

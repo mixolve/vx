@@ -131,7 +131,6 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
 {
     juce::ScopedNoDenormals noDenormals;
     juce::ignoreUnused(midiBuffer);
-    const juce::ScopedLock lock(processingLock);
 
     lastProcessedBlockSize = juce::jmax(1, buffer.getNumSamples());
 

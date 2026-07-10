@@ -129,6 +129,66 @@ public:
 private:
     double dragStartValue = 0.0;
 };
+
+#if ! JUCE_IOS
+class EdgeResizeHandle final : public juce::Component
+{
+public:
+    enum class Axis
+    {
+        horizontal,
+        vertical
+    };
+
+    EdgeResizeHandle(VxAudioProcessorEditor& ownerIn, const Axis axisIn)
+        : owner(ownerIn),
+          axis(axisIn)
+    {
+        setMouseCursor(axis == Axis::horizontal ? juce::MouseCursor::LeftRightResizeCursor
+                                                : juce::MouseCursor::UpDownResizeCursor);
+        setWantsKeyboardFocus(false);
+        setMouseClickGrabsKeyboardFocus(false);
+    }
+
+    void paint(juce::Graphics& graphics) override
+    {
+        auto bounds = getLocalBounds();
+        graphics.setColour(uiGrey500);
+
+        if (axis == Axis::horizontal)
+            graphics.fillRect(bounds.removeFromRight(1));
+        else
+            graphics.fillRect(bounds.removeFromBottom(1));
+    }
+
+    void mouseDown(const juce::MouseEvent&) override
+    {
+        dragStartSize = { owner.getWidth(), owner.getHeight() };
+    }
+
+    void mouseDrag(const juce::MouseEvent& event) override
+    {
+        auto width = dragStartSize.x;
+        auto height = dragStartSize.y;
+
+        if (axis == Axis::horizontal)
+            width = juce::jlimit(minimumEditorWidth,
+                                 maximumEditorWidth,
+                                 dragStartSize.x + event.getDistanceFromDragStartX());
+        else
+            height = juce::jlimit(minimumEditorHeight,
+                                  maximumEditorHeight,
+                                  dragStartSize.y + event.getDistanceFromDragStartY());
+
+        owner.setSize(width, height);
+    }
+
+private:
+    VxAudioProcessorEditor& owner;
+    Axis axis;
+    juce::Point<int> dragStartSize;
+};
+#endif
 }
 
 VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit)
@@ -141,7 +201,11 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
 
     setLookAndFeel(lookAndFeel.get());
     setOpaque(true);
-    setResizable(true, true);
+#if JUCE_IOS
+    setResizable(false, false);
+#else
+    setResizable(true, false);
+#endif
     setWantsKeyboardFocus(true);
     setMouseClickGrabsKeyboardFocus(false);
     tooltipWindow = std::make_unique<DelayedTooltipWindow>(this, 1500);
@@ -198,6 +262,13 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
                                           juce::dontSendNotification);
     };
     addAndMakeVisible(*focusedParameterControl);
+
+#if ! JUCE_IOS
+    horizontalResizeHandle = std::make_unique<EdgeResizeHandle>(*this, EdgeResizeHandle::Axis::horizontal);
+    verticalResizeHandle = std::make_unique<EdgeResizeHandle>(*this, EdgeResizeHandle::Axis::vertical);
+    addAndMakeVisible(*horizontalResizeHandle);
+    addAndMakeVisible(*verticalResizeHandle);
+#endif
 
     clipButton = std::make_unique<BoxTextButton>(uiClip);
     clipButton->setButtonText("C");
