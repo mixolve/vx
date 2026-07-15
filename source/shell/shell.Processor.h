@@ -85,7 +85,15 @@ public:
 
     void getStateInformation(juce::MemoryBlock& destData) override;
     void setStateInformation(const void* data, int sizeInBytes) override;
-    bool setStateInformationPreservingLoadedModule(const void* data, int sizeInBytes);
+    bool setStateInformationPreservingLoadedModule(const void* data,
+                                                   int sizeInBytes,
+                                                   bool suspendProcessingForRestore = true);
+    bool applyStateInformationForABCompare(const void* data, int sizeInBytes);
+    int getABCompareActiveSlot() const noexcept;
+    void setABCompareActiveSlot(int slot) noexcept;
+    bool isABCompareSnapshotValid(int slot) const noexcept;
+    juce::MemoryBlock getABCompareSnapshot(int slot) const;
+    void setABCompareSnapshot(int slot, const juce::MemoryBlock& snapshot);
 
     juce::AudioProcessorValueTreeState& getValueTreeState() noexcept;
     const juce::AudioProcessorValueTreeState& getValueTreeState() const noexcept;
@@ -164,6 +172,10 @@ private:
     std::atomic<int> lastEditorWidth { 0 };
     std::atomic<int> lastEditorHeight { 0 };
     std::atomic<bool> suppressHostStateNotifications { false };
+    mutable juce::CriticalSection abCompareLock;
+    std::array<juce::MemoryBlock, 2> abCompareSnapshots;
+    std::array<bool, 2> abCompareSnapshotValid {};
+    std::atomic<int> abCompareActiveSlot { 0 };
     int preparedNumChannels = 2;
     int lastProcessedBlockSize = 0;
     double currentSampleRate = 0.0;

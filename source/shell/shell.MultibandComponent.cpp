@@ -963,7 +963,10 @@ void MultibandModuleComponent::scrollPageViewport(const juce::MouseEvent& event,
     if (! pageViewport.getBounds().contains(editorPosition))
         return;
 
-    scrollViewportWithWheel(pageViewport, pageViewport.getViewedComponent()->getHeight(), wheel);
+    scrollViewportWithWheel(pageViewport,
+                            pageViewport.getViewedComponent()->getHeight(),
+                            wheel,
+                            event.mods.isShiftDown());
 }
 
 juce::Rectangle<int> MultibandModuleComponent::getContentBounds() const noexcept

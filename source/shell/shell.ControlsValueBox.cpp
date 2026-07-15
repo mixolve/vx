@@ -1,7 +1,10 @@
 #include "shell.EditorControls.h"
 #include "shell.EditorParameterControls.h"
 
-bool scrollViewportWithWheel(juce::Viewport& viewport, const int contentHeight, const juce::MouseWheelDetails& wheel)
+bool scrollViewportWithWheel(juce::Viewport& viewport,
+                             const int contentHeight,
+                             const juce::MouseWheelDetails& wheel,
+                             const bool fineControl)
 {
     const auto maxScrollY = juce::jmax(0, contentHeight - viewport.getHeight());
 
@@ -14,7 +17,7 @@ bool scrollViewportWithWheel(juce::Viewport& viewport, const int contentHeight, 
     if (std::abs(dominantDelta) < 1.0e-6f)
         return false;
 
-    const auto scrollSensitivity = wheel.isSmooth ? 140.0f : 48.0f;
+    const auto scrollSensitivity = (wheel.isSmooth ? 140.0f : 48.0f) * (fineControl ? 0.1f : 1.0f);
     auto pixelDelta = juce::roundToInt(-dominantDelta * scrollSensitivity);
 
     if (pixelDelta == 0)
@@ -213,10 +216,11 @@ void ValueBoxComponent::mouseDrag(const juce::MouseEvent& event)
                 ? viewport->getViewedComponent()->getHeight()
                 : 0;
             const auto maxScrollY = juce::jmax(0, viewedHeight - viewport->getHeight());
+            const auto dragScale = event.mods.isShiftDown() ? 0.1 : 1.0;
             viewport->setViewPosition(0,
                                       juce::jlimit(0,
                                                    maxScrollY,
-                                                   dragStartViewportY - event.getDistanceFromDragStartY()));
+                                                   dragStartViewportY - juce::roundToInt(static_cast<double>(event.getDistanceFromDragStartY()) * dragScale)));
         }
     }
 
@@ -283,7 +287,7 @@ void ValueBoxComponent::mouseWheelMove(const juce::MouseEvent& event, const juce
             const auto viewedHeight = viewport->getViewedComponent() != nullptr
                 ? viewport->getViewedComponent()->getHeight()
                 : 0;
-            scrollViewportWithWheel(*viewport, viewedHeight, wheel);
+            scrollViewportWithWheel(*viewport, viewedHeight, wheel, event.mods.isShiftDown());
         }
 
         return;

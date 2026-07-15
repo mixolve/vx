@@ -63,6 +63,7 @@ private:
     void selectFilterSection(int filterIndex);
     void refreshFilterPresetList(const juce::String& preferredSelection = {});
     void reloadFilterPresetFromProcessor();
+    void commitFilterDisplayOrderToProcessor();
     void addFilterPreset();
     void saveFilterPreset();
     bool renameFilterPreset(const juce::String& sourcePresetName, const juce::String& newPresetName);
@@ -100,6 +101,11 @@ private:
     void clearAllFilters();
     void performUndo();
     void performRedo();
+    void switchABState();
+    void captureCurrentABState();
+    void restoreABStateSnapshot(const juce::MemoryBlock& snapshot);
+    void refreshABCompareButton();
+    void refreshEqeFilterSectionsFromProcessor();
     void applyFilterSortOrder(const std::vector<int>& orderedIndices);
     void moveFilterSection(int sourceIndex, int destinationIndex);
     void enforceSingleExpandedFilterSection(int preferredFilterIndex = -1);
@@ -250,6 +256,7 @@ private:
     std::unique_ptr<BoxTextButton> clearFiltersButton;
     std::unique_ptr<BoxTextButton> undoButton;
     std::unique_ptr<BoxTextButton> redoButton;
+    std::unique_ptr<BoxTextButton> abCompareButton;
     std::unique_ptr<BoxTextButton> sortPlaceButton;
     std::unique_ptr<BoxTextButton> sortFreqButton;
     std::unique_ptr<BoxTextButton> sortDuoButton;

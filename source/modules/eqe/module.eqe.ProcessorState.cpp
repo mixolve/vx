@@ -48,6 +48,18 @@ void setParameterValue(juce::AudioProcessorValueTreeState& state,
     parameter->endChangeGesture();
 }
 
+void setParameterValueFast(juce::AudioProcessorValueTreeState& state,
+                           const juce::String& parameterId,
+                           const float value)
+{
+    auto* parameter = state.getParameter(parameterId);
+
+    if (parameter == nullptr)
+        return;
+
+    parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
+}
+
 float readParameterValue(juce::AudioProcessorValueTreeState& state, const juce::String& parameterId)
 {
     if (auto* parameter = state.getParameter(parameterId))
@@ -202,6 +214,43 @@ void removeStateParameterElement(juce::XmlElement& stateElement,
 {
     if (auto* parameterElement = findStateParameterElement(stateElement, parameterId))
         stateElement.removeChildElement(parameterElement, true);
+}
+
+void copyXmlAttributesToValueTreeProperties(const juce::XmlElement& sourceElement,
+                                            juce::ValueTree& targetState)
+{
+    for (int propertyIndex = targetState.getNumProperties(); --propertyIndex >= 0;)
+        targetState.removeProperty(targetState.getPropertyName(propertyIndex), nullptr);
+
+    for (int attributeIndex = 0; attributeIndex < sourceElement.getNumAttributes(); ++attributeIndex)
+    {
+        const auto attributeName = sourceElement.getAttributeName(attributeIndex);
+
+        if (attributeName.isNotEmpty())
+            targetState.setProperty(attributeName, sourceElement.getAttributeValue(attributeIndex), nullptr);
+    }
+}
+
+void applyParameterValuesFromStateElement(juce::AudioProcessorValueTreeState& parameters,
+                                          const juce::XmlElement& stateElement)
+{
+    for (auto* child : stateElement.getChildIterator())
+    {
+        if (! child->hasTagName("PARAM"))
+            continue;
+
+        const auto parameterId = child->getStringAttribute("id").trim();
+        auto* parameter = parameters.getParameter(parameterId);
+
+        if (parameter == nullptr)
+            continue;
+
+        const auto& range = parameter->getNormalisableRange();
+        auto plainValue = static_cast<float>(child->getDoubleAttribute("value",
+                                                                       parameter->convertFrom0to1(parameter->getDefaultValue())));
+        plainValue = range.snapToLegalValue(juce::jlimit(range.start, range.end, plainValue));
+        setParameterValueFast(parameters, parameterId, plainValue);
+    }
 }
 
 float readRestoredParameterValue(juce::XmlElement& stateElement,
@@ -522,6 +571,9 @@ void EqeModuleProcessor::parameterChanged(const juce::String& parameterID, float
     if (parameterID == activeFilterCountStateKey)
         return;
 
+    if (suppressEqeFilterDirty.load(std::memory_order_acquire))
+        return;
+
     markEqeFiltersDirty();
 }
 
@@ -601,6 +653,31 @@ void EqeModuleProcessor::setStateInformation(const void* data, const int sizeInB
             }
         }
     }
+}
+
+bool EqeModuleProcessor::applyStateInformationForABCompare(const void* data, const int sizeInBytes)
+{
+    auto stateXml = juce::AudioProcessor::getXmlFromBinary(data, sizeInBytes);
+
+    if (stateXml == nullptr || ! stateXml->hasTagName(parameters.state.getType()))
+        return false;
+
+    normalizeRestoredStateElement(*stateXml, parameters);
+
+    auto completeStateXml = createCompleteRestoredStateElement(*stateXml, parameters);
+
+    if (completeStateXml == nullptr)
+        return false;
+
+    const auto restoredFilterCount = clampActiveFilterCount(completeStateXml->getIntAttribute(activeFilterCountStateKey, 0));
+    const auto previousDirtySuppression = suppressEqeFilterDirty.exchange(true, std::memory_order_acq_rel);
+
+    applyParameterValuesFromStateElement(parameters, *completeStateXml);
+    copyXmlAttributesToValueTreeProperties(*completeStateXml, parameters.state);
+    activeFilterCount.store(restoredFilterCount, std::memory_order_relaxed);
+    suppressEqeFilterDirty.store(previousDirtySuppression, std::memory_order_release);
+    markEqeFiltersDirty();
+    return true;
 }
 
 juce::String EqeModuleProcessor::getDefaultFilterPresetName() const
@@ -909,6 +986,58 @@ bool EqeModuleProcessor::moveFilter(const int sourceIndex, const int destination
 
     for (int bandIndex = 0; bandIndex < currentCount; ++bandIndex)
         setFilterParameterValues(parameters, bandIndex, snapshots[static_cast<size_t>(bandIndex)]);
+
+    resetFilters();
+    updateFilters();
+    return true;
+}
+
+bool EqeModuleProcessor::applyFilterOrder(const std::vector<int>& orderedFilterIndices) noexcept
+{
+    const auto currentCount = getActiveFilterCount();
+
+    if (currentCount <= 1 || static_cast<int>(orderedFilterIndices.size()) != currentCount)
+        return false;
+
+    std::vector<bool> used(static_cast<size_t>(currentCount), false);
+
+    for (const auto sourceIndex : orderedFilterIndices)
+    {
+        if (! juce::isPositiveAndBelow(sourceIndex, currentCount))
+            return false;
+
+        if (used[static_cast<size_t>(sourceIndex)])
+            return false;
+
+        used[static_cast<size_t>(sourceIndex)] = true;
+    }
+
+    auto alreadyInOrder = true;
+
+    for (int destinationIndex = 0; destinationIndex < currentCount; ++destinationIndex)
+    {
+        if (orderedFilterIndices[static_cast<size_t>(destinationIndex)] != destinationIndex)
+        {
+            alreadyInOrder = false;
+            break;
+        }
+    }
+
+    if (alreadyInOrder)
+        return false;
+
+    std::vector<FilterParameterValues> snapshots(static_cast<size_t>(currentCount));
+
+    for (int sourceIndex = 0; sourceIndex < currentCount; ++sourceIndex)
+        snapshots[static_cast<size_t>(sourceIndex)] = readFilterParameterValues(parameters, sourceIndex);
+
+    for (int destinationIndex = 0; destinationIndex < currentCount; ++destinationIndex)
+    {
+        const auto sourceIndex = orderedFilterIndices[static_cast<size_t>(destinationIndex)];
+        setFilterParameterValues(parameters,
+                                 destinationIndex,
+                                 snapshots[static_cast<size_t>(sourceIndex)]);
+    }
 
     resetFilters();
     updateFilters();

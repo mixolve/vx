@@ -177,7 +177,7 @@ void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const
     {
         clearFocusedParameterForViewportScroll();
 
-        if (scrollViewportWithWheel(hostParametersViewport, hostParametersContent.getHeight(), wheel))
+        if (scrollViewportWithWheel(hostParametersViewport, hostParametersContent.getHeight(), wheel, event.mods.isShiftDown()))
             return;
     }
 
@@ -185,7 +185,7 @@ void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const
     {
         clearFocusedParameterForViewportScroll();
 
-        if (scrollViewportWithWheel(speAnalyserViewport, speAnalyserContent.getHeight(), wheel))
+        if (scrollViewportWithWheel(speAnalyserViewport, speAnalyserContent.getHeight(), wheel, event.mods.isShiftDown()))
             return;
     }
 
@@ -193,7 +193,7 @@ void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const
         return;
 
     clearFocusedParameterForViewportScroll();
-    scrollViewportWithWheel(filterViewport, getActiveFilterContentHeight(), wheel);
+    scrollViewportWithWheel(filterViewport, getActiveFilterContentHeight(), wheel, event.mods.isShiftDown());
 }
 
 bool VxAudioProcessorEditor::keyPressed(const juce::KeyPress& key)

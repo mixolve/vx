@@ -298,6 +298,17 @@ void BoxTextButton::setEqeFilterHeaderColouringEnabled(const bool shouldEnable) 
     repaint();
 }
 
+void BoxTextButton::setABCompareHighlightIndex(const int highlightedIndex) noexcept
+{
+    const auto clampedIndex = (highlightedIndex == 0 || highlightedIndex == 1) ? highlightedIndex : -1;
+
+    if (abCompareHighlightIndex == clampedIndex)
+        return;
+
+    abCompareHighlightIndex = clampedIndex;
+    repaint();
+}
+
 void BoxTextButton::setTextColourOverride(const juce::Colour colour)
 {
     hasTextColourOverride = true;
@@ -402,6 +413,21 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
 
             if (drawChannelTokenHighlight(graphics, getButtonText(), textBounds, font, textJustification))
             {
+                drawBottomDivider();
+                return;
+            }
+
+            if (abCompareHighlightIndex >= 0 && getButtonText() == "AB")
+            {
+                static const juce::Colour activeABColour { 0xFF9999FF };
+                drawFittedSingleLineSegments(graphics,
+                                             {
+                                                 { "A", abCompareHighlightIndex == 0 ? activeABColour : textColour },
+                                                 { "B", abCompareHighlightIndex == 1 ? activeABColour : textColour }
+                                             },
+                                             textBounds,
+                                             font,
+                                             textJustification);
                 drawBottomDivider();
                 return;
             }

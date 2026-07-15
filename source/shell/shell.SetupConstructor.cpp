@@ -5,7 +5,14 @@
 
 namespace
 {
-bool applyWheelToSliderValue(juce::Slider& slider, const juce::MouseWheelDetails& wheel)
+constexpr double fineControlScale = 0.1;
+
+double getFineControlScale(const bool fineControl) noexcept
+{
+    return fineControl ? fineControlScale : 1.0;
+}
+
+bool applyWheelToSliderValue(juce::Slider& slider, const juce::MouseWheelDetails& wheel, const bool fineControl)
 {
     const auto dominantDelta = std::abs(wheel.deltaY) >= std::abs(wheel.deltaX) ? wheel.deltaY
                                                                                 : -wheel.deltaX;
@@ -15,17 +22,18 @@ bool applyWheelToSliderValue(juce::Slider& slider, const juce::MouseWheelDetails
 
     const auto directionalDelta = wheel.isReversed ? -dominantDelta : dominantDelta;
     const auto direction = directionalDelta < 0.0f ? -1.0 : 1.0;
+    const auto fineScale = getFineControlScale(fineControl);
     const auto minimum = static_cast<double>(slider.getMinimum());
     const auto maximum = static_cast<double>(slider.getMaximum());
     const auto currentValue = static_cast<double>(slider.getValue());
 
     if (minimum > 0.0 && maximum / minimum >= 100.0)
     {
-        const auto smoothOctaves = static_cast<double>(directionalDelta) * 0.75;
-        const auto minimumSmoothOctaves = 1.0 / 96.0;
+        const auto smoothOctaves = static_cast<double>(directionalDelta) * 0.75 * fineScale;
+        const auto minimumSmoothOctaves = (1.0 / 96.0) * fineScale;
         const auto octaveDelta = wheel.isSmooth
             ? direction * juce::jmax(std::abs(smoothOctaves), minimumSmoothOctaves)
-            : direction / 12.0;
+            : (direction / 12.0) * fineScale;
         const auto clampedOctaveDelta = juce::jlimit(-0.25, 0.25, octaveDelta);
         const auto nextValue = currentValue * std::pow(2.0, clampedOctaveDelta);
 
@@ -35,18 +43,18 @@ bool applyWheelToSliderValue(juce::Slider& slider, const juce::MouseWheelDetails
 
     const auto& range = slider.getNormalisableRange();
     const auto currentNormalised = static_cast<double>(range.convertTo0to1(currentValue));
-    const auto smoothStep = static_cast<double>(directionalDelta) * 0.025;
-    const auto minimumSmoothStep = 0.0025;
+    const auto smoothStep = static_cast<double>(directionalDelta) * 0.025 * fineScale;
+    const auto minimumSmoothStep = 0.0025 * fineScale;
     const auto normalisedStep = wheel.isSmooth
         ? direction * juce::jmax(std::abs(smoothStep), minimumSmoothStep)
-        : direction * 0.025;
+        : direction * 0.025 * fineScale;
     const auto nextNormalised = juce::jlimit(0.0, 1.0, currentNormalised + normalisedStep);
 
     slider.setValue(range.convertFrom0to1(nextNormalised), juce::sendNotificationSync);
     return true;
 }
 
-bool applyWheelToNormalisedSliderValue(juce::Slider& slider, const juce::MouseWheelDetails& wheel)
+bool applyWheelToNormalisedSliderValue(juce::Slider& slider, const juce::MouseWheelDetails& wheel, const bool fineControl)
 {
     const auto dominantDelta = std::abs(wheel.deltaY) >= std::abs(wheel.deltaX) ? wheel.deltaY
                                                                                 : -wheel.deltaX;
@@ -56,10 +64,11 @@ bool applyWheelToNormalisedSliderValue(juce::Slider& slider, const juce::MouseWh
 
     const auto directionalDelta = wheel.isReversed ? -dominantDelta : dominantDelta;
     const auto direction = directionalDelta < 0.0f ? -1.0 : 1.0;
-    const auto minimumSmoothStep = 0.005;
+    const auto fineScale = getFineControlScale(fineControl);
+    const auto minimumSmoothStep = 0.005 * fineScale;
     const auto normalisedStep = wheel.isSmooth
-        ? direction * juce::jmax(std::abs(static_cast<double>(directionalDelta) * 0.02), minimumSmoothStep)
-        : direction * 0.025;
+        ? direction * juce::jmax(std::abs(static_cast<double>(directionalDelta) * 0.02 * fineScale), minimumSmoothStep)
+        : direction * 0.025 * fineScale;
     const auto nextValue = juce::jlimit(0.0,
                                         1.0,
                                         static_cast<double>(slider.getValue()) + normalisedStep);
@@ -108,7 +117,8 @@ public:
         const auto width = juce::jmax(1, getWidth());
         const auto horizontalDelta = static_cast<double>(event.getDistanceFromDragStartX());
         const auto verticalDelta = -static_cast<double>(event.getDistanceFromDragStartY());
-        const auto delta = (horizontalDelta + verticalDelta) / static_cast<double>(width);
+        const auto delta = ((horizontalDelta + verticalDelta) / static_cast<double>(width))
+            * getFineControlScale(event.mods.isShiftDown());
         setValue(juce::jlimit(0.0, 1.0, dragStartValue + delta), juce::sendNotificationSync);
     }
 
@@ -117,14 +127,14 @@ public:
     {
         juce::ignoreUnused(event);
 
-        if (onWheel != nullptr && onWheel(wheel))
+        if (onWheel != nullptr && onWheel(event, wheel))
             return;
 
-        applyWheelToSliderValue(*this, wheel);
+        applyWheelToSliderValue(*this, wheel, event.mods.isShiftDown());
     }
 #endif
 
-    std::function<bool(const juce::MouseWheelDetails&)> onWheel;
+    std::function<bool(const juce::MouseEvent&, const juce::MouseWheelDetails&)> onWheel;
 
 private:
     double dragStartValue = 0.0;
@@ -226,13 +236,13 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     addAndMakeVisible(filterViewport);
 
     auto focusedSlider = std::make_unique<FocusedParameterSlider>();
-    focusedSlider->onWheel = [this] (const juce::MouseWheelDetails& wheel)
+    focusedSlider->onWheel = [this] (const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
     {
         if (focusedParameterTargetSlider == nullptr)
             return false;
 
         return focusedParameterControl != nullptr
-            && applyWheelToNormalisedSliderValue(*focusedParameterControl, wheel);
+            && applyWheelToNormalisedSliderValue(*focusedParameterControl, wheel, event.mods.isShiftDown());
     };
     focusedParameterControl = std::move(focusedSlider);
     focusedParameterControl->setSliderStyle(juce::Slider::LinearHorizontal);
@@ -361,5 +371,12 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     refreshSpeAnalyserResponse();
 
     audioProcessor.getStateInformation(committedHistorySnapshot);
+
+    if (! audioProcessor.isABCompareSnapshotValid(0))
+        audioProcessor.setABCompareSnapshot(0, committedHistorySnapshot);
+
+    if (! audioProcessor.isABCompareSnapshotValid(audioProcessor.getABCompareActiveSlot()))
+        audioProcessor.setABCompareActiveSlot(0);
+
     updateUndoRedoButtons();
 }

@@ -119,9 +119,10 @@ void VxAudioProcessorEditor::layoutGlobalControlsSection(juce::Rectangle<int>& b
     globalControlsBounds.removeFromLeft(editorInsetX);
     globalControlsBounds.removeFromRight(editorInsetX);
 
-    std::array<BoxTextButton*, 5> panelButtons {
+    std::array<BoxTextButton*, 6> panelButtons {
         undoButton.get(),
         redoButton.get(),
+        abCompareButton.get(),
         globalBypassButton.get(),
         clipButton.get(),
         hostButton.get()
@@ -144,7 +145,20 @@ void VxAudioProcessorEditor::layoutGlobalControlsSection(juce::Rectangle<int>& b
     {
         auto remainingBounds = globalControlsBounds;
         const auto totalGap = parameterGap * (visiblePanelButtonCount - 1);
-        const auto baseButtonWidth = juce::jmax(0, (remainingBounds.getWidth() - totalGap) / visiblePanelButtonCount);
+        const auto availableButtonWidth = juce::jmax(0, remainingBounds.getWidth() - totalGap);
+        const auto abCompareVisible = abCompareButton != nullptr && abCompareButton->isVisible();
+        const auto abCompareMinimumWidth = abCompareVisible
+            ? juce::jmin(availableButtonWidth, getTextPixelWidth(makeUiFont(), "AB") + 18)
+            : 0;
+        const auto equalButtonWidth = juce::jmax(0, availableButtonWidth / visiblePanelButtonCount);
+        const auto useProtectedABWidth = abCompareVisible && equalButtonWidth < abCompareMinimumWidth;
+        const auto variableButtonCount = visiblePanelButtonCount - (abCompareVisible ? 1 : 0);
+        const auto variableButtonWidth = useProtectedABWidth && variableButtonCount > 0
+            ? juce::jmax(0, (availableButtonWidth - abCompareMinimumWidth) / variableButtonCount)
+            : equalButtonWidth;
+        auto variableRemainder = useProtectedABWidth && variableButtonCount > 0
+            ? juce::jmax(0, availableButtonWidth - abCompareMinimumWidth - (variableButtonWidth * variableButtonCount))
+            : juce::jmax(0, availableButtonWidth - (equalButtonWidth * visiblePanelButtonCount));
         auto placedButtonCount = 0;
 
         for (auto* button : panelButtons)
@@ -153,8 +167,17 @@ void VxAudioProcessorEditor::layoutGlobalControlsSection(juce::Rectangle<int>& b
                 continue;
 
             const auto isLastButton = placedButtonCount + 1 == visiblePanelButtonCount;
+            const auto isABCompareButton = button == abCompareButton.get();
+            auto buttonWidth = useProtectedABWidth && isABCompareButton ? abCompareMinimumWidth : variableButtonWidth;
+
+            if ((! useProtectedABWidth || ! isABCompareButton) && variableRemainder > 0)
+            {
+                ++buttonWidth;
+                --variableRemainder;
+            }
+
             auto buttonBounds = isLastButton ? remainingBounds
-                                             : remainingBounds.removeFromLeft(baseButtonWidth);
+                                             : remainingBounds.removeFromLeft(buttonWidth);
             button->setBounds(buttonBounds);
             ++placedButtonCount;
 
@@ -265,6 +288,7 @@ void VxAudioProcessorEditor::finalizeLayout() noexcept
     clipButton->toFront(false);
     if (undoButton != nullptr) undoButton->toFront(false);
     if (redoButton != nullptr) redoButton->toFront(false);
+    if (abCompareButton != nullptr) abCompareButton->toFront(false);
     if (globalBypassButton != nullptr) globalBypassButton->toFront(false);
     if (moduleAddButton != nullptr) moduleAddButton->toFront(false);
     if (hostButton != nullptr) hostButton->toFront(false);
@@ -297,6 +321,7 @@ void VxAudioProcessorEditor::resized()
         || clearFiltersButton == nullptr
         || undoButton == nullptr
         || redoButton == nullptr
+        || abCompareButton == nullptr
         || sortPlaceButton == nullptr
         || sortFreqButton == nullptr
         || sortDuoButton == nullptr

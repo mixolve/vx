@@ -6,7 +6,7 @@
 
 inline constexpr int initialEditorWidth = 360;
 inline constexpr int initialEditorHeight = 650;
-inline constexpr int minimumEditorWidth = 200;
+inline constexpr int minimumEditorWidth = 250;
 inline constexpr int minimumEditorHeight = 650;
 inline constexpr int maximumEditorWidth = 4096;
 inline constexpr int maximumEditorHeight = 4096;

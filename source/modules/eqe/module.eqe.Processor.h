@@ -55,6 +55,7 @@ public:
 
     void getStateInformation(juce::MemoryBlock& destData);
     void setStateInformation(const void* data, int sizeInBytes);
+    bool applyStateInformationForABCompare(const void* data, int sizeInBytes);
 
     juce::AudioProcessorValueTreeState& getValueTreeState() noexcept;
     const juce::AudioProcessorValueTreeState& getValueTreeState() const noexcept;
@@ -64,6 +65,7 @@ public:
     bool removeFilter(int filterIndex) noexcept;
     bool clearFilters() noexcept;
     bool moveFilter(int sourceIndex, int destinationIndex) noexcept;
+    bool applyFilterOrder(const std::vector<int>& orderedFilterIndices) noexcept;
     juce::String getDefaultFilterPresetName() const;
     juce::String getLastFilterPresetName() const;
     juce::StringArray getFilterPresetNames() const;
@@ -255,6 +257,7 @@ private:
     double currentSampleRate = 0.0;
     std::atomic<int> activeFilterCount { 0 };
     std::atomic<bool> eqeFiltersDirty { true };
+    std::atomic<bool> suppressEqeFilterDirty { false };
     std::atomic<bool> prepared { false };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(EqeModuleProcessor)

@@ -82,6 +82,19 @@ void VxAudioProcessorEditor::setupShellControls()
     };
     addAndMakeVisible(*redoButton);
 
+    abCompareButton = std::make_unique<BoxTextButton>(uiGrey500);
+    abCompareButton->setButtonText("AB");
+    abCompareButton->setTooltip("A/B COMPARE");
+    abCompareButton->setTextJustification(juce::Justification::centred);
+    abCompareButton->setClickingTogglesState(false);
+    abCompareButton->setABCompareHighlightIndex(0);
+    abCompareButton->onClick = [this]
+    {
+        switchABState();
+        clearKeyboardFocus(*this);
+    };
+    addAndMakeVisible(*abCompareButton);
+
     for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotButtons.size()); ++slotIndex)
     {
         auto slotButton = std::make_unique<BoxTextButton>(uiGrey500);

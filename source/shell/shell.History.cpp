@@ -411,6 +411,142 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
     updateUndoRedoButtons();
 }
 
+void VxAudioProcessorEditor::refreshEqeFilterSectionsFromProcessor()
+{
+    for (auto& sectionPtr : filterSections)
+    {
+        auto* section = sectionPtr.get();
+
+        if (section == nullptr)
+            continue;
+
+        const auto loadedType = section->getFilterType();
+        section->lastFilterType = loadedType;
+        section->slopeControl->setChoices(getBellSlopeDisplayChoicesForType(loadedType));
+        section->slopeControl->setChoiceEnabled(0, loadedType != EqeModuleProcessor::FilterType::bell);
+        section->updatePlaceChoicesForType(true);
+        section->captureCurrentValuesForCurrentType(true);
+    }
+}
+
+void VxAudioProcessorEditor::captureCurrentABState()
+{
+    const auto activeSlot = audioProcessor.getABCompareActiveSlot();
+
+    juce::MemoryBlock snapshot;
+    audioProcessor.getStateInformation(snapshot);
+    audioProcessor.setABCompareSnapshot(activeSlot, snapshot);
+}
+
+void VxAudioProcessorEditor::restoreABStateSnapshot(const juce::MemoryBlock& snapshot)
+{
+    if (snapshot.isEmpty())
+        return;
+
+    auto stateXml = VxAudioProcessor::getXmlFromBinary(snapshot.getData(), static_cast<int>(snapshot.getSize()));
+
+    if (stateXml == nullptr || ! stateXml->hasTagName(valueTreeState.state.getType().toString()))
+        return;
+
+    preserveEditorWindowState(*stateXml, valueTreeState.state);
+
+    juce::MemoryBlock restoredSnapshot;
+    VxAudioProcessor::copyXmlToBinary(*stateXml, restoredSnapshot);
+
+    struct PreservedUiState
+    {
+        bool hostParameters = false;
+        int filterScrollY = 0;
+    };
+
+    const PreservedUiState preservedUiState
+    {
+        hostParametersExpanded,
+        filterViewport.getViewPositionY()
+    };
+
+    const juce::ScopedValueSetter<bool> suppressHistory(suppressHistorySnapshots, true);
+    pendingHistorySnapshot.store(false, std::memory_order_relaxed);
+
+    const auto restoredWithFastABPath = audioProcessor.applyStateInformationForABCompare(restoredSnapshot.getData(),
+                                                                                        static_cast<int>(restoredSnapshot.getSize()));
+    if (! restoredWithFastABPath)
+    {
+        detachModuleEditorBindings();
+
+        if (! audioProcessor.setStateInformationPreservingLoadedModule(restoredSnapshot.getData(),
+                                                                        static_cast<int>(restoredSnapshot.getSize()),
+                                                                        false))
+        {
+            audioProcessor.setStateInformation(restoredSnapshot.getData(), static_cast<int>(restoredSnapshot.getSize()));
+        }
+    }
+
+    restoreEditorStateFromValueTree();
+    refreshModuleTabButton();
+    refreshFilterPresetList(getActiveEqeProcessor() != nullptr ? getActiveEqeProcessor()->getLastFilterPresetName()
+                                                               : juce::String {});
+    refreshEqeFilterSectionsFromProcessor();
+
+    hostParametersExpanded = preservedUiState.hostParameters;
+
+    storeEditorStateToValueTree();
+    syncEditorWidthToBounds();
+    updateSectionStates();
+    resized();
+
+    const auto filterMaxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
+    filterViewport.setViewPosition(0, juce::jlimit(0, filterMaxOffset, preservedUiState.filterScrollY));
+
+    audioProcessor.getStateInformation(committedHistorySnapshot);
+    updateUndoRedoButtons();
+    refreshABCompareButton();
+}
+
+void VxAudioProcessorEditor::switchABState()
+{
+    captureCurrentABState();
+
+    const auto currentSlot = audioProcessor.getABCompareActiveSlot();
+    const auto nextSlot = currentSlot == 0 ? 1 : 0;
+    auto nextSlotWasInitialised = false;
+    const auto currentSnapshot = audioProcessor.getABCompareSnapshot(currentSlot);
+
+    if (! audioProcessor.isABCompareSnapshotValid(nextSlot))
+    {
+        audioProcessor.setABCompareSnapshot(nextSlot, currentSnapshot);
+        nextSlotWasInitialised = true;
+    }
+
+    audioProcessor.setABCompareActiveSlot(nextSlot);
+    const auto nextSnapshot = audioProcessor.getABCompareSnapshot(nextSlot);
+
+    if (! nextSlotWasInitialised
+        && nextSnapshot != currentSnapshot)
+    {
+        restoreABStateSnapshot(nextSnapshot);
+    }
+    else
+    {
+        updateUndoRedoButtons();
+        refreshABCompareButton();
+    }
+
+    clearKeyboardFocus(*this);
+}
+
+void VxAudioProcessorEditor::refreshABCompareButton()
+{
+    if (abCompareButton == nullptr)
+        return;
+
+    const auto activeABSlot = audioProcessor.getABCompareActiveSlot();
+    abCompareButton->setToggleState(false, juce::dontSendNotification);
+    abCompareButton->setButtonText("AB");
+    abCompareButton->setABCompareHighlightIndex(activeABSlot);
+    abCompareButton->setTooltip(activeABSlot == 0 ? "A/B COMPARE: A" : "A/B COMPARE: B");
+}
+
 void VxAudioProcessorEditor::updateUndoRedoButtons()
 {
     if (undoButton != nullptr)
@@ -426,6 +562,8 @@ void VxAudioProcessorEditor::updateUndoRedoButtons()
         redoButton->setEnabled(canRedo);
         redoButton->setAlpha(canRedo ? 1.0f : 0.45f);
     }
+
+    refreshABCompareButton();
 }
 
 void VxAudioProcessorEditor::resetFilterSectionStoredValues(const int filterIndex)

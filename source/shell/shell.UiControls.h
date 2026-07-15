@@ -5,7 +5,10 @@
 #include <functional>
 #include <memory>
 
-bool scrollViewportWithWheel(juce::Viewport& viewport, int contentHeight, const juce::MouseWheelDetails& wheel);
+bool scrollViewportWithWheel(juce::Viewport& viewport,
+                             int contentHeight,
+                             const juce::MouseWheelDetails& wheel,
+                             bool fineControl = false);
 
 class CopyPasteTextEditor final : public juce::TextEditor
 {
@@ -126,6 +129,7 @@ public:
     void setArrowDirection(ArrowDirection direction) noexcept;
     void setBorderVisible(bool shouldShow) noexcept;
     void setEqeFilterHeaderColouringEnabled(bool shouldEnable) noexcept;
+    void setABCompareHighlightIndex(int highlightedIndex) noexcept;
     void setCancelClickOnLeave(bool shouldEnable) noexcept;
     void setTextColourOverride(juce::Colour colour);
     void clearTextColourOverride();
@@ -164,6 +168,7 @@ private:
     ArrowDirection arrowDirection = ArrowDirection::none;
     bool borderVisible = true;
     bool eqeFilterHeaderColouringEnabled = false;
+    int abCompareHighlightIndex = -1;
     bool hasTextColourOverride = false;
     juce::Colour textColourOverride;
     bool hostAssignmentFlashActive = false;

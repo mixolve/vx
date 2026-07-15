@@ -262,6 +262,9 @@ void VxAudioProcessorEditor::updateSectionStates()
     if (redoButton != nullptr)
         redoButton->setVisible(globalControlsVisible);
 
+    if (abCompareButton != nullptr)
+        abCompareButton->setVisible(globalControlsVisible);
+
     for (auto& hostSlotButton : hostSlotButtons)
         if (hostSlotButton != nullptr)
             hostSlotButton->setVisible(hostParametersVisible);
