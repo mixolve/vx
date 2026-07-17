@@ -69,7 +69,7 @@ void VxAudioProcessor::reset()
     globalClipIndicator.store(0.0f, std::memory_order_relaxed);
 }
 
-int VxAudioProcessor::getLoadedModulesLatencySamples() const noexcept
+int VxAudioProcessor::getActiveModuleLatencySamples() const noexcept
 {
     const auto module = activeModule.load(std::memory_order_acquire);
 
@@ -109,7 +109,7 @@ int VxAudioProcessor::getLoadedModulesLatencySamples() const noexcept
 
 void VxAudioProcessor::updateShellLatency() noexcept
 {
-    const auto totalLatencySamples = getLoadedModulesLatencySamples();
+    const auto totalLatencySamples = getActiveModuleLatencySamples();
 
     if (getLatencySamples() != totalLatencySamples)
         setLatencySamples(totalLatencySamples);

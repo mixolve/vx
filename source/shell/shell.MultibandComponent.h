@@ -18,6 +18,7 @@ public:
         heading,
         parameter,
         toggle,
+        readout,
         time
     };
 

@@ -89,6 +89,7 @@ public:
                                                    int sizeInBytes,
                                                    bool suspendProcessingForRestore = true);
     bool applyStateInformationForABCompare(const void* data, int sizeInBytes);
+    static void removeModuleStateProperties(juce::ValueTree& state);
     int getABCompareActiveSlot() const noexcept;
     void setABCompareActiveSlot(int slot) noexcept;
     bool isABCompareSnapshotValid(int slot) const noexcept;
@@ -106,21 +107,16 @@ public:
     bool clearLoadedModule();
     bool isModuleLoaded() const noexcept;
     juce::String getLoadedModuleLabel() const;
-    bool isEqeModuleLoaded() const noexcept;
     EqeModuleProcessor* getEqeModuleProcessor() noexcept;
     const EqeModuleProcessor* getEqeModuleProcessor() const noexcept;
     EqeModuleProcessor* getActiveEqeModuleProcessor() noexcept;
     const EqeModuleProcessor* getActiveEqeModuleProcessor() const noexcept;
-    bool isSpeModuleLoaded() const noexcept;
     SpeModuleProcessor* getSpeModuleProcessor() noexcept;
     const SpeModuleProcessor* getSpeModuleProcessor() const noexcept;
-    bool isMieModuleLoaded() const noexcept;
     MieAudioProcessor* getMieModuleProcessor() noexcept;
     const MieAudioProcessor* getMieModuleProcessor() const noexcept;
-    bool isMxeModuleLoaded() const noexcept;
     MxeAudioProcessor* getMxeModuleProcessor() noexcept;
     const MxeAudioProcessor* getMxeModuleProcessor() const noexcept;
-    bool isTseModuleLoaded() const noexcept;
     TseModuleProcessor* getTseModuleProcessor() noexcept;
     const TseModuleProcessor* getTseModuleProcessor() const noexcept;
     juce::Point<int> getLastEditorSize() const noexcept;
@@ -130,10 +126,6 @@ public:
     float getGlobalClipIndicator() const noexcept
     {
         return globalClipIndicator.load(std::memory_order_relaxed);
-    }
-    void resetGlobalClipIndicator() noexcept
-    {
-        globalClipIndicator.store(0.0f, std::memory_order_relaxed);
     }
 private:
     static constexpr size_t maxSupportedChannels = 2;
@@ -146,7 +138,7 @@ private:
     bool createTseModule();
     static const char* stateIdForModule(ActiveModule module) noexcept;
     static ActiveModule moduleFromStateId(const juce::String& moduleId);
-    int getLoadedModulesLatencySamples() const noexcept;
+    int getActiveModuleLatencySamples() const noexcept;
     void updateShellLatency() noexcept;
     void restoreLoadedModuleFromStateText(const juce::String& text, bool publishActiveModule = true);
     void registerActiveModuleStateListeners();

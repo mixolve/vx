@@ -56,6 +56,20 @@ BandControlSpec toggleControl(const char* suffix,
     return spec;
 }
 
+BandControlSpec readoutControl(const char* suffix,
+                               const char* label,
+                               const char* modeSuffix,
+                               const int topGapMultiplier = 1)
+{
+    BandControlSpec spec;
+    spec.kind = ControlKind::readout;
+    spec.suffix = suffix;
+    spec.label = label;
+    spec.modeSuffix = modeSuffix;
+    spec.topGapMultiplier = topGapMultiplier;
+    return spec;
+}
+
 BandControlSpec timeControl(const char* suffix,
                             const char* label,
                             const char* modeSuffix,
@@ -125,6 +139,7 @@ MultibandModuleComponent::Config makeMieMultibandConfig(MieAudioProcessor& proce
         headingControl("ORTHOGONAL", 2),
         parameterControl("degree", "DEGREE", 1),
         toggleControl("flipRight", "FLIP RIGHT"),
+        readoutControl("degree", "POSITION", "flipRight"),
 
         headingControl("LISTEN", 2),
         toggleControl("listenL", "LEFT", "", "", "listen"),

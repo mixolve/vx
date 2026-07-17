@@ -66,11 +66,7 @@ void VxAudioProcessorEditor::loadSpeModule()
     if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::spe))
         return;
 
-    speModuleLoaded = true;
-    eqeModuleLoaded = false;
-    mieModuleLoaded = false;
-    mxeModuleLoaded = false;
-    tseModuleLoaded = false;
+    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::spe);
 
     hostParametersExpanded = false;
     rebindActiveModuleEditors();

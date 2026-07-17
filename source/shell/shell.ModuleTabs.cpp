@@ -58,11 +58,7 @@ void VxAudioProcessorEditor::closeActiveModule()
     if (! audioProcessor.clearLoadedModule())
         return;
 
-    eqeModuleLoaded = false;
-    speModuleLoaded = false;
-    mieModuleLoaded = false;
-    mxeModuleLoaded = false;
-    tseModuleLoaded = false;
+    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::none);
 
     hostParametersExpanded = false;
     for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
@@ -129,11 +125,7 @@ void VxAudioProcessorEditor::loadEqeModule()
     if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::eqe))
         return;
 
-    eqeModuleLoaded = true;
-    speModuleLoaded = false;
-    mieModuleLoaded = false;
-    mxeModuleLoaded = false;
-    tseModuleLoaded = false;
+    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::eqe);
 
     hostParametersExpanded = false;
 
@@ -152,11 +144,7 @@ void VxAudioProcessorEditor::loadMieModule()
     if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::mie))
         return;
 
-    mieModuleLoaded = true;
-    eqeModuleLoaded = false;
-    speModuleLoaded = false;
-    mxeModuleLoaded = false;
-    tseModuleLoaded = false;
+    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::mie);
 
     hostParametersExpanded = false;
 
@@ -174,11 +162,7 @@ void VxAudioProcessorEditor::loadMxeModule()
     if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::mxe))
         return;
 
-    mxeModuleLoaded = true;
-    eqeModuleLoaded = false;
-    speModuleLoaded = false;
-    mieModuleLoaded = false;
-    tseModuleLoaded = false;
+    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::mxe);
 
     hostParametersExpanded = false;
 
@@ -196,11 +180,7 @@ void VxAudioProcessorEditor::loadTseModule()
     if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::tse))
         return;
 
-    tseModuleLoaded = true;
-    eqeModuleLoaded = false;
-    speModuleLoaded = false;
-    mieModuleLoaded = false;
-    mxeModuleLoaded = false;
+    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::tse);
 
     hostParametersExpanded = false;
 

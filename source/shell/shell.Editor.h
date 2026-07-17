@@ -103,6 +103,7 @@ private:
     void performRedo();
     void switchABState();
     void captureCurrentABState();
+    void copyCurrentABStateToOtherSlot();
     void restoreABStateSnapshot(const juce::MemoryBlock& snapshot);
     void refreshABCompareButton();
     void refreshEqeFilterSectionsFromProcessor();
@@ -111,6 +112,7 @@ private:
     void enforceSingleExpandedFilterSection(int preferredFilterIndex = -1);
     void restoreEditorStateFromValueTree();
     void storeEditorStateToValueTree() noexcept;
+    void setLoadedModuleFlags(VxAudioProcessor::ActiveModule activeModule) noexcept;
     juce::Point<int> getRestoredEditorSize() const noexcept;
     juce::Rectangle<int> getFilterSectionBounds(int filterIndex) const;
     void resetFilterSectionStoredValues(int filterIndex);

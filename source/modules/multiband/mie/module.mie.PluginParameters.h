@@ -90,7 +90,7 @@ inline constexpr auto parameterSpecs = std::to_array<ParameterSpec>({
     { "impactDirection", "TO LEFT CHANNEL/TO RIGHT CHANNEL", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
     { "mid", "MID", ParameterType::floating, -100.0f, 100.0f, 0.1f, 0.0f, "%" },
     { "side", "SIDE", ParameterType::floating, -100.0f, 100.0f, 0.1f, 0.0f, "%" },
-    { "degree", "DEGREE", ParameterType::floating, 0.0f, 360.0f, 0.1f, 0.0f, "deg" },
+    { "degree", "DEGREE", ParameterType::floating, 0.0f, 359.9f, 0.1f, 0.0f, "deg" },
     { "flipRight", "FLIP RIGHT", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
     { "listenL", "LEFT", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
     { "listenR", "RIGHT", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },

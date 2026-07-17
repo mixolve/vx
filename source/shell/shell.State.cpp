@@ -144,26 +144,7 @@ void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
     const auto activeCount = getActiveFilterCount();
     auto& state = valueTreeState.state;
 
-    const auto activeModule = audioProcessor.getActiveModule();
-    eqeModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::eqe;
-    speModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::spe;
-    mieModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::mie;
-    mxeModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::mxe;
-    tseModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::tse;
-
-    if (! eqeModuleLoaded && ! speModuleLoaded && ! mieModuleLoaded && ! mxeModuleLoaded && ! tseModuleLoaded)
-    {
-        if (audioProcessor.isEqeModuleLoaded())
-            eqeModuleLoaded = true;
-        else if (audioProcessor.isSpeModuleLoaded())
-            speModuleLoaded = true;
-        else if (audioProcessor.isMieModuleLoaded())
-            mieModuleLoaded = true;
-        else if (audioProcessor.isMxeModuleLoaded())
-            mxeModuleLoaded = true;
-        else if (audioProcessor.isTseModuleLoaded())
-            tseModuleLoaded = true;
-    }
+    setLoadedModuleFlags(audioProcessor.getActiveModule());
 
     hostParametersExpanded = static_cast<bool>(state.getProperty(editorHostParametersExpandedStateKey, false));
 
@@ -209,6 +190,15 @@ void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
     refreshHostSlotButtons();
 
     rebindActiveModuleEditors();
+}
+
+void VxAudioProcessorEditor::setLoadedModuleFlags(const VxAudioProcessor::ActiveModule activeModule) noexcept
+{
+    eqeModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::eqe;
+    speModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::spe;
+    mieModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::mie;
+    mxeModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::mxe;
+    tseModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::tse;
 }
 
 void VxAudioProcessorEditor::storeEditorStateToValueTree() noexcept

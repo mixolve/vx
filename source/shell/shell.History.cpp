@@ -486,7 +486,9 @@ void VxAudioProcessorEditor::restoreABStateSnapshot(const juce::MemoryBlock& sna
     refreshModuleTabButton();
     refreshFilterPresetList(getActiveEqeProcessor() != nullptr ? getActiveEqeProcessor()->getLastFilterPresetName()
                                                                : juce::String {});
-    refreshEqeFilterSectionsFromProcessor();
+
+    if (getActiveEqeProcessor() != nullptr)
+        refreshEqeFilterSectionsFromProcessor();
 
     hostParametersExpanded = preservedUiState.hostParameters;
 
@@ -532,6 +534,21 @@ void VxAudioProcessorEditor::switchABState()
         refreshABCompareButton();
     }
 
+    clearKeyboardFocus(*this);
+}
+
+void VxAudioProcessorEditor::copyCurrentABStateToOtherSlot()
+{
+    captureCurrentABState();
+
+    const auto currentSlot = audioProcessor.getABCompareActiveSlot();
+    const auto targetSlot = currentSlot == 0 ? 1 : 0;
+    const auto currentSnapshot = audioProcessor.getABCompareSnapshot(currentSlot);
+
+    if (! currentSnapshot.isEmpty())
+        audioProcessor.setABCompareSnapshot(targetSlot, currentSnapshot);
+
+    refreshABCompareButton();
     clearKeyboardFocus(*this);
 }
 

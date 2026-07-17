@@ -36,7 +36,7 @@ juce::String VxAudioProcessor::getHostSlotLetterLabel(const int slotIndex)
 
 juce::String VxAudioProcessor::getHostSlotParameterName(const int slotIndex)
 {
-    return "SLOT-" + getHostSlotLetterLabel(slotIndex);
+    return getHostSlotLetterLabel(slotIndex);
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout VxAudioProcessor::createParameterLayout()

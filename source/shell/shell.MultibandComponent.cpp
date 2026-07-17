@@ -91,6 +91,47 @@ float readRawParameter(juce::AudioProcessorValueTreeState& state,
 
     return fallback;
 }
+
+juce::String getOrthogonalPositionDescription(const float degreeValue, const bool flipRight)
+{
+    auto degree = std::fmod(static_cast<double>(degreeValue), 360.0);
+
+    if (degree < 0.0)
+        degree += 360.0;
+
+    const auto nearestKey = static_cast<int>(std::round(degree / 45.0)) % 8;
+    const auto nearestDegree = static_cast<double>(nearestKey) * 45.0;
+    auto distance = std::abs(degree - nearestDegree);
+    distance = juce::jmin(distance, 360.0 - distance);
+
+    if (distance > 0.05)
+        return "CUSTOM";
+
+    static constexpr std::array<const char*, 8> rotationLabels {
+        "NORMAL",
+        "L > SIDE & R > MID",
+        "L > -R & R > L",
+        "L > -MID & R > SIDE",
+        "BOTH FLIPPED",
+        "L > -SIDE & R > -MID",
+        "L > R & R > -L",
+        "L > MID & R > -SIDE"
+    };
+
+    static constexpr std::array<const char*, 8> flipLabels {
+        "RIGHT FLIPPED",
+        "L > MID & R > SIDE",
+        "L & R SWAPPED",
+        "L > -SIDE & R > MID",
+        "LEFT FLIPPED",
+        "L > -MID & R > -SIDE",
+        "SWAPPED FLIPPED",
+        "L > SIDE & R > -MID"
+    };
+
+    return flipRight ? flipLabels[static_cast<size_t>(nearestKey)]
+                     : rotationLabels[static_cast<size_t>(nearestKey)];
+}
 } // namespace
 
 class MultibandModuleComponent::BandPageComponent final : public juce::Component,
@@ -308,6 +349,54 @@ private:
         std::unique_ptr<ButtonAttachment> attachment;
     };
 
+    struct ReadoutRow final : public RowBase
+    {
+        ReadoutRow(MultibandModuleComponent& ownerIn,
+                   juce::String degreeParameterId,
+                   juce::String flipParameterId,
+                   const BandControlSpec& spec)
+            : owner(ownerIn),
+              degreeParameterIdToRead(std::move(degreeParameterId)),
+              flipParameterIdToRead(std::move(flipParameterId))
+        {
+            value = makeTextButton({}, uiGrey500);
+            value->setPressFillEnabled(false);
+            value->setInterceptsMouseClicks(false, false);
+            addAndMakeVisible(*value);
+
+            topGapMultiplier = spec.topGapMultiplier;
+            updateText();
+        }
+
+        int getPreferredHeight() const override { return rowHeight; }
+
+        void refreshExternalState() override
+        {
+            updateText();
+        }
+
+        void resized() override
+        {
+            if (value != nullptr)
+                value->setBounds(getLocalBounds());
+        }
+
+        void updateText()
+        {
+            if (value == nullptr)
+                return;
+
+            const auto degree = readRawParameter(owner.valueTreeState, degreeParameterIdToRead, 0.0f);
+            const auto flipRight = readRawParameter(owner.valueTreeState, flipParameterIdToRead, 0.0f) >= 0.5f;
+            value->setButtonText(getOrthogonalPositionDescription(degree, flipRight));
+        }
+
+        MultibandModuleComponent& owner;
+        juce::String degreeParameterIdToRead;
+        juce::String flipParameterIdToRead;
+        std::unique_ptr<BoxTextButton> value;
+    };
+
     struct TimeRow final : public RowBase
     {
         TimeRow(MultibandModuleComponent& ownerIn,
@@ -504,6 +593,20 @@ private:
                 listenedParameterIds.push_back(syncId);
                 owner.valueTreeState.addParameterListener(modeId, this);
                 owner.valueTreeState.addParameterListener(syncId, this);
+                addAndMakeVisible(*row);
+                rows.push_back(std::move(row));
+                continue;
+            }
+
+            if (spec.kind == ControlKind::readout)
+            {
+                const auto degreeId = getBandParameterId(spec);
+                const auto flipId = owner.config.makeBandParameterId(bandIndex, spec.modeSuffix);
+                auto row = std::make_unique<ReadoutRow>(owner, degreeId, flipId, spec);
+                listenedParameterIds.push_back(degreeId);
+                listenedParameterIds.push_back(flipId);
+                owner.valueTreeState.addParameterListener(degreeId, this);
+                owner.valueTreeState.addParameterListener(flipId, this);
                 addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
                 continue;

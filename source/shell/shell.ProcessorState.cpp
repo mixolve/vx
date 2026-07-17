@@ -37,11 +37,6 @@ void removeUnknownParameterElements(juce::ValueTree& state, juce::AudioProcessor
     }
 }
 
-void removeUnknownParametersFromState(juce::ValueTree& state, juce::AudioProcessorValueTreeState& parameters)
-{
-    removeUnknownParameterElements(state, parameters);
-}
-
 void copyStateProperties(juce::ValueTree& target, const juce::ValueTree& source)
 {
     for (int propertyIndex = target.getNumProperties(); --propertyIndex >= 0;)
@@ -76,6 +71,99 @@ void applyParameterValuesFromState(juce::AudioProcessorValueTreeState& targetPar
     }
 }
 
+struct RestoredModuleStateProperties
+{
+    explicit RestoredModuleStateProperties(const juce::ValueTree& state)
+        : eqeBase64(state.getProperty(VxAudioProcessor::eqeModuleStateKey).toString()),
+          speXml(state.getProperty(VxAudioProcessor::speModuleStateKey).toString()),
+          mieBase64(state.getProperty(VxAudioProcessor::mieModuleStateKey).toString()),
+          mxeBase64(state.getProperty(VxAudioProcessor::mxeModuleStateKey).toString()),
+          tseXml(state.getProperty(VxAudioProcessor::tseModuleStateKey).toString())
+    {
+    }
+
+    juce::String eqeBase64;
+    juce::String speXml;
+    juce::String mieBase64;
+    juce::String mxeBase64;
+    juce::String tseXml;
+};
+
+template <typename Processor>
+bool restoreBinaryModuleState(Processor* processor, const juce::String& stateBase64)
+{
+    if (processor == nullptr)
+        return false;
+
+    juce::MemoryBlock stateData;
+
+    if (! stateData.fromBase64Encoding(stateBase64))
+        return false;
+
+    processor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
+    return true;
+}
+
+template <typename Processor>
+bool restoreXmlModuleState(Processor* processor, const juce::String& stateXml)
+{
+    if (processor == nullptr || stateXml.isEmpty())
+        return false;
+
+    processor->setStateFromXmlString(stateXml);
+    return true;
+}
+
+bool restoreEqeModuleState(VxAudioProcessor& processor,
+                           const juce::String& stateBase64,
+                           const bool useABCompareRestore)
+{
+    auto* eqeProcessor = processor.getEqeModuleProcessor();
+
+    if (eqeProcessor == nullptr)
+        return false;
+
+    juce::MemoryBlock stateData;
+
+    if (! stateData.fromBase64Encoding(stateBase64))
+        return false;
+
+    if (useABCompareRestore)
+        return eqeProcessor->applyStateInformationForABCompare(stateData.getData(), static_cast<int>(stateData.getSize()));
+
+    eqeProcessor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
+    return true;
+}
+
+bool restoreActiveModuleState(VxAudioProcessor& processor,
+                              const VxAudioProcessor::ActiveModule module,
+                              const RestoredModuleStateProperties& moduleStates,
+                              const bool useABCompareRestore)
+{
+    switch (module)
+    {
+        case VxAudioProcessor::ActiveModule::eqe:
+            return restoreEqeModuleState(processor, moduleStates.eqeBase64, useABCompareRestore);
+
+        case VxAudioProcessor::ActiveModule::spe:
+            return restoreXmlModuleState(processor.getSpeModuleProcessor(), moduleStates.speXml);
+
+        case VxAudioProcessor::ActiveModule::mie:
+            return restoreBinaryModuleState(processor.getMieModuleProcessor(), moduleStates.mieBase64);
+
+        case VxAudioProcessor::ActiveModule::mxe:
+            return restoreBinaryModuleState(processor.getMxeModuleProcessor(), moduleStates.mxeBase64);
+
+        case VxAudioProcessor::ActiveModule::tse:
+            return restoreXmlModuleState(processor.getTseModuleProcessor(), moduleStates.tseXml);
+
+        case VxAudioProcessor::ActiveModule::none:
+            return true;
+    }
+
+    return false;
+}
+
 struct ScopedProcessingSuspend
 {
     explicit ScopedProcessingSuspend(VxAudioProcessor& processorIn) noexcept
@@ -93,6 +181,16 @@ struct ScopedProcessingSuspend
 };
 }
 
+void VxAudioProcessor::removeModuleStateProperties(juce::ValueTree& state)
+{
+    state.removeProperty(activeModuleStateKey, nullptr);
+    state.removeProperty(eqeModuleStateKey, nullptr);
+    state.removeProperty(speModuleStateKey, nullptr);
+    state.removeProperty(mieModuleStateKey, nullptr);
+    state.removeProperty(mxeModuleStateKey, nullptr);
+    state.removeProperty(tseModuleStateKey, nullptr);
+}
+
 void VxAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     const auto editorWidth = lastEditorWidth.load(std::memory_order_relaxed);
@@ -105,18 +203,13 @@ void VxAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     }
 
     auto state = parameters.copyState();
-    removeUnknownParametersFromState(state, parameters);
+    removeUnknownParameterElements(state, parameters);
 
     const auto active = getActiveModule();
 
     if (active == ActiveModule::none)
     {
-        state.removeProperty(activeModuleStateKey, nullptr);
-        state.removeProperty(eqeModuleStateKey, nullptr);
-        state.removeProperty(speModuleStateKey, nullptr);
-        state.removeProperty(mieModuleStateKey, nullptr);
-        state.removeProperty(mxeModuleStateKey, nullptr);
-        state.removeProperty(tseModuleStateKey, nullptr);
+        removeModuleStateProperties(state);
     }
     else
     {
@@ -215,59 +308,20 @@ void VxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
             const juce::ScopedLock lock(processingLock);
             auto restoredState = juce::ValueTree::fromXml(*stateXml);
             const auto restoredActiveModule = moduleFromStateId(restoredState.getProperty(activeModuleStateKey).toString());
-            const auto restoredEqeStateBase64 = restoredState.getProperty(eqeModuleStateKey).toString();
-            const auto restoredSpeStateXml = restoredState.getProperty(speModuleStateKey).toString();
-            const auto restoredMieStateBase64 = restoredState.getProperty(mieModuleStateKey).toString();
-            const auto restoredMxeStateBase64 = restoredState.getProperty(mxeModuleStateKey).toString();
-            const auto restoredTseStateXml = restoredState.getProperty(tseModuleStateKey).toString();
+            const auto restoredModuleStates = RestoredModuleStateProperties(restoredState);
 
             if (restoredActiveModule == ActiveModule::none)
-                restoredState.removeProperty(activeModuleStateKey, nullptr);
+                removeModuleStateProperties(restoredState);
             else
                 restoredState.setProperty(activeModuleStateKey, stateIdForModule(restoredActiveModule), nullptr);
 
-            removeUnknownParametersFromState(restoredState, parameters);
+            removeUnknownParameterElements(restoredState, parameters);
 
             const auto restoredModuleId = restoredState.getProperty(activeModuleStateKey).toString();
             parameters.replaceState(restoredState);
             setActiveModule(ActiveModule::none);
             restoreLoadedModuleFromStateText(restoredModuleId, false);
-
-            if (auto* eqeProcessor = getEqeModuleProcessor())
-            {
-                juce::MemoryBlock eqeStateData;
-
-                if (eqeStateData.fromBase64Encoding(restoredEqeStateBase64))
-                    eqeProcessor->setStateInformation(eqeStateData.getData(), static_cast<int>(eqeStateData.getSize()));
-            }
-
-            if (auto* processor = getSpeModuleProcessor())
-            {
-                if (restoredSpeStateXml.isNotEmpty())
-                    processor->setStateFromXmlString(restoredSpeStateXml);
-            }
-
-            if (auto* processor = getMieModuleProcessor())
-            {
-                juce::MemoryBlock stateData;
-
-                if (stateData.fromBase64Encoding(restoredMieStateBase64))
-                    processor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
-            }
-
-            if (auto* processor = getMxeModuleProcessor())
-            {
-                juce::MemoryBlock stateData;
-
-                if (stateData.fromBase64Encoding(restoredMxeStateBase64))
-                    processor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
-            }
-
-            if (auto* processor = getTseModuleProcessor())
-            {
-                if (restoredTseStateXml.isNotEmpty())
-                    processor->setStateFromXmlString(restoredTseStateXml);
-            }
+            restoreActiveModuleState(*this, restoredActiveModule, restoredModuleStates, false);
 
             setActiveModule(hasRestoredModuleProcessor(*this, restoredActiveModule) ? restoredActiveModule : ActiveModule::none);
             registerActiveModuleStateListeners();
@@ -299,11 +353,7 @@ bool VxAudioProcessor::setStateInformationPreservingLoadedModule(const void* dat
     if (restoredActiveModule != getActiveModule())
         return false;
 
-    const auto restoredEqeStateBase64 = restoredState.getProperty(eqeModuleStateKey).toString();
-    const auto restoredSpeStateXml = restoredState.getProperty(speModuleStateKey).toString();
-    const auto restoredMieStateBase64 = restoredState.getProperty(mieModuleStateKey).toString();
-    const auto restoredMxeStateBase64 = restoredState.getProperty(mxeModuleStateKey).toString();
-    const auto restoredTseStateXml = restoredState.getProperty(tseModuleStateKey).toString();
+    const auto restoredModuleStates = RestoredModuleStateProperties(restoredState);
     const auto previousNotificationSuppression = suppressHostStateNotifications.exchange(true, std::memory_order_acq_rel);
     std::unique_ptr<ScopedProcessingSuspend> suspendGuard;
 
@@ -316,62 +366,15 @@ bool VxAudioProcessor::setStateInformationPreservingLoadedModule(const void* dat
     const juce::ScopedLock lock(processingLock);
 
     if (restoredActiveModule == ActiveModule::none)
-        restoredState.removeProperty(activeModuleStateKey, nullptr);
+        removeModuleStateProperties(restoredState);
     else
         restoredState.setProperty(activeModuleStateKey, stateIdForModule(restoredActiveModule), nullptr);
 
-    removeUnknownParametersFromState(restoredState, parameters);
+    removeUnknownParameterElements(restoredState, parameters);
     parameters.replaceState(restoredState);
 
     clearActiveModuleStateListeners();
-
-    switch (restoredActiveModule)
-    {
-        case ActiveModule::eqe:
-            if (auto* processor = getEqeModuleProcessor())
-            {
-                juce::MemoryBlock stateData;
-
-                if (stateData.fromBase64Encoding(restoredEqeStateBase64))
-                    processor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
-            }
-            break;
-
-        case ActiveModule::spe:
-            if (auto* processor = getSpeModuleProcessor())
-                if (restoredSpeStateXml.isNotEmpty())
-                    processor->setStateFromXmlString(restoredSpeStateXml);
-            break;
-
-        case ActiveModule::mie:
-            if (auto* processor = getMieModuleProcessor())
-            {
-                juce::MemoryBlock stateData;
-
-                if (stateData.fromBase64Encoding(restoredMieStateBase64))
-                    processor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
-            }
-            break;
-
-        case ActiveModule::mxe:
-            if (auto* processor = getMxeModuleProcessor())
-            {
-                juce::MemoryBlock stateData;
-
-                if (stateData.fromBase64Encoding(restoredMxeStateBase64))
-                    processor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
-            }
-            break;
-
-        case ActiveModule::tse:
-            if (auto* processor = getTseModuleProcessor())
-                if (restoredTseStateXml.isNotEmpty())
-                    processor->setStateFromXmlString(restoredTseStateXml);
-            break;
-
-        case ActiveModule::none:
-            break;
-    }
+    restoreActiveModuleState(*this, restoredActiveModule, restoredModuleStates, false);
 
     if (restoredActiveModule != ActiveModule::none)
         registerActiveModuleStateListeners();
@@ -400,85 +403,19 @@ bool VxAudioProcessor::applyStateInformationForABCompare(const void* data, const
     if (restoredActiveModule != getActiveModule())
         return false;
 
-    const auto restoredEqeStateBase64 = restoredState.getProperty(eqeModuleStateKey).toString();
-    const auto restoredSpeStateXml = restoredState.getProperty(speModuleStateKey).toString();
-    const auto restoredMieStateBase64 = restoredState.getProperty(mieModuleStateKey).toString();
-    const auto restoredMxeStateBase64 = restoredState.getProperty(mxeModuleStateKey).toString();
-    const auto restoredTseStateXml = restoredState.getProperty(tseModuleStateKey).toString();
+    const auto restoredModuleStates = RestoredModuleStateProperties(restoredState);
     const auto previousNotificationSuppression = suppressHostStateNotifications.exchange(true, std::memory_order_acq_rel);
 
     if (restoredActiveModule == ActiveModule::none)
-        restoredState.removeProperty(activeModuleStateKey, nullptr);
+        removeModuleStateProperties(restoredState);
     else
         restoredState.setProperty(activeModuleStateKey, stateIdForModule(restoredActiveModule), nullptr);
 
-    removeUnknownParametersFromState(restoredState, parameters);
+    removeUnknownParameterElements(restoredState, parameters);
     applyParameterValuesFromState(parameters, restoredState);
     copyStateProperties(parameters.state, restoredState);
 
-    auto restoredModuleState = false;
-
-    switch (restoredActiveModule)
-    {
-        case ActiveModule::eqe:
-            if (auto* processor = getEqeModuleProcessor())
-            {
-                juce::MemoryBlock stateData;
-                restoredModuleState = stateData.fromBase64Encoding(restoredEqeStateBase64)
-                    && processor->applyStateInformationForABCompare(stateData.getData(), static_cast<int>(stateData.getSize()));
-            }
-            break;
-
-        case ActiveModule::spe:
-            if (auto* processor = getSpeModuleProcessor())
-            {
-                if (restoredSpeStateXml.isNotEmpty())
-                {
-                    processor->setStateFromXmlString(restoredSpeStateXml);
-                    restoredModuleState = true;
-                }
-            }
-            break;
-
-        case ActiveModule::mie:
-            if (auto* processor = getMieModuleProcessor())
-            {
-                juce::MemoryBlock stateData;
-                if (stateData.fromBase64Encoding(restoredMieStateBase64))
-                {
-                    processor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
-                    restoredModuleState = true;
-                }
-            }
-            break;
-
-        case ActiveModule::mxe:
-            if (auto* processor = getMxeModuleProcessor())
-            {
-                juce::MemoryBlock stateData;
-                if (stateData.fromBase64Encoding(restoredMxeStateBase64))
-                {
-                    processor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
-                    restoredModuleState = true;
-                }
-            }
-            break;
-
-        case ActiveModule::tse:
-            if (auto* processor = getTseModuleProcessor())
-            {
-                if (restoredTseStateXml.isNotEmpty())
-                {
-                    processor->setStateFromXmlString(restoredTseStateXml);
-                    restoredModuleState = true;
-                }
-            }
-            break;
-
-        case ActiveModule::none:
-            restoredModuleState = true;
-            break;
-    }
+    const auto restoredModuleState = restoreActiveModuleState(*this, restoredActiveModule, restoredModuleStates, true);
 
     if (! restoredModuleState)
     {

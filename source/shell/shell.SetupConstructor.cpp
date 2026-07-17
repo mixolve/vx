@@ -80,6 +80,24 @@ bool applyWheelToNormalisedSliderValue(juce::Slider& slider, const juce::MouseWh
     return true;
 }
 
+juce::MemoryBlock makeNoModuleSnapshotFrom(const juce::MemoryBlock& sourceSnapshot)
+{
+    juce::MemoryBlock noModuleSnapshot;
+    auto stateXml = VxAudioProcessor::getXmlFromBinary(sourceSnapshot.getData(),
+                                                       static_cast<int>(sourceSnapshot.getSize()));
+
+    if (stateXml == nullptr)
+        return noModuleSnapshot;
+
+    auto state = juce::ValueTree::fromXml(*stateXml);
+    VxAudioProcessor::removeModuleStateProperties(state);
+
+    if (auto noModuleXml = state.createXml())
+        VxAudioProcessor::copyXmlToBinary(*noModuleXml, noModuleSnapshot);
+
+    return noModuleSnapshot;
+}
+
 class FocusedParameterSlider final : public juce::Slider
 {
 public:
@@ -109,7 +127,9 @@ public:
 
     void mouseDown(const juce::MouseEvent&) override
     {
-        dragStartValue = getValue();
+        dragValue = getValue();
+        lastDragHorizontalDelta = 0.0;
+        lastDragVerticalDelta = 0.0;
     }
 
     void mouseDrag(const juce::MouseEvent& event) override
@@ -117,9 +137,15 @@ public:
         const auto width = juce::jmax(1, getWidth());
         const auto horizontalDelta = static_cast<double>(event.getDistanceFromDragStartX());
         const auto verticalDelta = -static_cast<double>(event.getDistanceFromDragStartY());
-        const auto delta = ((horizontalDelta + verticalDelta) / static_cast<double>(width))
+        const auto stepHorizontalDelta = horizontalDelta - lastDragHorizontalDelta;
+        const auto stepVerticalDelta = verticalDelta - lastDragVerticalDelta;
+        const auto delta = ((stepHorizontalDelta + stepVerticalDelta) / static_cast<double>(width))
             * getFineControlScale(event.mods.isShiftDown());
-        setValue(juce::jlimit(0.0, 1.0, dragStartValue + delta), juce::sendNotificationSync);
+
+        lastDragHorizontalDelta = horizontalDelta;
+        lastDragVerticalDelta = verticalDelta;
+        dragValue = juce::jlimit(0.0, 1.0, dragValue + delta);
+        setValue(dragValue, juce::sendNotificationSync);
     }
 
 #if ! JUCE_IOS
@@ -137,7 +163,9 @@ public:
     std::function<bool(const juce::MouseEvent&, const juce::MouseWheelDetails&)> onWheel;
 
 private:
-    double dragStartValue = 0.0;
+    double dragValue = 0.0;
+    double lastDragHorizontalDelta = 0.0;
+    double lastDragVerticalDelta = 0.0;
 };
 
 #if ! JUCE_IOS
@@ -285,10 +313,7 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     clipButton->setTooltip("CLIP INDICATOR");
     clipButton->setTextJustification(juce::Justification::centred);
     clipButton->setClickingTogglesState(false);
-    clipButton->onClick = [this]
-    {
-        clearKeyboardFocus(*this);
-    };
+    clipButton->setInterceptsMouseClicks(false, false);
     addAndMakeVisible(*clipButton);
 
     hostButton = std::make_unique<BoxTextButton>(uiAccent);
@@ -314,11 +339,7 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     };
     addAndMakeVisible(*moduleAddButton);
 
-    eqeModuleLoaded = audioProcessor.isEqeModuleLoaded();
-    speModuleLoaded = audioProcessor.isSpeModuleLoaded();
-    mieModuleLoaded = audioProcessor.isMieModuleLoaded();
-    mxeModuleLoaded = audioProcessor.isMxeModuleLoaded();
-    tseModuleLoaded = audioProcessor.isTseModuleLoaded();
+    setLoadedModuleFlags(audioProcessor.getActiveModule());
 
     if (auto* speProcessor = audioProcessor.getSpeModuleProcessor())
     {
@@ -374,6 +395,9 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
 
     if (! audioProcessor.isABCompareSnapshotValid(0))
         audioProcessor.setABCompareSnapshot(0, committedHistorySnapshot);
+
+    if (! audioProcessor.isABCompareSnapshotValid(1))
+        audioProcessor.setABCompareSnapshot(1, makeNoModuleSnapshotFrom(committedHistorySnapshot));
 
     if (! audioProcessor.isABCompareSnapshotValid(audioProcessor.getABCompareActiveSlot()))
         audioProcessor.setABCompareActiveSlot(0);

@@ -34,10 +34,10 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
     left = (midLeft + sideLeft) * 0.7071067811865476;
     right = (midRight - sideRight) * 0.7071067811865476;
 
-    const auto rotatedLeft = (derived.orthogonalM11 * left) + (derived.orthogonalM12 * right);
-    const auto rotatedRight = (derived.orthogonalM21 * left) + (derived.orthogonalM22 * right);
-    left = rotatedLeft;
-    right = rotatedRight;
+    const auto orthogonalLeft = (derived.orthogonalM11 * left) + (derived.orthogonalM12 * right);
+    const auto orthogonalRight = (derived.orthogonalM21 * left) + (derived.orthogonalM22 * right);
+    left = orthogonalLeft;
+    right = orthogonalRight;
 
     if (parameters.halfPositive)
     {

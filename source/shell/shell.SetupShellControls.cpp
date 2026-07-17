@@ -2,20 +2,6 @@
 
 void VxAudioProcessorEditor::setupShellControls()
 {
-    auto resetGlobalClip = [this]
-    {
-        audioProcessor.resetGlobalClipIndicator();
-        lastClipIndicatorTimeMs = 0;
-
-        if (clipButton != nullptr)
-            clipButton->clearTextColourOverride();
-
-        clearKeyboardFocus(*this);
-    };
-
-    if (clipButton != nullptr)
-        clipButton->setLongPressAction(resetGlobalClip, 500);
-
     globalBypassButton = std::make_unique<BoxTextButton>(uiAccent);
     globalBypassButton->setButtonText("B");
     globalBypassButton->setTooltip("CLICK: BYPASS -- LONG PRESS: CLOSE MODULE");
@@ -88,6 +74,14 @@ void VxAudioProcessorEditor::setupShellControls()
     abCompareButton->setTextJustification(juce::Justification::centred);
     abCompareButton->setClickingTogglesState(false);
     abCompareButton->setABCompareHighlightIndex(0);
+    abCompareButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+    {
+        if (! modifiers.isCtrlDown())
+            return false;
+
+        copyCurrentABStateToOtherSlot();
+        return true;
+    };
     abCompareButton->onClick = [this]
     {
         switchABState();
@@ -99,7 +93,7 @@ void VxAudioProcessorEditor::setupShellControls()
     {
         auto slotButton = std::make_unique<BoxTextButton>(uiGrey500);
         slotButton->setTextJustification(juce::Justification::centred);
-        slotButton->setButtonText("SLOT-" + VxAudioProcessor::getHostSlotLetterLabel(slotIndex));
+        slotButton->setButtonText(VxAudioProcessor::getHostSlotLetterLabel(slotIndex));
         slotButton->onClick = [this]
         {
             clearKeyboardFocus(*this);
@@ -200,11 +194,16 @@ void VxAudioProcessorEditor::refreshHostSlotButtons()
 
         const auto& assignment = hostSlotAssignments[static_cast<size_t>(slotIndex)];
 
+        const auto slotName = VxAudioProcessor::getHostSlotLetterLabel(slotIndex);
+
         if (assignment.parameterId.isEmpty())
-            slotButton->setButtonText("SLOT-" + VxAudioProcessor::getHostSlotLetterLabel(slotIndex));
+            slotButton->setButtonText(slotName);
         else
-            slotButton->setButtonText(assignment.parameterName.isNotEmpty() ? assignment.parameterName
-                                                                             : assignment.parameterId);
+        {
+            const auto parameterName = assignment.parameterName.isNotEmpty() ? assignment.parameterName
+                                                                             : assignment.parameterId;
+            slotButton->setButtonText(parameterName + " (" + slotName + ")");
+        }
     }
 }
 

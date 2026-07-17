@@ -247,21 +247,6 @@ juce::String VxAudioProcessor::getLoadedModuleLabel() const
     return {};
 }
 
-bool VxAudioProcessor::isEqeModuleLoaded() const noexcept
-{
-    return getActiveModule() == ActiveModule::eqe && eqeModuleProcessor != nullptr;
-}
-
-bool VxAudioProcessor::isSpeModuleLoaded() const noexcept
-{
-    return getActiveModule() == ActiveModule::spe && speModuleProcessor != nullptr;
-}
-
-bool VxAudioProcessor::isMieModuleLoaded() const noexcept
-{
-    return getActiveModule() == ActiveModule::mie && mieModuleProcessor != nullptr;
-}
-
 MieAudioProcessor* VxAudioProcessor::getMieModuleProcessor() noexcept
 {
     return mieModuleProcessor.get();
@@ -282,11 +267,6 @@ const SpeModuleProcessor* VxAudioProcessor::getSpeModuleProcessor() const noexce
     return speModuleProcessor.get();
 }
 
-bool VxAudioProcessor::isMxeModuleLoaded() const noexcept
-{
-    return getActiveModule() == ActiveModule::mxe && mxeModuleProcessor != nullptr;
-}
-
 MxeAudioProcessor* VxAudioProcessor::getMxeModuleProcessor() noexcept
 {
     return mxeModuleProcessor.get();
@@ -295,11 +275,6 @@ MxeAudioProcessor* VxAudioProcessor::getMxeModuleProcessor() noexcept
 const MxeAudioProcessor* VxAudioProcessor::getMxeModuleProcessor() const noexcept
 {
     return mxeModuleProcessor.get();
-}
-
-bool VxAudioProcessor::isTseModuleLoaded() const noexcept
-{
-    return getActiveModule() == ActiveModule::tse && tseModuleProcessor != nullptr;
 }
 
 TseModuleProcessor* VxAudioProcessor::getTseModuleProcessor() noexcept
