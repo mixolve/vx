@@ -374,7 +374,7 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
 
     auto rebindEqeEditorSections = [this]
     {
-        if (auto* eqeProcessor = audioProcessor.getActiveEqeModuleProcessor())
+        if (auto* eqeProcessor = getActiveEqeProcessor())
         {
             auto& eqeState = eqeProcessor->getValueTreeState();
 
@@ -411,107 +411,53 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         }
     };
 
-    auto rebindMxeEditor = [this]
+    auto rebindMultibandEditor = [this] (const bool moduleLoaded,
+                                         auto* processor,
+                                         std::unique_ptr<juce::Component>& editor,
+                                         auto makeConfig)
     {
-        if (! mxeModuleLoaded)
+        if (! moduleLoaded)
         {
-            shell_setup_support::removeOwnedChild(*this, mxeModuleEditor);
+            shell_setup_support::removeOwnedChild(*this, editor);
             return;
         }
 
-        auto* mxeProcessor = audioProcessor.getMxeModuleProcessor();
-
-        if (mxeProcessor == nullptr)
+        if (processor == nullptr)
             return;
 
-        auto* currentMxeEditor = dynamic_cast<MultibandModuleComponent*>(mxeModuleEditor.get());
+        auto* currentEditor = dynamic_cast<MultibandModuleComponent*>(editor.get());
 
-        if (currentMxeEditor == nullptr || currentMxeEditor->getProcessorIdentity() != mxeProcessor)
+        if (currentEditor == nullptr || currentEditor->getProcessorIdentity() != processor)
         {
-            shell_setup_support::removeOwnedChild(*this, mxeModuleEditor);
-            auto config = makeMxeMultibandConfig(*mxeProcessor);
+            shell_setup_support::removeOwnedChild(*this, editor);
+            auto config = makeConfig(*processor);
             config.assignHostSlot = [this] (const juce::String& parameterId,
                                             const juce::String& parameterName,
                                             const float normalizedValue)
             {
                 return handleHostSlotAssignRequest(parameterId, parameterName, normalizedValue);
             };
-            mxeModuleEditor = std::make_unique<MultibandModuleComponent>(std::move(config));
-            addAndMakeVisible(*mxeModuleEditor);
+            editor = std::make_unique<MultibandModuleComponent>(std::move(config));
+            addAndMakeVisible(*editor);
         }
 
-        mxeModuleEditor->setVisible(mxeModuleLoaded);
-    };
-
-    auto rebindMieEditor = [this]
-    {
-        if (! mieModuleLoaded)
-        {
-            shell_setup_support::removeOwnedChild(*this, mieModuleEditor);
-            return;
-        }
-
-        auto* mieProcessor = audioProcessor.getMieModuleProcessor();
-
-        if (mieProcessor == nullptr)
-            return;
-
-        auto* currentMieEditor = dynamic_cast<MultibandModuleComponent*>(mieModuleEditor.get());
-
-        if (currentMieEditor == nullptr || currentMieEditor->getProcessorIdentity() != mieProcessor)
-        {
-            shell_setup_support::removeOwnedChild(*this, mieModuleEditor);
-            auto config = makeMieMultibandConfig(*mieProcessor);
-            config.assignHostSlot = [this] (const juce::String& parameterId,
-                                            const juce::String& parameterName,
-                                            const float normalizedValue)
-            {
-                return handleHostSlotAssignRequest(parameterId, parameterName, normalizedValue);
-            };
-            mieModuleEditor = std::make_unique<MultibandModuleComponent>(std::move(config));
-            addAndMakeVisible(*mieModuleEditor);
-        }
-
-        mieModuleEditor->setVisible(mieModuleLoaded);
-    };
-
-    auto rebindTseEditor = [this]
-    {
-        if (! tseModuleLoaded)
-        {
-            shell_setup_support::removeOwnedChild(*this, tseModuleEditor);
-            return;
-        }
-
-        auto* tseProcessor = audioProcessor.getTseModuleProcessor();
-
-        if (tseProcessor == nullptr)
-            return;
-
-        auto* currentTseEditor = dynamic_cast<MultibandModuleComponent*>(tseModuleEditor.get());
-
-        if (currentTseEditor == nullptr || currentTseEditor->getProcessorIdentity() != tseProcessor)
-        {
-            shell_setup_support::removeOwnedChild(*this, tseModuleEditor);
-            auto config = makeTseMultibandConfig(*tseProcessor, *this, tseModuleEditor);
-            config.assignHostSlot = [this] (const juce::String& parameterId,
-                                            const juce::String& parameterName,
-                                            const float normalizedValue)
-            {
-                return handleHostSlotAssignRequest(parameterId, parameterName, normalizedValue);
-            };
-            tseModuleEditor = std::make_unique<MultibandModuleComponent>(std::move(config));
-            addAndMakeVisible(*tseModuleEditor);
-        }
-
-        tseModuleEditor->setVisible(tseModuleLoaded);
+        editor->setVisible(moduleLoaded);
     };
 
     refreshModuleStateListeners();
 
     rebindEqeEditorSections();
     rebindSpeEditorSections();
-    rebindMieEditor();
-    rebindMxeEditor();
-    rebindTseEditor();
+    rebindMultibandEditor(mieModuleLoaded,
+                          audioProcessor.getMieModuleProcessor(),
+                          mieModuleEditor,
+                          [] (auto& processor) { return makeMieMultibandConfig(processor); });
+    rebindMultibandEditor(mxeModuleLoaded,
+                          audioProcessor.getMxeModuleProcessor(),
+                          mxeModuleEditor,
+                          [] (auto& processor) { return makeMxeMultibandConfig(processor); });
+    rebindMultibandEditor(tseModuleLoaded,
+                          audioProcessor.getTseModuleProcessor(),
+                          tseModuleEditor,
+                          [this] (auto& processor) { return makeTseMultibandConfig(processor, *this, tseModuleEditor); });
 }

@@ -200,14 +200,15 @@ void VxAudioProcessorEditor::addFilterPreset()
     if (presetsSection == nullptr)
         return;
 
+    auto* eqeProcessor = getActiveEqeProcessor();
     const auto presetName = makeUniquePresetName(presetsSection->getEnteredPresetName(),
-                                                 getActiveEqeProcessor() != nullptr ? getActiveEqeProcessor()->getFilterPresetNames()
-                                                                                    : juce::StringArray {},
+                                                 eqeProcessor != nullptr ? eqeProcessor->getFilterPresetNames()
+                                                                         : juce::StringArray {},
                                                  "PRESET");
 
     commitFilterDisplayOrderToProcessor();
 
-    if (auto* eqeProcessor = getActiveEqeProcessor(); eqeProcessor != nullptr && eqeProcessor->saveFilterPreset(presetName))
+    if (eqeProcessor != nullptr && eqeProcessor->saveFilterPreset(presetName))
         refreshFilterPresetList(presetName);
 }
 

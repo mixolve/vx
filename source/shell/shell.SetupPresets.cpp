@@ -68,6 +68,8 @@ void VxAudioProcessorEditor::setupPresetControls()
                            return true;
                        });
     };
-    refreshFilterPresetList(getActiveEqeProcessor() != nullptr ? getActiveEqeProcessor()->getLastFilterPresetName()
-                                                               : juce::String {});
+    if (auto* eqeProcessor = getActiveEqeProcessor())
+        refreshFilterPresetList(eqeProcessor->getLastFilterPresetName());
+    else
+        refreshFilterPresetList({});
 }

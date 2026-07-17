@@ -9,7 +9,9 @@ void VxAudioProcessorEditor::showModulePicker()
     if (moduleAddButton == nullptr)
         return;
 
-    if (audioProcessor.isModuleLoaded())
+    const auto canLoadModule = audioProcessor.getActiveModule() == VxAudioProcessor::ActiveModule::none;
+
+    if (! canLoadModule)
         return;
 
     auto anchorBounds = moduleAddButton->getBounds();
@@ -19,11 +21,7 @@ void VxAudioProcessorEditor::showModulePicker()
     showChoicePrompt(anchorBounds,
                      { "MIE", "EQE", "SPE", "MXE", "TSE" },
                      -1,
-                     { ! audioProcessor.isModuleLoaded(),
-                       ! audioProcessor.isModuleLoaded(),
-                       ! audioProcessor.isModuleLoaded(),
-                       ! audioProcessor.isModuleLoaded(),
-                       ! audioProcessor.isModuleLoaded() },
+                     { canLoadModule, canLoadModule, canLoadModule, canLoadModule, canLoadModule },
                      juce::Justification::centred,
                        [this] (const int selectedIndex)
                        {
@@ -44,13 +42,12 @@ void VxAudioProcessorEditor::showModulePicker()
                        "PARAMETRIC EQUALIZER",
                        "DUAL-MONO SPECTRAL PROCESSOR",
                        "MULTIBAND/SINGLEBAND/DUAL-MONO/HALFWAVE DYNAMIC PROCESSOR",
-                       "MUTIBAND/SINGLEBAND TRANSIENT PROCESSOR" });
+                       "MULTIBAND/SINGLEBAND TRANSIENT PROCESSOR" });
 }
 
 void VxAudioProcessorEditor::closeActiveModule()
 {
-    if (! audioProcessor.isModuleLoaded()
-        && audioProcessor.getActiveModule() == VxAudioProcessor::ActiveModule::none)
+    if (audioProcessor.getActiveModule() == VxAudioProcessor::ActiveModule::none)
         return;
 
     detachModuleEditorBindings();
@@ -203,7 +200,7 @@ void VxAudioProcessorEditor::refreshModuleTabButton()
         addAndMakeVisible(*moduleTabButton);
     }
 
-    moduleTabButton->setButtonText(audioProcessor.getLoadedModuleLabel());
+    moduleTabButton->setButtonText(juce::String(VxAudioProcessor::stateIdForModule(audioProcessor.getActiveModule())).toUpperCase());
     moduleTabButton->setVisible(audioProcessor.getActiveModule() != VxAudioProcessor::ActiveModule::none);
 }
 

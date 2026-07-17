@@ -82,12 +82,18 @@ juce::String makeHostSlotNameStateKey(const int slotIndex)
 
 EqeModuleProcessor* VxAudioProcessorEditor::getActiveEqeProcessor() noexcept
 {
-    return audioProcessor.getActiveEqeModuleProcessor();
+    if (audioProcessor.getActiveModule() != VxAudioProcessor::ActiveModule::eqe)
+        return nullptr;
+
+    return audioProcessor.getEqeModuleProcessor();
 }
 
 const EqeModuleProcessor* VxAudioProcessorEditor::getActiveEqeProcessor() const noexcept
 {
-    return audioProcessor.getActiveEqeModuleProcessor();
+    if (audioProcessor.getActiveModule() != VxAudioProcessor::ActiveModule::eqe)
+        return nullptr;
+
+    return audioProcessor.getEqeModuleProcessor();
 }
 
 
@@ -204,31 +210,12 @@ void VxAudioProcessorEditor::setLoadedModuleFlags(const VxAudioProcessor::Active
 void VxAudioProcessorEditor::storeEditorStateToValueTree() noexcept
 {
     auto& state = valueTreeState.state;
+    const auto activeModuleId = juce::String(VxAudioProcessor::stateIdForModule(audioProcessor.getActiveModule()));
 
-    if (eqeModuleLoaded)
-    {
-        state.setProperty(VxAudioProcessor::activeModuleStateKey, VxAudioProcessor::eqeModuleId, nullptr);
-    }
-    else if (speModuleLoaded)
-    {
-        state.setProperty(VxAudioProcessor::activeModuleStateKey, VxAudioProcessor::speModuleId, nullptr);
-    }
-    else if (mieModuleLoaded)
-    {
-        state.setProperty(VxAudioProcessor::activeModuleStateKey, VxAudioProcessor::mieModuleId, nullptr);
-    }
-    else if (mxeModuleLoaded)
-    {
-        state.setProperty(VxAudioProcessor::activeModuleStateKey, VxAudioProcessor::mxeModuleId, nullptr);
-    }
-    else if (tseModuleLoaded)
-    {
-        state.setProperty(VxAudioProcessor::activeModuleStateKey, VxAudioProcessor::tseModuleId, nullptr);
-    }
+    if (activeModuleId.isNotEmpty())
+        state.setProperty(VxAudioProcessor::activeModuleStateKey, activeModuleId, nullptr);
     else
-    {
         state.removeProperty(VxAudioProcessor::activeModuleStateKey, nullptr);
-    }
 
     state.setProperty(editorHostParametersExpandedStateKey, hostParametersExpanded, nullptr);
     state.setProperty(editorFilterDisplayOrderStateKey,

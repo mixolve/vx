@@ -101,16 +101,13 @@ public:
     static juce::String getHostSlotParameterId(int slotIndex);
     static juce::String getHostSlotLetterLabel(int slotIndex);
     static juce::String getHostSlotParameterName(int slotIndex);
+    static const char* stateIdForModule(ActiveModule module) noexcept;
     ActiveModule getActiveModule() const noexcept;
     void setActiveModule(ActiveModule module);
     bool loadModule(ActiveModule module);
     bool clearLoadedModule();
-    bool isModuleLoaded() const noexcept;
-    juce::String getLoadedModuleLabel() const;
     EqeModuleProcessor* getEqeModuleProcessor() noexcept;
     const EqeModuleProcessor* getEqeModuleProcessor() const noexcept;
-    EqeModuleProcessor* getActiveEqeModuleProcessor() noexcept;
-    const EqeModuleProcessor* getActiveEqeModuleProcessor() const noexcept;
     SpeModuleProcessor* getSpeModuleProcessor() noexcept;
     const SpeModuleProcessor* getSpeModuleProcessor() const noexcept;
     MieAudioProcessor* getMieModuleProcessor() noexcept;
@@ -131,12 +128,8 @@ private:
     static constexpr size_t maxSupportedChannels = 2;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    bool createEqeModule();
-    bool createSpeModule();
-    bool createMieModule();
-    bool createMxeModule();
-    bool createTseModule();
-    static const char* stateIdForModule(ActiveModule module) noexcept;
+    bool createModuleInstance(ActiveModule module);
+    void resetModuleProcessors() noexcept;
     static ActiveModule moduleFromStateId(const juce::String& moduleId);
     int getActiveModuleLatencySamples() const noexcept;
     void updateShellLatency() noexcept;

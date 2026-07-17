@@ -150,31 +150,31 @@ double phaseAmountRadiansForType(const EqeModuleProcessor::FilterType filterType
 }
 }
 
-void EqeModuleProcessor::setBellIdentityResponse(const size_t bellIndex) noexcept
+void EqeModuleProcessor::setBellIdentityResponse(const size_t filterIndex) noexcept
 {
-    for (auto& filter : bellOrderFilters[bellIndex])
+    for (auto& filter : bellOrderFilters[filterIndex])
         filter.setIdentity();
 }
 
-void EqeModuleProcessor::setShelfIdentityResponse(const size_t bellIndex) noexcept
+void EqeModuleProcessor::setShelfIdentityResponse(const size_t filterIndex) noexcept
 {
-    for (auto& filter : shelfOrderFilters[bellIndex])
+    for (auto& filter : shelfOrderFilters[filterIndex])
         filter.setIdentity();
 }
 
-void EqeModuleProcessor::setCutIdentityResponse(const size_t bellIndex) noexcept
+void EqeModuleProcessor::setCutIdentityResponse(const size_t filterIndex) noexcept
 {
-    cutBlendFilters[bellIndex].setIdentity();
+    cutBlendFilters[filterIndex].setIdentity();
 }
 
-void EqeModuleProcessor::setTiltIdentityResponse(const size_t bellIndex) noexcept
+void EqeModuleProcessor::setTiltIdentityResponse(const size_t filterIndex) noexcept
 {
-    tiltFilters[bellIndex].setIdentity();
+    tiltFilters[filterIndex].setIdentity();
 }
 
-void EqeModuleProcessor::setPhaseIdentityResponse(const size_t bellIndex) noexcept
+void EqeModuleProcessor::setPhaseIdentityResponse(const size_t filterIndex) noexcept
 {
-    phaseFirFilters[bellIndex].setIdentity();
+    phaseFirFilters[filterIndex].setIdentity();
 }
 
 double EqeModuleProcessor::evaluateCascadeMagnitudeAt(const BiquadCascade& filter, const double frequency) const noexcept
@@ -587,13 +587,13 @@ void EqeModuleProcessor::updateInterpolatedCascadeFilter(BiquadCascade& target,
     }
 }
 
-void EqeModuleProcessor::rebuildCutBlendFilter(const size_t bellIndex,
+void EqeModuleProcessor::rebuildCutBlendFilter(const size_t filterIndex,
                                               const FilterType filterType,
                                               const double frequency,
                                               const double octaveBandwidth,
                                               const double slope) noexcept
 {
-    buildCutBlendFilter(cutBlendFilters[bellIndex],
+    buildCutBlendFilter(cutBlendFilters[filterIndex],
                         filterType,
                         frequency,
                         octaveBandwidth,

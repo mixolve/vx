@@ -238,7 +238,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         const auto shouldShow = module != VxAudioProcessor::ActiveModule::none;
 
         moduleTabButton->setVisible(shouldShow);
-        moduleTabButton->setButtonText(audioProcessor.getLoadedModuleLabel());
+        moduleTabButton->setButtonText(juce::String(VxAudioProcessor::stateIdForModule(module)).toUpperCase());
         moduleTabButton->setToggleState(active, juce::dontSendNotification);
     }
 
@@ -248,7 +248,7 @@ void VxAudioProcessorEditor::updateSectionStates()
 
     if (moduleAddButton != nullptr)
     {
-        const auto noModuleLoaded = ! audioProcessor.isModuleLoaded();
+        const auto noModuleLoaded = audioProcessor.getActiveModule() == VxAudioProcessor::ActiveModule::none;
         moduleAddButton->setVisible(noModuleLoaded && ! hostParametersExpanded);
         moduleAddButton->setEnabled(noModuleLoaded);
     }
@@ -380,7 +380,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         section->moveDownButton->setVisible(isActive);
         section->moveDownButton->setEnabled(canMoveDown);
         section->moveDownButton->setAlpha(canMoveDown ? 1.0f : 0.45f);
-        if (auto* eqeProcessor = audioProcessor.getActiveEqeModuleProcessor())
+        if (auto* eqeProcessor = getActiveEqeProcessor())
             section->header->setButtonText(eqeProcessor->getFilterHeaderText(filterIndex, orderPosition));
         else
             section->header->setButtonText({});

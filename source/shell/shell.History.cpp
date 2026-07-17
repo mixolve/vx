@@ -393,8 +393,10 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
 
     restoreEditorStateFromValueTree();
     refreshModuleTabButton();
-    refreshFilterPresetList(getActiveEqeProcessor() != nullptr ? getActiveEqeProcessor()->getLastFilterPresetName()
-                                                               : juce::String {});
+    if (auto* eqeProcessor = getActiveEqeProcessor())
+        refreshFilterPresetList(eqeProcessor->getLastFilterPresetName());
+    else
+        refreshFilterPresetList({});
     reloadFilterPresetFromProcessor();
 
     hostParametersExpanded = preservedUiState.hostParameters;
@@ -484,11 +486,16 @@ void VxAudioProcessorEditor::restoreABStateSnapshot(const juce::MemoryBlock& sna
 
     restoreEditorStateFromValueTree();
     refreshModuleTabButton();
-    refreshFilterPresetList(getActiveEqeProcessor() != nullptr ? getActiveEqeProcessor()->getLastFilterPresetName()
-                                                               : juce::String {});
 
-    if (getActiveEqeProcessor() != nullptr)
+    if (auto* eqeProcessor = getActiveEqeProcessor())
+    {
+        refreshFilterPresetList(eqeProcessor->getLastFilterPresetName());
         refreshEqeFilterSectionsFromProcessor();
+    }
+    else
+    {
+        refreshFilterPresetList({});
+    }
 
     hostParametersExpanded = preservedUiState.hostParameters;
 

@@ -164,6 +164,45 @@ bool restoreActiveModuleState(VxAudioProcessor& processor,
     return false;
 }
 
+template <typename Processor>
+void storeBinaryModuleState(juce::ValueTree& state,
+                            const juce::Identifier& property,
+                            Processor* processor)
+{
+    if (processor == nullptr)
+    {
+        state.removeProperty(property, nullptr);
+        return;
+    }
+
+    juce::MemoryBlock stateData;
+    processor->getStateInformation(stateData);
+
+    if (stateData.getSize() > 0)
+        state.setProperty(property, stateData.toBase64Encoding(), nullptr);
+    else
+        state.removeProperty(property, nullptr);
+}
+
+template <typename Processor>
+void storeXmlModuleState(juce::ValueTree& state,
+                         const juce::Identifier& property,
+                         Processor* processor)
+{
+    if (processor == nullptr)
+    {
+        state.removeProperty(property, nullptr);
+        return;
+    }
+
+    const auto stateXml = processor->getStateXmlString();
+
+    if (stateXml.isNotEmpty())
+        state.setProperty(property, stateXml, nullptr);
+    else
+        state.removeProperty(property, nullptr);
+}
+
 struct ScopedProcessingSuspend
 {
     explicit ScopedProcessingSuspend(VxAudioProcessor& processorIn) noexcept
@@ -214,79 +253,11 @@ void VxAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
     else
     {
         state.setProperty(activeModuleStateKey, stateIdForModule(active), nullptr);
-
-        if (auto* eqeProcessor = getEqeModuleProcessor())
-        {
-            juce::MemoryBlock eqeStateData;
-            eqeProcessor->getStateInformation(eqeStateData);
-
-            if (eqeStateData.getSize() > 0)
-                state.setProperty(eqeModuleStateKey, eqeStateData.toBase64Encoding(), nullptr);
-            else
-                state.removeProperty(eqeModuleStateKey, nullptr);
-        }
-        else
-        {
-            state.removeProperty(eqeModuleStateKey, nullptr);
-        }
-
-        if (auto* processor = getSpeModuleProcessor())
-        {
-            const auto stateXml = processor->getStateXmlString();
-
-            if (stateXml.isNotEmpty())
-                state.setProperty(speModuleStateKey, stateXml, nullptr);
-            else
-                state.removeProperty(speModuleStateKey, nullptr);
-        }
-        else
-        {
-            state.removeProperty(speModuleStateKey, nullptr);
-        }
-
-        if (auto* processor = getMieModuleProcessor())
-        {
-            juce::MemoryBlock stateData;
-            processor->getStateInformation(stateData);
-
-            if (stateData.getSize() > 0)
-                state.setProperty(mieModuleStateKey, stateData.toBase64Encoding(), nullptr);
-            else
-                state.removeProperty(mieModuleStateKey, nullptr);
-        }
-        else
-        {
-            state.removeProperty(mieModuleStateKey, nullptr);
-        }
-
-        if (auto* processor = getMxeModuleProcessor())
-        {
-            juce::MemoryBlock stateData;
-            processor->getStateInformation(stateData);
-
-            if (stateData.getSize() > 0)
-                state.setProperty(mxeModuleStateKey, stateData.toBase64Encoding(), nullptr);
-            else
-                state.removeProperty(mxeModuleStateKey, nullptr);
-        }
-        else
-        {
-            state.removeProperty(mxeModuleStateKey, nullptr);
-        }
-
-        if (auto* processor = getTseModuleProcessor())
-        {
-            const auto stateXml = processor->getStateXmlString();
-
-            if (stateXml.isNotEmpty())
-                state.setProperty(tseModuleStateKey, stateXml, nullptr);
-            else
-                state.removeProperty(tseModuleStateKey, nullptr);
-        }
-        else
-        {
-            state.removeProperty(tseModuleStateKey, nullptr);
-        }
+        storeBinaryModuleState(state, eqeModuleStateKey, getEqeModuleProcessor());
+        storeXmlModuleState(state, speModuleStateKey, getSpeModuleProcessor());
+        storeBinaryModuleState(state, mieModuleStateKey, getMieModuleProcessor());
+        storeBinaryModuleState(state, mxeModuleStateKey, getMxeModuleProcessor());
+        storeXmlModuleState(state, tseModuleStateKey, getTseModuleProcessor());
     }
 
     if (auto stateXml = state.createXml())
