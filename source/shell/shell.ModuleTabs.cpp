@@ -75,7 +75,6 @@ void VxAudioProcessorEditor::closeActiveModule()
     };
 
     hideComponent(addFilterButton.get());
-    hideComponent(clearFiltersButton.get());
     hideComponent(sortPlaceButton.get());
     hideComponent(sortFreqButton.get());
     hideComponent(sortDuoButton.get());

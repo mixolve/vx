@@ -101,11 +101,6 @@ void ValueBoxComponent::setCustomPromptAction(std::function<void()> action)
     updateMouseCursor();
 }
 
-void ValueBoxComponent::setScrollGesturesPassThrough(const bool shouldPassThrough)
-{
-    scrollGesturesPassThrough = shouldPassThrough;
-}
-
 void ValueBoxComponent::updateMouseCursor()
 {
     if (interactionEnabled)
@@ -181,18 +176,12 @@ void ValueBoxComponent::mouseDown(const juce::MouseEvent& event)
 
     const auto valueCanOpenPrompt = interactionEnabled || customPromptAction != nullptr;
 
-    if (! valueCanOpenPrompt && ! scrollGesturesPassThrough)
-        return;
-
     pointerDown = true;
     dragDetected = false;
     dragStartViewportY = 0;
 
-    if (scrollGesturesPassThrough)
-    {
-        if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
-            dragStartViewportY = viewport->getViewPositionY();
-    }
+    if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
+        dragStartViewportY = viewport->getViewPositionY();
 
     pressHighlight = valueCanOpenPrompt;
     repaint();
@@ -206,22 +195,19 @@ void ValueBoxComponent::mouseDrag(const juce::MouseEvent& event)
     if (! dragDetected && event.mouseWasDraggedSinceMouseDown())
         dragDetected = true;
 
-    if (scrollGesturesPassThrough)
-    {
-        shell_parameter_focus::clearFocus();
+    shell_parameter_focus::clearFocus(*this);
 
-        if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
-        {
-            const auto viewedHeight = viewport->getViewedComponent() != nullptr
-                ? viewport->getViewedComponent()->getHeight()
-                : 0;
-            const auto maxScrollY = juce::jmax(0, viewedHeight - viewport->getHeight());
-            const auto dragScale = event.mods.isShiftDown() ? 0.1 : 1.0;
-            viewport->setViewPosition(0,
-                                      juce::jlimit(0,
-                                                   maxScrollY,
-                                                   dragStartViewportY - juce::roundToInt(static_cast<double>(event.getDistanceFromDragStartY()) * dragScale)));
-        }
+    if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
+    {
+        const auto viewedHeight = viewport->getViewedComponent() != nullptr
+            ? viewport->getViewedComponent()->getHeight()
+            : 0;
+        const auto maxScrollY = juce::jmax(0, viewedHeight - viewport->getHeight());
+        const auto dragScale = event.mods.isShiftDown() ? 0.1 : 1.0;
+        viewport->setViewPosition(0,
+                                  juce::jlimit(0,
+                                               maxScrollY,
+                                               dragStartViewportY - juce::roundToInt(static_cast<double>(event.getDistanceFromDragStartY()) * dragScale)));
     }
 
     const auto canHighlight = interactionEnabled || customPromptAction != nullptr;
@@ -278,22 +264,15 @@ void ValueBoxComponent::mouseWheelMove(const juce::MouseEvent& event, const juce
 {
     juce::ignoreUnused(event);
 
-    if (scrollGesturesPassThrough)
+    shell_parameter_focus::clearFocus(*this);
+
+    if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
     {
-        shell_parameter_focus::clearFocus();
-
-        if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
-        {
-            const auto viewedHeight = viewport->getViewedComponent() != nullptr
-                ? viewport->getViewedComponent()->getHeight()
-                : 0;
-            scrollViewportWithWheel(*viewport, viewedHeight, wheel, event.mods.isShiftDown());
-        }
-
-        return;
+        const auto viewedHeight = viewport->getViewedComponent() != nullptr
+            ? viewport->getViewedComponent()->getHeight()
+            : 0;
+        scrollViewportWithWheel(*viewport, viewedHeight, wheel, event.mods.isShiftDown());
     }
-
-    juce::ignoreUnused(wheel);
 }
 
 void ValueBoxComponent::showEditor()

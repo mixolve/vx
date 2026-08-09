@@ -48,41 +48,43 @@ void DspCore::clearState()
 
 void DspCore::updateDerivedParameters()
 {
-    const auto midGainDb = juce::jlimit(-48.0, 48.0, roundToJsfxStep(parameters.gainMid));
-    const auto sideGainDb = juce::jlimit(-48.0, 48.0, roundToJsfxStep(parameters.gainSide));
+    const auto midGainDb = juce::jlimit(-48.0, 48.0, roundToParameterStep(parameters.gainMid));
+    const auto sideGainDb = juce::jlimit(-48.0, 48.0, roundToParameterStep(parameters.gainSide));
     derived.midGain = midGainDb <= -48.0 ? 0.0 : dbToAmp(midGainDb);
     derived.sideGain = sideGainDb <= -48.0 ? 0.0 : dbToAmp(sideGainDb);
-    derived.leftGain = dbToAmp(roundToJsfxStep(parameters.gainL));
-    derived.rightGain = dbToAmp(roundToJsfxStep(parameters.gainR));
-    derived.linkedGain = dbToAmp(roundToJsfxStep(parameters.gainLr));
-    const auto leftPosition = roundToJsfxStep(parameters.left) * 0.01;
-    const auto rightPosition = roundToJsfxStep(parameters.right) * 0.01;
+    derived.leftGain = dbToAmp(roundToParameterStep(parameters.gainL));
+    derived.rightGain = dbToAmp(roundToParameterStep(parameters.gainR));
+    derived.linkedGain = dbToAmp(roundToParameterStep(parameters.gainLr));
+    const auto leftPosition = roundToParameterStep(parameters.left) * 0.01;
+    const auto rightPosition = roundToParameterStep(parameters.right) * 0.01;
     const auto leftTheta = (leftPosition + 1.0) * juce::MathConstants<double>::pi * 0.25;
     const auto rightTheta = (rightPosition + 1.0) * juce::MathConstants<double>::pi * 0.25;
-    const auto law = dbToAmp(-juce::jlimit(0.0f, 6.0f, parameters.law));
+    const auto lawDb = juce::jlimit(0.0f, 6.0f, parameters.law);
+    const auto lawGainForPosition = [lawDb] (const double position)
+    {
+        const auto distanceFromCentre = juce::jlimit(0.0, 1.0, std::abs(position));
+        const auto centreWeight = std::cos(distanceFromCentre * juce::MathConstants<double>::pi * 0.5);
+        return dbToAmp(-lawDb * centreWeight);
+    };
 
     derived.gLL = std::cos(leftTheta);
     derived.gLR = std::sin(leftTheta);
     derived.gRL = std::cos(rightTheta);
     derived.gRR = std::sin(rightTheta);
 
-    if (std::abs(leftPosition) < 0.0000001)
-    {
-        derived.gLL *= law;
-        derived.gLR *= law;
-    }
+    const auto leftLawGain = lawGainForPosition(leftPosition);
+    derived.gLL *= leftLawGain;
+    derived.gLR *= leftLawGain;
 
-    if (std::abs(rightPosition) < 0.0000001)
-    {
-        derived.gRL *= law;
-        derived.gRR *= law;
-    }
+    const auto rightLawGain = lawGainForPosition(rightPosition);
+    derived.gRL *= rightLawGain;
+    derived.gRR *= rightLawGain;
 
-    derived.impactAmount = roundToJsfxStep(parameters.impact) * 0.01;
-    derived.midAmount = roundToJsfxStep(parameters.mid) * 0.01;
-    derived.sideAmount = roundToJsfxStep(parameters.side) * 0.01;
+    derived.impactAmount = roundToParameterStep(parameters.impact) * 0.01;
+    derived.midAmount = roundToParameterStep(parameters.mid) * 0.01;
+    derived.sideAmount = roundToParameterStep(parameters.side) * 0.01;
 
-    const auto orthogonalTheta = roundToJsfxStep(parameters.degree) * (juce::MathConstants<double>::pi / 180.0);
+    const auto orthogonalTheta = roundToParameterStep(parameters.degree) * (juce::MathConstants<double>::pi / 180.0);
     const auto c = std::cos(orthogonalTheta);
     const auto s = std::sin(orthogonalTheta);
     derived.orthogonalM11 = c;

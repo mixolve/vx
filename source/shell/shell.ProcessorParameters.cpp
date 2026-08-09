@@ -34,11 +34,6 @@ juce::String VxAudioProcessor::getHostSlotLetterLabel(const int slotIndex)
         + juce::String::charToString(static_cast<juce_wchar>('A' + second));
 }
 
-juce::String VxAudioProcessor::getHostSlotParameterName(const int slotIndex)
-{
-    return getHostSlotLetterLabel(slotIndex);
-}
-
 juce::AudioProcessorValueTreeState::ParameterLayout VxAudioProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameterLayout;
@@ -52,7 +47,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout VxAudioProcessor::createPara
     {
         parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
             juce::ParameterID { getHostSlotParameterId(slotIndex), 2 },
-            getHostSlotParameterName(slotIndex),
+            getHostSlotLetterLabel(slotIndex),
             juce::NormalisableRange<float> { 0.0f, 1.0f, 0.0f },
             0.0f,
             juce::AudioParameterFloatAttributes().withAutomatable(true)));

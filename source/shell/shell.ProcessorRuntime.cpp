@@ -109,7 +109,13 @@ int VxAudioProcessor::getActiveModuleLatencySamples() const noexcept
 
 void VxAudioProcessor::updateShellLatency() noexcept
 {
-    const auto totalLatencySamples = getActiveModuleLatencySamples();
+    auto totalLatencySamples = getActiveModuleLatencySamples();
+
+    if (abCompareLatencyLocked.load(std::memory_order_acquire))
+    {
+        totalLatencySamples = juce::jmax(totalLatencySamples,
+                                         abCompareLatencyFloorSamples.load(std::memory_order_acquire));
+    }
 
     if (getLatencySamples() != totalLatencySamples)
         setLatencySamples(totalLatencySamples);
@@ -136,6 +142,14 @@ void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Midi
 
     for (auto channel = getTotalNumInputChannels(); channel < getTotalNumOutputChannels(); ++channel)
         buffer.clear(channel, 0, buffer.getNumSamples());
+
+    const juce::ScopedTryLock lock(processingLock);
+
+    if (! lock.isLocked())
+    {
+        globalClipIndicator.store(0.0f, std::memory_order_relaxed);
+        return;
+    }
 
     if (! processingPrepared.load(std::memory_order_acquire))
     {

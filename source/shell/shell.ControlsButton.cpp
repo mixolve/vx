@@ -1,7 +1,6 @@
 #include "shell.EditorControls.h"
 #include "shell.EditorParameterControls.h"
 
-#include <cmath>
 #include <vector>
 
 namespace
@@ -188,12 +187,28 @@ bool drawEqeFilterHeaderHighlight(juce::Graphics& graphics,
         const auto separatorIndex = text.indexOfChar(startIndex, '-');
         const auto tokenEnd = separatorIndex >= 0 ? separatorIndex : text.length();
         const auto token = text.substring(startIndex, tokenEnd);
-        const auto tokenColour = colourForEqeFilterHeaderToken(token);
 
-        if (tokenColour != uiWhite)
+        if (token == "PHL")
+        {
+            segments.push_back({ "PH", uiWhite });
+            segments.push_back({ "L", leftTokenColour });
             foundToken = true;
+        }
+        else if (token == "PHR")
+        {
+            segments.push_back({ "PH", uiWhite });
+            segments.push_back({ "R", rightTokenColour });
+            foundToken = true;
+        }
+        else
+        {
+            const auto tokenColour = colourForEqeFilterHeaderToken(token);
 
-        segments.push_back({ token, tokenColour });
+            if (tokenColour != uiWhite)
+                foundToken = true;
+
+            segments.push_back({ token, tokenColour });
+        }
 
         if (separatorIndex >= 0)
             segments.push_back({ "-", uiWhite });
@@ -325,24 +340,6 @@ void BoxTextButton::clearTextColourOverride()
     repaint();
 }
 
-void BoxTextButton::setLeadingDot(const juce::Colour colour, const float level)
-{
-    leadingDotVisible = true;
-    leadingDotColour = colour;
-    setLeadingDotLevel(level);
-}
-
-void BoxTextButton::setLeadingDotLevel(const float level)
-{
-    const auto clampedLevel = juce::jlimit(0.0f, 1.0f, level);
-
-    if (std::abs(leadingDotLevel - clampedLevel) < 1.0e-6f)
-        return;
-
-    leadingDotLevel = clampedLevel;
-    repaint();
-}
-
 void BoxTextButton::setLongPressAction(std::function<void()> action, const int delayMs, juce::String promptText)
 {
     longPressAction = std::move(action);
@@ -350,9 +347,9 @@ void BoxTextButton::setLongPressAction(std::function<void()> action, const int d
     longPressPromptText = std::move(promptText);
 }
 
-void BoxTextButton::flashHostAssignmentOutline()
+void BoxTextButton::flashConfirmationOutline()
 {
-    hostAssignmentFlashActive = true;
+    confirmationFlashActive = true;
     repaint();
     startTimer(500);
 }
@@ -365,7 +362,7 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
         && (manualInteractionEnabled ? manualPointerDown : pressHighlight);
     const auto accentActive = alwaysAccentOutline || getToggleState();
     const auto fill = buttonDown ? uiGrey700 : uiGrey800;
-    const auto outline = hostAssignmentFlashActive ? juce::Colour { 0xFF99CCCC }
+    const auto outline = confirmationFlashActive ? juce::Colour { 0xFF99CCCC }
                                                    : (accentActive ? accentColour : uiGrey500);
 
     if (fillVisible)
@@ -400,73 +397,37 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
         const auto font = makeUiFont();
         graphics.setFont(font);
 
-        if (! leadingDotVisible || getButtonText().isEmpty())
+        const auto textBounds = getLocalBounds().reduced(6, 0);
+
+        if (eqeFilterHeaderColouringEnabled
+            && drawEqeFilterHeaderHighlight(graphics, getButtonText(), textBounds, font, textJustification))
         {
-            const auto textBounds = getLocalBounds().reduced(6, 0);
-
-            if (eqeFilterHeaderColouringEnabled
-                && drawEqeFilterHeaderHighlight(graphics, getButtonText(), textBounds, font, textJustification))
-            {
-                drawBottomDivider();
-                return;
-            }
-
-            if (drawChannelTokenHighlight(graphics, getButtonText(), textBounds, font, textJustification))
-            {
-                drawBottomDivider();
-                return;
-            }
-
-            if (abCompareHighlightIndex >= 0 && getButtonText() == "AB")
-            {
-                static const juce::Colour activeABColour { 0xFF9999FF };
-                drawFittedSingleLineSegments(graphics,
-                                             {
-                                                 { "A", abCompareHighlightIndex == 0 ? activeABColour : textColour },
-                                                 { "B", abCompareHighlightIndex == 1 ? activeABColour : textColour }
-                                             },
-                                             textBounds,
-                                             font,
-                                             textJustification);
-                drawBottomDivider();
-                return;
-            }
-
-            graphics.drawFittedText(getButtonText(), textBounds, textJustification, 1, 1.0f);
             drawBottomDivider();
             return;
         }
 
-        const auto textBounds = getLocalBounds().toFloat().reduced(6.0f, 0.0f);
-        const auto dotDiameter = 6.0f;
-        const auto dotGap = uiGapFloat;
-        const auto textWidth = static_cast<float>(getTextPixelWidth(font, getButtonText()));
-        const auto groupWidth = dotDiameter + dotGap + textWidth;
-        const auto horizontalFlags = textJustification.getOnlyHorizontalFlags();
-        auto groupLeft = textBounds.getX();
+        if (drawChannelTokenHighlight(graphics, getButtonText(), textBounds, font, textJustification))
+        {
+            drawBottomDivider();
+            return;
+        }
 
-        if ((horizontalFlags & juce::Justification::horizontallyCentred) != 0)
-            groupLeft = textBounds.getCentreX() - (groupWidth * 0.5f);
-        else if ((horizontalFlags & juce::Justification::right) != 0)
-            groupLeft = textBounds.getRight() - groupWidth;
+        if (abCompareHighlightIndex >= 0 && getButtonText() == "AB")
+        {
+            static const juce::Colour activeABColour { 0xFF9999FF };
+            drawFittedSingleLineSegments(graphics,
+                                         {
+                                             { "A", abCompareHighlightIndex == 0 ? activeABColour : textColour },
+                                             { "B", abCompareHighlightIndex == 1 ? activeABColour : textColour }
+                                         },
+                                         textBounds,
+                                         font,
+                                         textJustification);
+            drawBottomDivider();
+            return;
+        }
 
-        const auto dotBounds = juce::Rectangle<float>(groupLeft,
-                                                      textBounds.getCentreY() - dotDiameter * 0.5f,
-                                                      dotDiameter,
-                                                      dotDiameter);
-
-        graphics.setColour(leadingDotColour.withAlpha(leadingDotLevel > 0.5f ? 1.0f : 0.25f));
-        graphics.fillEllipse(dotBounds);
-
-        graphics.setColour(textColour);
-        graphics.drawFittedText(getButtonText(),
-                                juce::Rectangle<int>(juce::roundToInt(groupLeft + dotDiameter + dotGap),
-                                                     getLocalBounds().getY(),
-                                                     juce::roundToInt(textWidth) + 2,
-                                                     getLocalBounds().getHeight()),
-                                juce::Justification::centredLeft,
-                                1,
-                                1.0f);
+        graphics.drawFittedText(getButtonText(), textBounds, textJustification, 1, 1.0f);
         drawBottomDivider();
         return;
     }
@@ -508,7 +469,7 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
 void BoxTextButton::mouseDown(const juce::MouseEvent& event)
 {
     if (clearsParameterFocusOnMouseDown)
-        shell_parameter_focus::clearFocus();
+        shell_parameter_focus::clearFocus(*this);
 
     if (! manualInteractionEnabled)
     {
@@ -617,7 +578,10 @@ void BoxTextButton::mouseUp(const juce::MouseEvent& event)
             repaint();
 
             if (! wasPressCanceled && contains(event.getPosition()) && longPressAction != nullptr)
+            {
+                flashConfirmationOutline();
                 longPressAction();
+            }
 
             return;
         }
@@ -630,7 +594,7 @@ void BoxTextButton::mouseUp(const juce::MouseEvent& event)
             if (onClickWithModifiers && event.mods.isCtrlDown())
             {
                 if (onClickWithModifiers(event.mods))
-                    flashHostAssignmentOutline();
+                    flashConfirmationOutline();
 
                 return;
             }
@@ -696,9 +660,9 @@ void BoxTextButton::timerCallback()
 {
     stopTimer();
 
-    if (hostAssignmentFlashActive)
+    if (confirmationFlashActive)
     {
-        hostAssignmentFlashActive = false;
+        confirmationFlashActive = false;
         repaint();
         return;
     }

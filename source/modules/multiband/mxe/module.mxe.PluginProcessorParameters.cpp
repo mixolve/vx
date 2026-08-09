@@ -63,10 +63,10 @@ mxe::dsp::DspCore::Parameters MxeAudioProcessor::readBandParameters(const size_t
     };
 
     mxe::dsp::DspCore::Parameters parameters;
-    parameters.moRph = loadFloat(ParameterSlot::moRph);
-    parameters.peakHoldHz = loadFloat(ParameterSlot::peakHoldHz);
-    parameters.TensionFlooR = loadFloat(ParameterSlot::TensionFlooR);
-    parameters.TensionHysT = loadFloat(ParameterSlot::TensionHysT);
+    parameters.morph = loadFloat(ParameterSlot::morph);
+    parameters.peakHoldFrequency = loadFloat(ParameterSlot::peakHoldFrequency);
+    parameters.tensionFloor = loadFloat(ParameterSlot::tensionFloor);
+    parameters.tensionHysteresis = loadFloat(ParameterSlot::tensionHysteresis);
     parameters.thLU = loadFloat(ParameterSlot::thLU);
     parameters.tensLU = loadFloat(ParameterSlot::tensLU);
     parameters.relLU = loadFloat(ParameterSlot::relLU);
@@ -83,7 +83,7 @@ mxe::dsp::DspCore::Parameters MxeAudioProcessor::readBandParameters(const size_t
     parameters.tensRD = loadFloat(ParameterSlot::tensRD);
     parameters.relRD = loadFloat(ParameterSlot::relRD);
     parameters.outRD = loadFloat(ParameterSlot::outRD);
-    parameters.delTa = loadBool(ParameterSlot::delTa);
+    parameters.delta = loadBool(ParameterSlot::delta);
 
     return parameters;
 }

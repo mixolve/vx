@@ -1,13 +1,5 @@
 #include "module.eqe.ProcessorSupport.h"
 
-namespace
-{
-juce::String makeEqeFilterName(const int filterIndex, const juce::String& parameterName)
-{
-    return "FILTER " + juce::String(filterIndex + 1) + " - " + parameterName;
-}
-}
-
 juce::String formatDecibelValue(const float value)
 {
     return juce::String::formatted("%.2f dB", static_cast<double>(value));
@@ -21,16 +13,6 @@ juce::String formatFrequencyValue(const float value)
 juce::String formatBandwidthValue(const float value)
 {
     return juce::String::formatted("%.2f oct", static_cast<double>(value));
-}
-
-juce::String makeFilterTypeName(const int filterIndex)
-{
-    return makeEqeFilterName(filterIndex, "TYPE");
-}
-
-juce::String makeFilterPlaceName(const int filterIndex)
-{
-    return makeEqeFilterName(filterIndex, "PLACE");
 }
 
 juce::String makeFilterParameterId(const char* suffix, const int filterIndex)

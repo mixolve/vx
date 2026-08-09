@@ -31,21 +31,6 @@ void VxAudioProcessorEditor::setupShellControls()
     }, 500, "C");
     addAndMakeVisible(*globalBypassButton);
 
-    clearFiltersButton = std::make_unique<BoxTextButton>(uiAccent);
-    clearFiltersButton->setButtonText("DL");
-    clearFiltersButton->setTooltip("DELETE ALL FILTERS");
-    clearFiltersButton->setTextJustification(juce::Justification::centred);
-    clearFiltersButton->onClick = [this]
-    {
-        clearKeyboardFocus(*this);
-    };
-    clearFiltersButton->setLongPressAction([this]
-    {
-        clearAllFilters();
-        clearKeyboardFocus(*this);
-    }, 500, "SURE?");
-    addAndMakeVisible(*clearFiltersButton);
-
     undoButton = std::make_unique<BoxTextButton>(uiGrey500);
     undoButton->setButtonText("U");
     undoButton->setTooltip("UNDO");

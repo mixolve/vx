@@ -4,6 +4,8 @@
 #include "../modules/spe/module.spe.SpeProcessor.h"
 #include "../modules/multiband/tse/module.tse.TseProcessor.h"
 
+#include <optional>
+
 namespace
 {
 bool hasRestoredModuleProcessor(VxAudioProcessor& processor, const VxAudioProcessor::ActiveModule module) noexcept
@@ -49,28 +51,6 @@ void copyStateProperties(juce::ValueTree& target, const juce::ValueTree& source)
     }
 }
 
-void applyParameterValuesFromState(juce::AudioProcessorValueTreeState& targetParameters,
-                                   const juce::ValueTree& sourceState)
-{
-    for (const auto child : sourceState)
-    {
-        if (! child.hasType("PARAM"))
-            continue;
-
-        const auto parameterId = child.getProperty("id").toString().trim();
-        auto* parameter = targetParameters.getParameter(parameterId);
-
-        if (parameter == nullptr)
-            continue;
-
-        const auto& range = parameter->getNormalisableRange();
-        auto plainValue = static_cast<float>(static_cast<double>(child.getProperty("value",
-                                                                                   parameter->convertFrom0to1(parameter->getDefaultValue()))));
-        plainValue = range.snapToLegalValue(juce::jlimit(range.start, range.end, plainValue));
-        parameter->setValueNotifyingHost(parameter->convertTo0to1(plainValue));
-    }
-}
-
 struct RestoredModuleStateProperties
 {
     explicit RestoredModuleStateProperties(const juce::ValueTree& state)
@@ -88,6 +68,66 @@ struct RestoredModuleStateProperties
     juce::String mxeBase64;
     juce::String tseXml;
 };
+
+struct RestoredABCompareState
+{
+    explicit RestoredABCompareState(const juce::ValueTree& state)
+        : shouldRestore(state.hasProperty(VxAudioProcessor::abCompareSnapshotAStateKey)
+                        || state.hasProperty(VxAudioProcessor::abCompareSnapshotBStateKey)
+                        || state.hasProperty(VxAudioProcessor::abCompareActiveSlotStateKey)),
+          snapshotA(state.getProperty(VxAudioProcessor::abCompareSnapshotAStateKey).toString())
+    {
+    }
+
+    bool shouldRestore = false;
+    juce::String snapshotA;
+};
+
+void removeABCompareStateProperties(juce::ValueTree& state)
+{
+    state.removeProperty(VxAudioProcessor::abCompareSnapshotAStateKey, nullptr);
+    state.removeProperty(VxAudioProcessor::abCompareSnapshotBStateKey, nullptr);
+    state.removeProperty(VxAudioProcessor::abCompareActiveSlotStateKey, nullptr);
+}
+
+void restoreABCompareState(VxAudioProcessor& processor, const RestoredABCompareState& restoredState)
+{
+    if (! restoredState.shouldRestore)
+        return;
+
+    const auto restoreSnapshot = [&processor] (const int slot, const juce::String& encodedState)
+    {
+        juce::MemoryBlock snapshot;
+
+        if (! snapshot.fromBase64Encoding(encodedState))
+            snapshot.reset();
+
+        processor.setABCompareSnapshot(slot, snapshot);
+    };
+
+    restoreSnapshot(0, restoredState.snapshotA);
+    processor.setABCompareSnapshot(1, {});
+    processor.setABCompareActiveSlot(0);
+}
+
+void storeABCompareState(juce::ValueTree& state, const VxAudioProcessor& processor)
+{
+    const auto storeSnapshot = [&state, &processor] (const int slot, const juce::Identifier& property)
+    {
+        const auto snapshot = processor.getABCompareSnapshot(slot);
+
+        if (snapshot.isEmpty())
+            state.removeProperty(property, nullptr);
+        else
+            state.setProperty(property, snapshot.toBase64Encoding(), nullptr);
+    };
+
+    storeSnapshot(0, VxAudioProcessor::abCompareSnapshotAStateKey);
+    storeSnapshot(1, VxAudioProcessor::abCompareSnapshotBStateKey);
+    state.setProperty(VxAudioProcessor::abCompareActiveSlotStateKey,
+                      processor.getABCompareActiveSlot(),
+                      nullptr);
+}
 
 template <typename Processor>
 bool restoreBinaryModuleState(Processor* processor, const juce::String& stateBase64)
@@ -203,21 +243,6 @@ void storeXmlModuleState(juce::ValueTree& state,
         state.removeProperty(property, nullptr);
 }
 
-struct ScopedProcessingSuspend
-{
-    explicit ScopedProcessingSuspend(VxAudioProcessor& processorIn) noexcept
-        : processor(processorIn)
-    {
-        processor.suspendProcessing(true);
-    }
-
-    ~ScopedProcessingSuspend()
-    {
-        processor.suspendProcessing(false);
-    }
-
-    VxAudioProcessor& processor;
-};
 }
 
 void VxAudioProcessor::removeModuleStateProperties(juce::ValueTree& state)
@@ -232,17 +257,25 @@ void VxAudioProcessor::removeModuleStateProperties(juce::ValueTree& state)
 
 void VxAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
+    writeStateInformation(destData, true);
+}
+
+void VxAudioProcessor::getStateInformationForABCompareSnapshot(juce::MemoryBlock& destData)
+{
+    writeStateInformation(destData, false);
+}
+
+void VxAudioProcessor::writeStateInformation(juce::MemoryBlock& destData, const bool includeABCompareState)
+{
     const auto editorWidth = lastEditorWidth.load(std::memory_order_relaxed);
     const auto editorHeight = lastEditorHeight.load(std::memory_order_relaxed);
+    auto state = parameters.copyState();
 
     if (editorWidth > 0 && editorHeight > 0)
     {
-        parameters.state.setProperty(editorWidthStateKey, editorWidth, nullptr);
-        parameters.state.setProperty(editorHeightStateKey, editorHeight, nullptr);
+        state.setProperty(editorWidthStateKey, editorWidth, nullptr);
+        state.setProperty(editorHeightStateKey, editorHeight, nullptr);
     }
-
-    auto state = parameters.copyState();
-    removeUnknownParameterElements(state, parameters);
 
     const auto active = getActiveModule();
 
@@ -259,6 +292,11 @@ void VxAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
         storeBinaryModuleState(state, mxeModuleStateKey, getMxeModuleProcessor());
         storeXmlModuleState(state, tseModuleStateKey, getTseModuleProcessor());
     }
+
+    if (includeABCompareState)
+        storeABCompareState(state, *this);
+    else
+        removeABCompareStateProperties(state);
 
     if (auto stateXml = state.createXml())
         copyXmlToBinary(*stateXml, destData);
@@ -280,6 +318,8 @@ void VxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
             auto restoredState = juce::ValueTree::fromXml(*stateXml);
             const auto restoredActiveModule = moduleFromStateId(restoredState.getProperty(activeModuleStateKey).toString());
             const auto restoredModuleStates = RestoredModuleStateProperties(restoredState);
+            const auto restoredABCompareState = RestoredABCompareState(restoredState);
+            removeABCompareStateProperties(restoredState);
 
             if (restoredActiveModule == ActiveModule::none)
                 removeModuleStateProperties(restoredState);
@@ -296,6 +336,7 @@ void VxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 
             setActiveModule(hasRestoredModuleProcessor(*this, restoredActiveModule) ? restoredActiveModule : ActiveModule::none);
             registerActiveModuleStateListeners();
+            restoreABCompareState(*this, restoredABCompareState);
 
             updateShellLatency();
             setLastEditorSize(static_cast<int>(parameters.state.getProperty(editorWidthStateKey, 0)),
@@ -325,11 +366,13 @@ bool VxAudioProcessor::setStateInformationPreservingLoadedModule(const void* dat
         return false;
 
     const auto restoredModuleStates = RestoredModuleStateProperties(restoredState);
+    const auto restoredABCompareState = RestoredABCompareState(restoredState);
+    removeABCompareStateProperties(restoredState);
     const auto previousNotificationSuppression = suppressHostStateNotifications.exchange(true, std::memory_order_acq_rel);
-    std::unique_ptr<ScopedProcessingSuspend> suspendGuard;
+    std::optional<ScopedProcessingSuspend> suspendGuard;
 
     if (suspendProcessingForRestore)
-        suspendGuard = std::make_unique<ScopedProcessingSuspend>(*this);
+        suspendGuard.emplace(*this);
 
     const auto wasProcessingPrepared = suspendProcessingForRestore
         ? processingPrepared.exchange(false, std::memory_order_acq_rel)
@@ -349,6 +392,8 @@ bool VxAudioProcessor::setStateInformationPreservingLoadedModule(const void* dat
 
     if (restoredActiveModule != ActiveModule::none)
         registerActiveModuleStateListeners();
+
+    restoreABCompareState(*this, restoredABCompareState);
 
     updateShellLatency();
     setLastEditorSize(static_cast<int>(parameters.state.getProperty(editorWidthStateKey, 0)),
@@ -370,35 +415,46 @@ bool VxAudioProcessor::applyStateInformationForABCompare(const void* data, const
 
     auto restoredState = juce::ValueTree::fromXml(*stateXml);
     const auto restoredActiveModule = moduleFromStateId(restoredState.getProperty(activeModuleStateKey).toString());
-
-    if (restoredActiveModule != getActiveModule())
-        return false;
+    removeABCompareStateProperties(restoredState);
 
     const auto restoredModuleStates = RestoredModuleStateProperties(restoredState);
     const auto previousNotificationSuppression = suppressHostStateNotifications.exchange(true, std::memory_order_acq_rel);
+    const auto reportedLatencySamples = getLatencySamples();
+    const auto previousLatencyFloor = abCompareLatencyFloorSamples.load(std::memory_order_acquire);
+    abCompareLatencyFloorSamples.store(juce::jmax(previousLatencyFloor, reportedLatencySamples),
+                                       std::memory_order_release);
+    abCompareLatencyLocked.store(true, std::memory_order_release);
+    const juce::ScopedLock lock(processingLock);
 
     if (restoredActiveModule == ActiveModule::none)
         removeModuleStateProperties(restoredState);
     else
         restoredState.setProperty(activeModuleStateKey, stateIdForModule(restoredActiveModule), nullptr);
 
-    removeUnknownParameterElements(restoredState, parameters);
-    applyParameterValuesFromState(parameters, restoredState);
     copyStateProperties(parameters.state, restoredState);
+    clearActiveModuleStateListeners();
+    resetModuleProcessors();
+    setActiveModule(ActiveModule::none);
 
-    const auto restoredModuleState = restoreActiveModuleState(*this, restoredActiveModule, restoredModuleStates, true);
+    auto restoredModuleState = restoredActiveModule == ActiveModule::none;
 
-    if (! restoredModuleState)
+    if (restoredActiveModule != ActiveModule::none && createModuleInstance(restoredActiveModule))
     {
-        suppressHostStateNotifications.store(previousNotificationSuppression, std::memory_order_release);
-        return false;
+        restoredModuleState = restoreActiveModuleState(*this, restoredActiveModule, restoredModuleStates, true);
+
+        if (restoredModuleState)
+        {
+            setActiveModule(restoredActiveModule);
+            registerActiveModuleStateListeners();
+        }
     }
 
     updateShellLatency();
     setLastEditorSize(static_cast<int>(parameters.state.getProperty(editorWidthStateKey, 0)),
                       static_cast<int>(parameters.state.getProperty(editorHeightStateKey, 0)));
+
     suppressHostStateNotifications.store(previousNotificationSuppression, std::memory_order_release);
-    return true;
+    return restoredModuleState;
 }
 
 int VxAudioProcessor::getABCompareActiveSlot() const noexcept
@@ -458,6 +514,5 @@ void VxAudioProcessor::notifyHostOfStateChange()
         return;
 
     updateHostDisplay(juce::AudioProcessorListener::ChangeDetails()
-                          .withNonParameterStateChanged(true)
-                          .withProgramChanged(true));
+                          .withNonParameterStateChanged(true));
 }

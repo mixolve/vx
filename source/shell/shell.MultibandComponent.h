@@ -89,6 +89,8 @@ private:
 
     void loadUiState();
     void saveUiState();
+    bool restoreUiStateIfChanged();
+    juce::String getUiStateSignature() const;
     void selectBand(size_t bandIndex);
     void toggleManualSolo(size_t bandIndex);
     void setAllBandsMonitoring();
@@ -123,6 +125,8 @@ private:
     juce::Viewport pageViewport;
     bool uiStateLoaded = false;
     size_t visibleBandIndex = 0;
+    int restoredPageScrollY = 0;
+    juce::String uiStateSignature;
     std::array<bool, numBands> manualSoloMask {};
     bool allBandsActive = true;
     bool autoSoloEnabled = false;

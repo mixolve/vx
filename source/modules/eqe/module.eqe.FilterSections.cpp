@@ -164,40 +164,37 @@ void EqeModuleProcessor::PhaseFirFilter::processWithChannelMask(juce::AudioBuffe
 
     for (int sampleIndex = 0; sampleIndex < buffer.getNumSamples(); ++sampleIndex)
     {
+        if (--writeIndex < 0)
+            writeIndex = phaseFirSize - 1;
+
         for (int channel = 0; channel < channelLimit; ++channel)
         {
             auto& channelState = state[static_cast<size_t>(channel)];
-            channelState[static_cast<size_t>(writeIndex)] = buffer.getSample(channel, sampleIndex);
+            const auto input = buffer.getSample(channel, sampleIndex);
+            channelState[static_cast<size_t>(writeIndex)] = input;
+            channelState[static_cast<size_t>(writeIndex + phaseFirSize)] = input;
             const auto applyPhase = channelLimit < 2
                 || (channel == 0 ? processLeft : processRight);
 
             if (applyPhase)
             {
+                const auto* history = channelState.data() + writeIndex;
                 auto output = 0.0f;
-                auto readIndex = writeIndex;
 
-                for (int tapIndex = 0; tapIndex < phaseFirSize; ++tapIndex)
+                for (int tapIndex = 0; tapIndex < phaseFirSize; tapIndex += 4)
                 {
-                    output += taps[static_cast<size_t>(tapIndex)] * channelState[static_cast<size_t>(readIndex)];
-
-                    if (--readIndex < 0)
-                        readIndex = phaseFirSize - 1;
+                    output += (taps[static_cast<size_t>(tapIndex)] * history[tapIndex])
+                        + (taps[static_cast<size_t>(tapIndex + 1)] * history[tapIndex + 1])
+                        + (taps[static_cast<size_t>(tapIndex + 2)] * history[tapIndex + 2])
+                        + (taps[static_cast<size_t>(tapIndex + 3)] * history[tapIndex + 3]);
                 }
 
                 buffer.setSample(channel, sampleIndex, output);
             }
             else
             {
-                auto readIndex = writeIndex - phaseFirLatencySamples;
-
-                while (readIndex < 0)
-                    readIndex += phaseFirSize;
-
-                buffer.setSample(channel, sampleIndex, channelState[static_cast<size_t>(readIndex)]);
+                buffer.setSample(channel, sampleIndex, channelState[static_cast<size_t>(writeIndex + phaseFirLatencySamples)]);
             }
         }
-
-        if (++writeIndex >= phaseFirSize)
-            writeIndex = 0;
     }
 }

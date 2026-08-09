@@ -1,6 +1,5 @@
 #pragma once
 
-#include "module.mie.DspSupport.h"
 #include "../module.multiband.Processor.h"
 
 #include <JuceHeader.h>
@@ -10,6 +9,10 @@
 
 namespace mie::dsp
 {
+using vx::multiband::detail::dbToAmp;
+using vx::multiband::detail::roundToParameterStep;
+using vx::multiband::detail::wrapIndex;
+
 class DspCore
 {
 public:

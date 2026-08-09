@@ -192,15 +192,15 @@ void EqeModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
         if (bandBypassed)
             return;
 
-        const auto placeChoice = filterPlaceParams[bandArrayIndex] != nullptr
+        auto placeChoice = filterPlaceParams[bandArrayIndex] != nullptr
             ? juce::jlimit(0, 7, static_cast<int>(std::lround(filterPlaceParams[bandArrayIndex]->load(std::memory_order_relaxed))))
             : 0;
 
+        if (isVolumeFilterType(filterType) && isPhasePlaceChoice(placeChoice))
+            placeChoice = 0;
+
         if (isPhasePlaceChoice(placeChoice) && ! isCutFilterType(filterType))
         {
-            if (isVolumeFilterType(filterType))
-                return;
-
             if (filterType == FilterType::bell)
             {
                 if (filterSlopeChoiceParams[bandArrayIndex] != nullptr

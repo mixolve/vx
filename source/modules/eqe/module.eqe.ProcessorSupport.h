@@ -10,8 +10,9 @@ inline constexpr auto minimumBellBandwidth = 0.01f;
 inline constexpr auto maximumBellBandwidth = 8.0f;
 inline constexpr auto minimumVisibleFilterFrequency = 20.0f;
 inline constexpr auto maximumVisibleFilterFrequency = 30000.0f;
+inline constexpr auto maximumLowCutFrequency = 20000.0f;
 inline constexpr auto minimumDesignFilterFrequency = 2.0;
-inline constexpr auto highFrequencyExtensionStart = 16000.0;
+inline constexpr auto highFrequencyExtensionStart = 20000.0;
 inline constexpr auto lowFrequencyExtensionEnd = 25.0;
 inline constexpr auto defaultTiltFrequency = 632.0f;
 inline constexpr auto nyquistSafetyFactor = 0.98;
@@ -35,14 +36,12 @@ struct ShelfSlopeBlend
 };
 
 float defaultFilterFrequencyForType(EqeModuleProcessor::FilterType type);
-float defaultFilterBandwidthForType(EqeModuleProcessor::FilterType type);
-float defaultFilterSlopeForType(EqeModuleProcessor::FilterType type);
+float defaultFilterBandwidth();
+float defaultFilterSlope();
 
 juce::String formatDecibelValue(float value);
 juce::String formatFrequencyValue(float value);
 juce::String formatBandwidthValue(float value);
-juce::String makeFilterTypeName(int filterIndex);
-juce::String makeFilterPlaceName(int filterIndex);
 juce::String makeFilterParameterId(const char* suffix, int filterIndex);
 juce::StringArray getBellSlopeDisplayChoicesForType(EqeModuleProcessor::FilterType type) noexcept;
 int clampActiveFilterCount(int filterCount);
@@ -54,7 +53,7 @@ bool writeFilterPresetsXml(const juce::XmlElement& rootElement);
 juce::XmlElement* findPresetElement(juce::XmlElement& rootElement, const juce::String& presetName);
 std::unique_ptr<juce::XmlElement> createSerializableStateXml(juce::AudioProcessorValueTreeState& parameters,
                                                              int activeFilterCount);
-std::unique_ptr<juce::XmlElement> createSerializableStateXml(const EqeModuleProcessor& processor);
+std::unique_ptr<juce::XmlElement> createSerializableStateXml(EqeModuleProcessor& processor);
 juce::File getEqeAppGroupContainerDirectory();
 void syncEqePresetStorageWithSharedContainer();
 

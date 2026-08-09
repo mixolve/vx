@@ -18,6 +18,7 @@ struct VxAudioProcessorEditor::FilterSection
     bool isBandwidthInactiveAtCurrentSlope() const noexcept;
     bool isSlopeInactive() const noexcept;
     bool isGainInactive() const noexcept;
+    void updateFrequencyRangeForType();
     void setGainDisplaysDegrees(bool shouldDisplayDegrees);
     void updatePlaceChoicesForType(bool normalizeSelection);
 

@@ -6,13 +6,12 @@
 #include <cmath>
 #include <optional>
 
-MxeAudioProcessor::MxeAudioProcessor(juce::AudioProcessor& ownerProcessor)
+MxeAudioProcessor::MxeAudioProcessor()
     : juce::AudioProcessor(BusesProperties()
                                .withInput("Input", juce::AudioChannelSet::stereo(), true)
                                .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       valueTreeState(*this, &undoManager, "PARAMETERS", createParameterLayout())
 {
-    juce::ignoreUnused(ownerProcessor);
     cacheParameterPointers();
     registerParameterListeners();
 }
@@ -29,10 +28,6 @@ void MxeAudioProcessor::prepareToPlay(const double sampleRate, const int samples
     multibandProcessor.reset();
 }
 
-void MxeAudioProcessor::releaseResources()
-{
-}
-
 void MxeAudioProcessor::reset()
 {
     multibandProcessor.reset();
@@ -40,22 +35,14 @@ void MxeAudioProcessor::reset()
 
 bool MxeAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    const auto mainInput = layouts.getMainInputChannelSet();
-    const auto mainOutput = layouts.getMainOutputChannelSet();
-
-    if (mainInput != mainOutput)
-        return false;
-
-    return mainOutput == juce::AudioChannelSet::mono()
-        || mainOutput == juce::AudioChannelSet::stereo();
+    return vx::multiband::detail::supportsMatchingMonoOrStereoLayout(layouts);
 }
 
 void MxeAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    for (auto channel = getTotalNumInputChannels(); channel < getTotalNumOutputChannels(); ++channel)
-        buffer.clear(channel, 0, buffer.getNumSamples());
+    vx::multiband::detail::clearOutputOnlyChannels(*this, buffer);
 
     syncParameters();
 
@@ -242,10 +229,10 @@ void MxeAudioProcessor::setStateInformation(const void* data, const int sizeInBy
                         setBandSlotValue(targetBand, slot, sourceValue);
                 };
 
-                syncGlobalFromBand0(ParameterSlot::moRph);
-                syncGlobalFromBand0(ParameterSlot::peakHoldHz);
-                syncGlobalFromBand0(ParameterSlot::TensionFlooR);
-                syncGlobalFromBand0(ParameterSlot::TensionHysT);
+                syncGlobalFromBand0(ParameterSlot::morph);
+                syncGlobalFromBand0(ParameterSlot::peakHoldFrequency);
+                syncGlobalFromBand0(ParameterSlot::tensionFloor);
+                syncGlobalFromBand0(ParameterSlot::tensionHysteresis);
             }
 
             markParametersDirty();
@@ -499,10 +486,10 @@ void MxeAudioProcessor::parameterChanged(const juce::String& parameterID, float)
 
         const auto isGlobalMainSlot = [] (const ParameterSlot slotToCheck)
         {
-            return slotToCheck == ParameterSlot::moRph
-                || slotToCheck == ParameterSlot::peakHoldHz
-                || slotToCheck == ParameterSlot::TensionFlooR
-                || slotToCheck == ParameterSlot::TensionHysT;
+            return slotToCheck == ParameterSlot::morph
+                || slotToCheck == ParameterSlot::peakHoldFrequency
+                || slotToCheck == ParameterSlot::tensionFloor
+                || slotToCheck == ParameterSlot::tensionHysteresis;
         };
 
         if (isGlobalMainSlot(sourceSlot))

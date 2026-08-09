@@ -2,7 +2,7 @@
 
 #include "module.mie.ParameterIds.h"
 
-MieAudioProcessor::MieAudioProcessor(juce::AudioProcessor&)
+MieAudioProcessor::MieAudioProcessor()
     : juce::AudioProcessor(BusesProperties()
                                .withInput("Input", juce::AudioChannelSet::stereo(), true)
                                .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
@@ -24,10 +24,6 @@ void MieAudioProcessor::prepareToPlay(const double sampleRate, const int samples
     multibandProcessor.reset();
 }
 
-void MieAudioProcessor::releaseResources()
-{
-}
-
 void MieAudioProcessor::reset()
 {
     multibandProcessor.reset();
@@ -35,22 +31,14 @@ void MieAudioProcessor::reset()
 
 bool MieAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    const auto mainInput = layouts.getMainInputChannelSet();
-    const auto mainOutput = layouts.getMainOutputChannelSet();
-
-    if (mainInput != mainOutput)
-        return false;
-
-    return mainOutput == juce::AudioChannelSet::mono()
-        || mainOutput == juce::AudioChannelSet::stereo();
+    return vx::multiband::detail::supportsMatchingMonoOrStereoLayout(layouts);
 }
 
 void MieAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    for (auto channel = getTotalNumInputChannels(); channel < getTotalNumOutputChannels(); ++channel)
-        buffer.clear(channel, 0, buffer.getNumSamples());
+    vx::multiband::detail::clearOutputOnlyChannels(*this, buffer);
 
     syncParameters();
 

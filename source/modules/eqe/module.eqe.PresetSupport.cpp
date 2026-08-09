@@ -37,11 +37,6 @@ static juce::File getAppGroupPresetStorageDirectory()
     return directory;
 }
 
-static void deleteObsoleteSyncStateFile(const juce::File& directory)
-{
-    directory.getChildFile("sync-state").deleteFile();
-}
-
 #if ! VX_APP_EXTENSION
 static bool shouldCopyPresetFile(const juce::File& sourceFile, const juce::File& targetFile)
 {
@@ -92,9 +87,6 @@ static void mirrorDocumentsPresetsToAppGroup(const juce::File& documentsDirector
     if (! appGroupDirectory.isDirectory())
         return;
 
-    deleteObsoleteSyncStateFile(documentsDirectory);
-    deleteObsoleteSyncStateFile(appGroupDirectory);
-
     if (documentsDirectory.getFullPathName().equalsIgnoreCase(appGroupDirectory.getFullPathName()))
         return;
 
@@ -128,10 +120,6 @@ static juce::File getFilterPresetsDirectory()
     auto directory = getPresetStorageRootDirectory();
 
     directory.createDirectory();
-
-#if JUCE_IOS
-    deleteObsoleteSyncStateFile(directory);
-#endif
 
 #if JUCE_IOS && ! VX_APP_EXTENSION
     mirrorDocumentsPresetsToAppGroup(directory);
@@ -498,9 +486,9 @@ bool writeFilterPresetsXml(const juce::XmlElement& rootElement)
     return true;
 }
 
-std::unique_ptr<juce::XmlElement> createSerializableStateXml(const EqeModuleProcessor& processor)
+std::unique_ptr<juce::XmlElement> createSerializableStateXml(EqeModuleProcessor& processor)
 {
-    return createSerializableStateXml(const_cast<EqeModuleProcessor&>(processor).getValueTreeState(),
+    return createSerializableStateXml(processor.getValueTreeState(),
                                       processor.getActiveFilterCount());
 }
 

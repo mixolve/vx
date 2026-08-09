@@ -44,7 +44,7 @@ public:
     static int choiceIndexFromFilterType(FilterType type) noexcept;
     static void appendEqeParameters(std::vector<std::unique_ptr<juce::RangedAudioParameter>>& parameterLayout);
 
-    explicit EqeModuleProcessor(juce::AudioProcessor& ownerProcessor);
+    EqeModuleProcessor();
     ~EqeModuleProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock);
@@ -105,7 +105,7 @@ private:
     static constexpr size_t maxBellOrder = 128;
     static constexpr size_t maxShelfOrder = 128;
     static constexpr size_t maxBellFourthOrderSections = maxBellOrder;
-    static constexpr int phaseFirOrder = 10;
+    static constexpr int phaseFirOrder = 13;
     static constexpr int phaseFirSize = 1 << phaseFirOrder;
     static constexpr int phaseFirLatencySamples = phaseFirSize / 2;
 
@@ -160,7 +160,7 @@ private:
 
         bool active = false;
         std::array<float, phaseFirSize> taps {};
-        std::array<std::array<float, phaseFirSize>, maxSupportedChannels> state {};
+        std::array<std::array<float, phaseFirSize * 2>, maxSupportedChannels> state {};
         int writeIndex = 0;
     };
 

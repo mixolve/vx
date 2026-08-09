@@ -25,6 +25,7 @@ public:
     void clearOverrideText();
     void setInteractionEnabled(bool shouldEnable);
     void setValueClickAction(std::function<void()> action);
+    void setValueRange(double minimum, double maximum, double interval);
     void setTitleWidthOverride(int width) noexcept;
     void setTitleText(const juce::String& text);
     void setValueTextTransform(std::function<juce::String(double)> displayFormatter,

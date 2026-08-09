@@ -1,6 +1,6 @@
 [all-in-web](https://mixolve.cc/)
 
-VIBECODED. V:06
+VIBECODED. V:07
 
 ctrl + click on label sends parameters to the "H" list which reports automation to the host application.
 

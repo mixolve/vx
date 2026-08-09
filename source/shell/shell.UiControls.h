@@ -67,7 +67,6 @@ public:
     void setHighlightColour(juce::Colour colour);
     void setPromptActive(bool shouldBeActive);
     void setCustomPromptAction(std::function<void()> action);
-    void setScrollGesturesPassThrough(bool shouldPassThrough);
 
     void paint(juce::Graphics& g) override;
     void resized() override;
@@ -94,7 +93,6 @@ private:
     juce::Slider& slider;
     bool isTrackingGlobalClicks = false;
     bool interactionEnabled = true;
-    bool scrollGesturesPassThrough = true;
     bool pointerDown = false;
     bool dragDetected = false;
     bool pressHighlight = false;
@@ -133,8 +131,6 @@ public:
     void setCancelClickOnLeave(bool shouldEnable) noexcept;
     void setTextColourOverride(juce::Colour colour);
     void clearTextColourOverride();
-    void setLeadingDot(juce::Colour colour, float level);
-    void setLeadingDotLevel(float level);
     void setLongPressAction(std::function<void()> action, int delayMs = 500, juce::String promptText = "RESET?");
 
     void paintButton(juce::Graphics& graphics, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
@@ -171,10 +167,7 @@ private:
     int abCompareHighlightIndex = -1;
     bool hasTextColourOverride = false;
     juce::Colour textColourOverride;
-    bool hostAssignmentFlashActive = false;
-    bool leadingDotVisible = false;
-    juce::Colour leadingDotColour;
-    float leadingDotLevel = 0.0f;
+    bool confirmationFlashActive = false;
     std::function<void()> longPressAction;
     int longPressDelayMs = 500;
     bool longPressEligible = false;
@@ -182,6 +175,6 @@ private:
     juce::String longPressOriginalText;
     juce::String longPressPromptText = "RESET?";
 
-    void flashHostAssignmentOutline();
+    void flashConfirmationOutline();
     void timerCallback() override;
 };

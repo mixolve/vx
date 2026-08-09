@@ -17,6 +17,7 @@ class ParameterControl;
 namespace shell_parameter_focus
 {
 void clearFocus() noexcept;
+void clearFocus(juce::Component& owner) noexcept;
 }
 
 class ParameterFocusClearingComponent : public juce::Component
@@ -24,7 +25,7 @@ class ParameterFocusClearingComponent : public juce::Component
 public:
     void mouseDown(const juce::MouseEvent&) override
     {
-        shell_parameter_focus::clearFocus();
+        shell_parameter_focus::clearFocus(*this);
     }
 };
 
@@ -255,7 +256,6 @@ private:
     std::unique_ptr<LocalParameterControl> speAnalyserTimeControl;
     std::unique_ptr<BoxTextButton> globalBypassButton;
     std::unique_ptr<ButtonAttachment> globalBypassAttachment;
-    std::unique_ptr<BoxTextButton> clearFiltersButton;
     std::unique_ptr<BoxTextButton> undoButton;
     std::unique_ptr<BoxTextButton> redoButton;
     std::unique_ptr<BoxTextButton> abCompareButton;
@@ -291,6 +291,7 @@ private:
     bool suppressSpeAnalyserControlChangeHandlers = false;
     bool suppressFocusedParameterControlChangeHandlers = false;
     bool suppressHostSlotAutomationSync = false;
+    bool suppressProcessorStateResync = false;
     bool suppressEditorSizeStateSave = true;
     bool suppressHistorySnapshots = false;
     bool shellStateListenerRegistered = false;

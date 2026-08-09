@@ -6,12 +6,38 @@
 namespace
 {
 const juce::Colour parameterTitleFocusColour { 0xFF99CC99 };
+juce::Component::SafePointer<VxAudioProcessorEditor> focusedParameterOwner;
 BoxTextButton* focusedParameterTitleButton = nullptr;
 juce::Slider* focusedParameterValueSlider = nullptr;
 
+VxAudioProcessorEditor* findFocusOwner(juce::Component* component) noexcept
+{
+    if (component == nullptr)
+        return nullptr;
+
+    if (auto* editor = dynamic_cast<VxAudioProcessorEditor*>(component))
+        return editor;
+
+    return component->findParentComponentOfClass<VxAudioProcessorEditor>();
+}
+
+bool focusBelongsTo(juce::Component& owner) noexcept
+{
+    return focusedParameterOwner.getComponent() != nullptr
+        && focusedParameterOwner.getComponent() == findFocusOwner(&owner);
+}
+
 void focusParameterTitleButton(BoxTextButton* button, juce::Slider* valueSlider)
 {
+    auto* owner = findFocusOwner(button);
+
     if (button == nullptr || valueSlider == nullptr)
+    {
+        shell_parameter_focus::clearFocus();
+        return;
+    }
+
+    if (owner == nullptr)
     {
         shell_parameter_focus::clearFocus();
         return;
@@ -20,6 +46,7 @@ void focusParameterTitleButton(BoxTextButton* button, juce::Slider* valueSlider)
     if (focusedParameterTitleButton != nullptr && focusedParameterTitleButton != button)
         focusedParameterTitleButton->setAlwaysAccentOutline(false);
 
+    focusedParameterOwner = owner;
     focusedParameterTitleButton = button;
     focusedParameterValueSlider = valueSlider;
     focusedParameterTitleButton->setAlwaysAccentOutline(true);
@@ -43,6 +70,7 @@ void clearFocusedParameterTitleButton(BoxTextButton* button, juce::Slider* value
 
     focusedParameterTitleButton->setAlwaysAccentOutline(false);
     focusedParameterTitleButton = nullptr;
+    focusedParameterOwner = nullptr;
     focusedParameterValueSlider = nullptr;
 }
 
@@ -73,9 +101,9 @@ bool assignParameterTitleToHostSlot(juce::Component& source,
 }
 }
 
-juce::Slider* shell_parameter_focus::getFocusedValueSlider() noexcept
+juce::Slider* shell_parameter_focus::getFocusedValueSlider(juce::Component& owner) noexcept
 {
-    return focusedParameterValueSlider;
+    return focusBelongsTo(owner) ? focusedParameterValueSlider : nullptr;
 }
 
 void shell_parameter_focus::clearFocus() noexcept
@@ -84,11 +112,21 @@ void shell_parameter_focus::clearFocus() noexcept
         focusedParameterTitleButton->setAlwaysAccentOutline(false);
 
     focusedParameterTitleButton = nullptr;
+    focusedParameterOwner = nullptr;
     focusedParameterValueSlider = nullptr;
 }
 
-void shell_parameter_focus::clearFocusIfNotShowing() noexcept
+void shell_parameter_focus::clearFocus(juce::Component& owner) noexcept
 {
+    if (focusBelongsTo(owner))
+        clearFocus();
+}
+
+void shell_parameter_focus::clearFocusIfNotShowing(juce::Component& owner) noexcept
+{
+    if (! focusBelongsTo(owner))
+        return;
+
     if (focusedParameterTitleButton == nullptr && focusedParameterValueSlider == nullptr)
         return;
 
@@ -136,7 +174,7 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
 
         if (valueClickAction != nullptr)
         {
-            shell_parameter_focus::clearFocus();
+            shell_parameter_focus::clearFocus(*this);
             clearKeyboardFocus(*this);
             return;
         }
@@ -144,7 +182,7 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
         if (interactionEnabled && canUseFocusedPotentiometer(parameter, valueClickAction))
             focusParameterTitleButton(titleButton.get(), &slider);
         else
-            shell_parameter_focus::clearFocus();
+            shell_parameter_focus::clearFocus(*this);
 
         clearKeyboardFocus(*this);
     };
@@ -353,6 +391,18 @@ void ParameterControl::setValueClickAction(std::function<void()> action)
 
     if (titleButton != nullptr)
         titleButton->setPressFillEnabled(interactionEnabled && canUseFocusedPotentiometer(parameter, valueClickAction));
+}
+
+void ParameterControl::setValueRange(const double minimum, const double maximum, const double interval)
+{
+    if (std::abs(slider.getMinimum() - minimum) <= 1.0e-9
+        && std::abs(slider.getMaximum() - maximum) <= 1.0e-9
+        && std::abs(slider.getInterval() - interval) <= 1.0e-9)
+    {
+        return;
+    }
+
+    slider.setRange(minimum, maximum, interval);
 }
 
 void ParameterControl::setTitleWidthOverride(const int width) noexcept
@@ -820,7 +870,7 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
 
         if (valueClickAction != nullptr)
         {
-            shell_parameter_focus::clearFocus();
+            shell_parameter_focus::clearFocus(*this);
             valueClickAction();
             clearKeyboardFocus(*this);
             return;
@@ -829,7 +879,7 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
         if (interactionEnabled && valueClickAction == nullptr)
             focusParameterTitleButton(titleButton.get(), &slider);
         else
-            shell_parameter_focus::clearFocus();
+            shell_parameter_focus::clearFocus(*this);
 
         clearKeyboardFocus(*this);
     };
@@ -1003,12 +1053,6 @@ void LocalParameterControl::setValueClickAction(std::function<void()> action)
 juce::Rectangle<int> LocalParameterControl::getValueBounds() const noexcept
 {
     return valueBox != nullptr ? valueBox->getBounds() : juce::Rectangle<int>();
-}
-
-void LocalParameterControl::setTitleBorderVisible(const bool shouldShow)
-{
-    if (titleButton != nullptr)
-        titleButton->setBorderVisible(shouldShow);
 }
 
 void LocalParameterControl::setTitleMouseEnabled(const bool shouldEnable)

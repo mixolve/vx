@@ -131,6 +131,17 @@ struct FilterSortKey
     double frequency = 0.0;
 };
 
+int sortPlaceFor(const int place) noexcept
+{
+    switch (juce::jlimit(0, 7, place))
+    {
+        case 5: return 0; // PHS -> LR
+        case 6: return 1; // PHL -> LL
+        case 7: return 2; // PHR -> RR
+        default: return juce::jlimit(0, 4, place);
+    }
+}
+
 }
 
 void VxAudioProcessorEditor::sortFilterSectionsByPlace()
@@ -152,7 +163,7 @@ void VxAudioProcessorEditor::sortFilterSectionsByPlace()
 
         const auto sortFrequency = section->getFilterType() == EqeModuleProcessor::FilterType::volume ? 0.0
                                                                                                       : section->getFrequency();
-        sortKeys.push_back({ filterIndex, juce::jlimit(0, 7, section->getPlace()), sortFrequency });
+        sortKeys.push_back({ filterIndex, sortPlaceFor(section->getPlace()), sortFrequency });
     }
 
     std::stable_sort(sortKeys.begin(),
@@ -190,7 +201,7 @@ void VxAudioProcessorEditor::sortFilterSectionsByFrequency()
 
         const auto sortFrequency = section->getFilterType() == EqeModuleProcessor::FilterType::volume ? 0.0
                                                                                                       : section->getFrequency();
-        sortKeys.push_back({ filterIndex, juce::jlimit(0, 7, section->getPlace()), sortFrequency });
+        sortKeys.push_back({ filterIndex, sortPlaceFor(section->getPlace()), sortFrequency });
     }
 
     std::stable_sort(sortKeys.begin(),
@@ -228,7 +239,7 @@ void VxAudioProcessorEditor::sortFilterSectionsByDuo()
 
         const auto sortFrequency = section->getFilterType() == EqeModuleProcessor::FilterType::volume ? 0.0
                                                                                                       : section->getFrequency();
-        sortKeys.push_back({ filterIndex, juce::jlimit(0, 7, section->getPlace()), sortFrequency });
+        sortKeys.push_back({ filterIndex, sortPlaceFor(section->getPlace()), sortFrequency });
     }
 
     std::stable_sort(sortKeys.begin(),

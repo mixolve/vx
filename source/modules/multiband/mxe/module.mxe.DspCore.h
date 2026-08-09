@@ -1,6 +1,5 @@
 #pragma once
 
-#include "module.mxe.DspSupport.h"
 #include "../module.multiband.Processor.h"
 
 #include <JuceHeader.h>
@@ -10,6 +9,11 @@
 
 namespace mxe::dsp
 {
+using vx::multiband::detail::dbToAmp;
+using vx::multiband::detail::epsilon;
+using vx::multiband::detail::roundToParameterStep;
+using vx::multiband::detail::wrapIndex;
+
 class DspCore
 {
 public:
@@ -37,11 +41,11 @@ public:
         float tensRD = 0.0f;
         float relRD = 0.0f;
         float outRD = 0.0f;
-        float moRph = 0.0f;
-        float peakHoldHz = 100.0f;
-        float TensionFlooR = -96.0f;
-        float TensionHysT = 0.0f;
-        bool delTa = false;
+        float morph = 0.0f;
+        float peakHoldFrequency = 100.0f;
+        float tensionFloor = -96.0f;
+        float tensionHysteresis = 0.0f;
+        bool delta = false;
     };
 
     void prepare(double sampleRate, int maxBlockSize, int numChannels);

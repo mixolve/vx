@@ -50,39 +50,39 @@ void DspCore::updateDerivedParameters()
 {
     const auto sampleRate = std::max(1.0, currentSampleRate);
 
-    derived.thresholds[branchLu] = dbToAmp(roundToJsfxStep(parameters.thLU));
-    derived.thresholds[branchLd] = dbToAmp(roundToJsfxStep(parameters.thLD));
-    derived.thresholds[branchRu] = dbToAmp(roundToJsfxStep(parameters.thRU));
-    derived.thresholds[branchRd] = dbToAmp(roundToJsfxStep(parameters.thRD));
+    derived.thresholds[branchLu] = dbToAmp(roundToParameterStep(parameters.thLU));
+    derived.thresholds[branchLd] = dbToAmp(roundToParameterStep(parameters.thLD));
+    derived.thresholds[branchRu] = dbToAmp(roundToParameterStep(parameters.thRU));
+    derived.thresholds[branchRd] = dbToAmp(roundToParameterStep(parameters.thRD));
 
-    derived.tensions[branchLu] = roundToJsfxStep(parameters.tensLU);
-    derived.tensions[branchLd] = roundToJsfxStep(parameters.tensLD);
-    derived.tensions[branchRu] = roundToJsfxStep(parameters.tensRU);
-    derived.tensions[branchRd] = roundToJsfxStep(parameters.tensRD);
+    derived.tensions[branchLu] = roundToParameterStep(parameters.tensLU);
+    derived.tensions[branchLd] = roundToParameterStep(parameters.tensLD);
+    derived.tensions[branchRu] = roundToParameterStep(parameters.tensRU);
+    derived.tensions[branchRd] = roundToParameterStep(parameters.tensRD);
 
-    const auto relLuMs = roundToJsfxStep(parameters.relLU);
-    const auto relLdMs = roundToJsfxStep(parameters.relLD);
-    const auto relRuMs = roundToJsfxStep(parameters.relRU);
-    const auto relRdMs = roundToJsfxStep(parameters.relRD);
+    const auto relLuMs = roundToParameterStep(parameters.relLU);
+    const auto relLdMs = roundToParameterStep(parameters.relLD);
+    const auto relRuMs = roundToParameterStep(parameters.relRU);
+    const auto relRdMs = roundToParameterStep(parameters.relRD);
     derived.releaseCoeffs[branchLu] = relLuMs <= 0.0 ? 0.0 : std::exp(-1.0 / std::max(1.0, relLuMs * 0.001 * sampleRate));
     derived.releaseCoeffs[branchLd] = relLdMs <= 0.0 ? 0.0 : std::exp(-1.0 / std::max(1.0, relLdMs * 0.001 * sampleRate));
     derived.releaseCoeffs[branchRu] = relRuMs <= 0.0 ? 0.0 : std::exp(-1.0 / std::max(1.0, relRuMs * 0.001 * sampleRate));
     derived.releaseCoeffs[branchRd] = relRdMs <= 0.0 ? 0.0 : std::exp(-1.0 / std::max(1.0, relRdMs * 0.001 * sampleRate));
 
-    derived.branchOutGains[branchLu] = dbToAmp(roundToJsfxStep(parameters.outLU));
-    derived.branchOutGains[branchLd] = dbToAmp(roundToJsfxStep(parameters.outLD));
-    derived.branchOutGains[branchRu] = dbToAmp(roundToJsfxStep(parameters.outRU));
-    derived.branchOutGains[branchRd] = dbToAmp(roundToJsfxStep(parameters.outRD));
+    derived.branchOutGains[branchLu] = dbToAmp(roundToParameterStep(parameters.outLU));
+    derived.branchOutGains[branchLd] = dbToAmp(roundToParameterStep(parameters.outLD));
+    derived.branchOutGains[branchRu] = dbToAmp(roundToParameterStep(parameters.outRU));
+    derived.branchOutGains[branchRd] = dbToAmp(roundToParameterStep(parameters.outRD));
 
-    derived.morph = roundToJsfxStep(parameters.moRph) * 0.01;
+    derived.morph = roundToParameterStep(parameters.morph) * 0.01;
     derived.clipKneeDb = kneeRangeDb * derived.morph;
 
-    auto holdHz = roundToJsfxStep(parameters.peakHoldHz);
+    auto holdHz = roundToParameterStep(parameters.peakHoldFrequency);
     holdHz = std::max(21.0, holdHz);
 
-    derived.tensionFloor = dbToAmp(roundToJsfxStep(parameters.TensionFlooR));
-    derived.tensionHysteresis = roundToJsfxStep(parameters.TensionHysT) * 0.01;
-    derived.delta = parameters.delTa;
+    derived.tensionFloor = dbToAmp(roundToParameterStep(parameters.tensionFloor));
+    derived.tensionHysteresis = roundToParameterStep(parameters.tensionHysteresis) * 0.01;
+    derived.delta = parameters.delta;
 
     const auto holdTotalMs = 500.0 / holdHz;
     auto holdSamples = static_cast<int>(std::floor(holdTotalMs * 0.001 * sampleRate));

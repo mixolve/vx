@@ -20,13 +20,15 @@ public:
 
     inline static constexpr auto paramGlobalBypassId = "global_bypass";
     inline static constexpr auto paramHostSlotPrefix = "host_slot_";
-    inline static constexpr float fixedSlopeDbPerOct = EqeModuleProcessor::fixedSlopeDbPerOct;
     inline static constexpr auto activeModuleStateKey = "vx.active_module";
     inline static constexpr auto eqeModuleStateKey = "vx.eqe_state";
     inline static constexpr auto speModuleStateKey = "vx.spe_state";
     inline static constexpr auto mieModuleStateKey = "vx.mie_state";
     inline static constexpr auto mxeModuleStateKey = "vx.mxe_state";
     inline static constexpr auto tseModuleStateKey = "vx.tse_state";
+    inline static constexpr auto abCompareSnapshotAStateKey = "vx.ab_compare.a";
+    inline static constexpr auto abCompareSnapshotBStateKey = "vx.ab_compare.b";
+    inline static constexpr auto abCompareActiveSlotStateKey = "vx.ab_compare.active";
     inline static constexpr auto eqeModuleId = "eqe";
     inline static constexpr auto speModuleId = "spe";
     inline static constexpr auto mieModuleId = "mie";
@@ -84,6 +86,7 @@ public:
     void changeProgramName(int index, const juce::String& newName) override;
 
     void getStateInformation(juce::MemoryBlock& destData) override;
+    void getStateInformationForABCompareSnapshot(juce::MemoryBlock& destData);
     void setStateInformation(const void* data, int sizeInBytes) override;
     bool setStateInformationPreservingLoadedModule(const void* data,
                                                    int sizeInBytes,
@@ -100,7 +103,6 @@ public:
     const juce::AudioProcessorValueTreeState& getValueTreeState() const noexcept;
     static juce::String getHostSlotParameterId(int slotIndex);
     static juce::String getHostSlotLetterLabel(int slotIndex);
-    static juce::String getHostSlotParameterName(int slotIndex);
     static const char* stateIdForModule(ActiveModule module) noexcept;
     ActiveModule getActiveModule() const noexcept;
     void setActiveModule(ActiveModule module);
@@ -125,6 +127,24 @@ public:
         return globalClipIndicator.load(std::memory_order_relaxed);
     }
 private:
+    class ScopedProcessingSuspend
+    {
+    public:
+        explicit ScopedProcessingSuspend(VxAudioProcessor& processorIn) noexcept
+            : processor(processorIn)
+        {
+            processor.suspendProcessing(true);
+        }
+
+        ~ScopedProcessingSuspend()
+        {
+            processor.suspendProcessing(false);
+        }
+
+    private:
+        VxAudioProcessor& processor;
+    };
+
     static constexpr size_t maxSupportedChannels = 2;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
@@ -136,6 +156,7 @@ private:
     void restoreLoadedModuleFromStateText(const juce::String& text, bool publishActiveModule = true);
     void registerActiveModuleStateListeners();
     void clearActiveModuleStateListeners();
+    void writeStateInformation(juce::MemoryBlock& destData, bool includeABCompareState);
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     void valueTreePropertyChanged(juce::ValueTree& treeWhosePropertyHasChanged,
                                   const juce::Identifier& property) override;
@@ -161,6 +182,8 @@ private:
     std::array<juce::MemoryBlock, 2> abCompareSnapshots;
     std::array<bool, 2> abCompareSnapshotValid {};
     std::atomic<int> abCompareActiveSlot { 0 };
+    std::atomic<bool> abCompareLatencyLocked { false };
+    std::atomic<int> abCompareLatencyFloorSamples { 0 };
     int preparedNumChannels = 2;
     int lastProcessedBlockSize = 0;
     double currentSampleRate = 0.0;

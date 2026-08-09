@@ -12,11 +12,11 @@ class MxeAudioProcessor final : public juce::AudioProcessor,
                                 private juce::AudioProcessorValueTreeState::Listener
 {
 public:
-    explicit MxeAudioProcessor(juce::AudioProcessor& ownerProcessor);
+    MxeAudioProcessor();
     ~MxeAudioProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override;
+    void releaseResources() override {}
     void reset() override;
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;

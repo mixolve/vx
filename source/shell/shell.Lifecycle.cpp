@@ -84,6 +84,9 @@ void VxAudioProcessorEditor::timerCallback()
     if (auto* mxeEditor = dynamic_cast<MultibandModuleComponent*>(mxeModuleEditor.get()))
         mxeEditor->refreshExternalState();
 
+    if (auto* tseEditor = dynamic_cast<MultibandModuleComponent*>(tseModuleEditor.get()))
+        tseEditor->refreshExternalState();
+
     refreshSpeAnalyserResponse();
 }
 
@@ -108,9 +111,9 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
     if (focusedParameterControl == nullptr)
         return;
 
-    shell_parameter_focus::clearFocusIfNotShowing();
+    shell_parameter_focus::clearFocusIfNotShowing(*this);
 
-    auto* nextTarget = shell_parameter_focus::getFocusedValueSlider();
+    auto* nextTarget = shell_parameter_focus::getFocusedValueSlider(*this);
 
     if (nextTarget != focusedParameterTargetSlider)
     {
@@ -161,7 +164,7 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
 void VxAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
 {
     juce::ignoreUnused(event);
-    shell_parameter_focus::clearFocus();
+    shell_parameter_focus::clearFocus(*this);
     clearKeyboardFocus(*this);
 }
 
@@ -169,7 +172,7 @@ void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const
 {
     const auto clearFocusedParameterForViewportScroll = [this]
     {
-        shell_parameter_focus::clearFocus();
+        shell_parameter_focus::clearFocus(*this);
         syncFocusedParameterControl();
     };
 

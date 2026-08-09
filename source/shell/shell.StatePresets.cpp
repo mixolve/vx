@@ -127,8 +127,8 @@ void VxAudioProcessorEditor::reloadFilterPresetFromProcessor()
         {
             section->setStoredValues(filterType,
                                      defaultFilterFrequencyForType(filterType),
-                                     defaultFilterBandwidthForType(filterType),
-                                     defaultFilterSlopeForType(filterType),
+                                     defaultFilterBandwidth(),
+                                     defaultFilterSlope(),
                                      0,
                                      false);
         }

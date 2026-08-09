@@ -48,18 +48,6 @@ void setParameterValue(juce::AudioProcessorValueTreeState& state,
     parameter->endChangeGesture();
 }
 
-void setParameterValueFast(juce::AudioProcessorValueTreeState& state,
-                           const juce::String& parameterId,
-                           const float value)
-{
-    auto* parameter = state.getParameter(parameterId);
-
-    if (parameter == nullptr)
-        return;
-
-    parameter->setValueNotifyingHost(parameter->convertTo0to1(value));
-}
-
 float readParameterValue(juce::AudioProcessorValueTreeState& state, const juce::String& parameterId)
 {
     if (auto* parameter = state.getParameter(parameterId))
@@ -105,8 +93,8 @@ FilterParameterValues makeDefaultFilterParameterValues(const EqeModuleProcessor:
         static_cast<float>(EqeModuleProcessor::choiceIndexFromFilterType(type)),
         0.0f,
         defaultFilterFrequencyForType(type),
-        defaultFilterBandwidthForType(type),
-        static_cast<float>(EqeModuleProcessor::getBellSlopeChoiceIndexForValue(defaultFilterSlopeForType(type))),
+        defaultFilterBandwidth(),
+        static_cast<float>(EqeModuleProcessor::getBellSlopeChoiceIndexForValue(defaultFilterSlope())),
         0.0f,
         0.0f
     };
@@ -249,7 +237,7 @@ void applyParameterValuesFromStateElement(juce::AudioProcessorValueTreeState& pa
         auto plainValue = static_cast<float>(child->getDoubleAttribute("value",
                                                                        parameter->convertFrom0to1(parameter->getDefaultValue())));
         plainValue = range.snapToLegalValue(juce::jlimit(range.start, range.end, plainValue));
-        setParameterValueFast(parameters, parameterId, plainValue);
+        parameter->setValue(parameter->convertTo0to1(plainValue));
     }
 }
 
@@ -432,10 +420,9 @@ void normalizeRestoredStateElement(juce::XmlElement& stateElement,
 }
 }
 
-EqeModuleProcessor::EqeModuleProcessor(juce::AudioProcessor& ownerProcessor)
+EqeModuleProcessor::EqeModuleProcessor()
     : parameters(internalParameterHost, nullptr, "eqe_state", createParameterLayout())
 {
-    juce::ignoreUnused(ownerProcessor);
     for (int filterIndex = 0; filterIndex < maxFilterCount; ++filterIndex)
     {
         filterTypeParams[static_cast<size_t>(filterIndex)] = parameters.getRawParameterValue(getFilterTypeParamId(filterIndex));

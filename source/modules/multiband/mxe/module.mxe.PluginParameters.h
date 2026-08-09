@@ -15,10 +15,10 @@ enum class ParameterType
 
 enum class ParameterSlot : size_t
 {
-    moRph,
-    peakHoldHz,
-    TensionFlooR,
-    TensionHysT,
+    morph,
+    peakHoldFrequency,
+    tensionFloor,
+    tensionHysteresis,
     linkUpDn,
     linkLr,
     linkOpp,
@@ -38,7 +38,7 @@ enum class ParameterSlot : size_t
     tensRD,
     relRD,
     outRD,
-    delTa,
+    delta,
     count
 };
 
@@ -68,10 +68,10 @@ struct ParameterSpec
 };
 
 inline constexpr auto parameterSpecs = std::to_array<ParameterSpec>({
-    { "moRph", "Morph", ParameterType::floating, 0.0f, 100.0f, 0.1f, 0.0f, "%" },
-    { "peakHoldHz", "Peak Hold", ParameterType::floating, 21.0f, 3675.1f, 0.1f, 100.0f, "Hz" },
-    { "TensionFlooR", "Tension Floor", ParameterType::floating, -96.0f, 0.0f, 0.1f, -96.0f, "dB" },
-    { "TensionHysT", "Tension Hysteresis", ParameterType::floating, 0.0f, 100.0f, 0.1f, 0.0f, "%" },
+    { "morph", "Morph", ParameterType::floating, 0.0f, 100.0f, 0.1f, 0.0f, "%" },
+    { "peak_hold_frequency", "Peak Hold", ParameterType::floating, 21.0f, 3675.1f, 0.1f, 100.0f, "Hz" },
+    { "tension_floor", "Tension Floor", ParameterType::floating, -96.0f, 0.0f, 0.1f, -96.0f, "dB" },
+    { "tension_hysteresis", "Tension Hysteresis", ParameterType::floating, 0.0f, 100.0f, 0.1f, 0.0f, "%" },
     { "linkUpDn", "Link UP/DN (Dual-Mono)", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
     { "linkLr", "Link L/R (Stereo)", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 1.0f, "" },
     { "linkOpp", "Link Opp", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 1.0f, "" },
@@ -91,7 +91,7 @@ inline constexpr auto parameterSpecs = std::to_array<ParameterSpec>({
     { "tensRD", "R.DN.TENS", ParameterType::floating, -100.0f, 100.0f, 0.1f, 0.0f, "%" },
     { "relRD", "R.DN.REL", ParameterType::floating, 0.0f, 1000.0f, 0.1f, 10.0f, "ms" },
     { "outRD", "R.DN.OUT", ParameterType::floating, -48.0f, 48.0f, 0.1f, 0.0f, "dB" },
-    { "delTa", "Delta", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "delta", "Delta", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
 });
 
 inline constexpr auto crossoverSpecs = std::to_array<ParameterSpec>({

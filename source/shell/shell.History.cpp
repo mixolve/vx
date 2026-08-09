@@ -109,7 +109,8 @@ void VxAudioProcessorEditor::valueTreePropertyChanged(juce::ValueTree& treeWhose
                                                        const juce::Identifier& property)
 {
     if (treeWhosePropertyHasChanged == valueTreeState.state
-        && property == juce::Identifier(VxAudioProcessor::activeModuleStateKey))
+        && property == juce::Identifier(VxAudioProcessor::activeModuleStateKey)
+        && ! suppressProcessorStateResync)
         resyncEditorFromProcessorState();
 
     scheduleHistorySnapshot();
@@ -328,7 +329,7 @@ void VxAudioProcessorEditor::commitPendingHistorySnapshot(const bool force)
         return;
 
     juce::MemoryBlock snapshot;
-    audioProcessor.getStateInformation(snapshot);
+    audioProcessor.getStateInformationForABCompareSnapshot(snapshot);
     pendingHistorySnapshot.store(false, std::memory_order_relaxed);
 
     if (snapshot == committedHistorySnapshot)
@@ -381,6 +382,7 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
     const auto preservedBypassValue = bypassParameter != nullptr ? bypassParameter->getValue() : 0.0f;
 
     const juce::ScopedValueSetter<bool> suppressHistory(suppressHistorySnapshots, true);
+    const juce::ScopedValueSetter<bool> suppressHostSlotSync(suppressHostSlotAutomationSync, true);
     pendingHistorySnapshot.store(false, std::memory_order_relaxed);
     detachModuleEditorBindings();
     if (! audioProcessor.setStateInformationPreservingLoadedModule(mergedSnapshot.getData(),
@@ -436,7 +438,7 @@ void VxAudioProcessorEditor::captureCurrentABState()
     const auto activeSlot = audioProcessor.getABCompareActiveSlot();
 
     juce::MemoryBlock snapshot;
-    audioProcessor.getStateInformation(snapshot);
+    audioProcessor.getStateInformationForABCompareSnapshot(snapshot);
     audioProcessor.setABCompareSnapshot(activeSlot, snapshot);
 }
 
@@ -468,20 +470,16 @@ void VxAudioProcessorEditor::restoreABStateSnapshot(const juce::MemoryBlock& sna
     };
 
     const juce::ScopedValueSetter<bool> suppressHistory(suppressHistorySnapshots, true);
+    const juce::ScopedValueSetter<bool> suppressHostSlotSync(suppressHostSlotAutomationSync, true);
     pendingHistorySnapshot.store(false, std::memory_order_relaxed);
 
-    const auto restoredWithFastABPath = audioProcessor.applyStateInformationForABCompare(restoredSnapshot.getData(),
-                                                                                        static_cast<int>(restoredSnapshot.getSize()));
-    if (! restoredWithFastABPath)
     {
+        // Restoring root properties fires synchronous ValueTree callbacks before the
+        // old processor is destroyed. Rebind only after the replacement is complete.
+        const juce::ScopedValueSetter<bool> suppressResync(suppressProcessorStateResync, true);
         detachModuleEditorBindings();
-
-        if (! audioProcessor.setStateInformationPreservingLoadedModule(restoredSnapshot.getData(),
-                                                                        static_cast<int>(restoredSnapshot.getSize()),
-                                                                        false))
-        {
-            audioProcessor.setStateInformation(restoredSnapshot.getData(), static_cast<int>(restoredSnapshot.getSize()));
-        }
+        audioProcessor.applyStateInformationForABCompare(restoredSnapshot.getData(),
+                                                          static_cast<int>(restoredSnapshot.getSize()));
     }
 
     restoreEditorStateFromValueTree();
@@ -518,20 +516,12 @@ void VxAudioProcessorEditor::switchABState()
 
     const auto currentSlot = audioProcessor.getABCompareActiveSlot();
     const auto nextSlot = currentSlot == 0 ? 1 : 0;
-    auto nextSlotWasInitialised = false;
     const auto currentSnapshot = audioProcessor.getABCompareSnapshot(currentSlot);
-
-    if (! audioProcessor.isABCompareSnapshotValid(nextSlot))
-    {
-        audioProcessor.setABCompareSnapshot(nextSlot, currentSnapshot);
-        nextSlotWasInitialised = true;
-    }
 
     audioProcessor.setABCompareActiveSlot(nextSlot);
     const auto nextSnapshot = audioProcessor.getABCompareSnapshot(nextSlot);
 
-    if (! nextSlotWasInitialised
-        && nextSnapshot != currentSnapshot)
+    if (nextSnapshot != currentSnapshot)
     {
         restoreABStateSnapshot(nextSnapshot);
     }
@@ -604,8 +594,8 @@ void VxAudioProcessorEditor::resetFilterSectionStoredValues(const int filterInde
     {
         section->setStoredValues(filterType,
                                  defaultFilterFrequencyForType(filterType),
-                                 defaultFilterBandwidthForType(filterType),
-                                 defaultFilterSlopeForType(filterType),
+                                 defaultFilterBandwidth(),
+                                 defaultFilterSlope(),
                                  0,
                                  false);
     }

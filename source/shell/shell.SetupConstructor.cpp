@@ -235,7 +235,7 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
       valueTreeState(processorToEdit.getValueTreeState()),
       lookAndFeel(std::make_unique<VxLookAndFeel>())
 {
-    shell_parameter_focus::clearFocus();
+    shell_parameter_focus::clearFocus(*this);
 
     setLookAndFeel(lookAndFeel.get());
     setOpaque(true);
@@ -391,7 +391,7 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     syncFocusedParameterControl();
     refreshSpeAnalyserResponse();
 
-    audioProcessor.getStateInformation(committedHistorySnapshot);
+    audioProcessor.getStateInformationForABCompareSnapshot(committedHistorySnapshot);
 
     if (! audioProcessor.isABCompareSnapshotValid(0))
         audioProcessor.setABCompareSnapshot(0, committedHistorySnapshot);

@@ -183,10 +183,10 @@ MultibandModuleComponent::Config makeMxeMultibandConfig(MxeAudioProcessor& proce
         return mxe::parameters::makeActiveSplitCountParameterId();
     };
     config.bandControls = {
-        parameterControl("moRph", "MORPH", 1, 0),
-        parameterControl("peakHoldHz", "PEAK-HOLD", 1, 0),
-        parameterControl("TensionFlooR", "TEN-FLOOR", 1, 0),
-        parameterControl("TensionHysT", "TEN-HYST", 1, 0),
+        parameterControl("morph", "MORPH", 1, 0),
+        parameterControl("peak_hold_frequency", "PEAK-HOLD", 1, 0),
+        parameterControl("tension_floor", "TEN-FLOOR", 1, 0),
+        parameterControl("tension_hysteresis", "TEN-HYST", 1, 0),
         toggleControl("linkUpDn", "LINK-UPDN (DUAL-MONO)"),
         toggleControl("linkLr", "LINK-LR (STEREO)"),
         toggleControl("linkOpp", "LINK-OPP"),
@@ -208,7 +208,7 @@ MultibandModuleComponent::Config makeMxeMultibandConfig(MxeAudioProcessor& proce
         parameterControl("outRD", "R.DN.OUT", 1),
     };
     config.bandTailControls = {
-        toggleControl("delTa", "DELTA"),
+        toggleControl("delta", "DELTA"),
     };
     return config;
 }
@@ -439,6 +439,10 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
             };
             editor = std::make_unique<MultibandModuleComponent>(std::move(config));
             addAndMakeVisible(*editor);
+        }
+        else
+        {
+            currentEditor->refreshExternalState();
         }
 
         editor->setVisible(moduleLoaded);

@@ -142,7 +142,7 @@ double phaseAmountRadiansForType(const EqeModuleProcessor::FilterType filterType
         return 0.0;
     }
 
-    static constexpr auto phaseWrapGuardRadians = 1.0e-3;
+    static constexpr auto phaseWrapGuardRadians = 0.025;
     const auto phaseLimit = juce::MathConstants<double>::pi - phaseWrapGuardRadians;
     return juce::jlimit(-phaseLimit,
                         phaseLimit,
@@ -263,15 +263,14 @@ void EqeModuleProcessor::updateBellOrderFilter(BellOrderFilter& filter,
     const auto digitalOrder = juce::jmax(2, order + (order & 1));
     const auto prototypeOrder = juce::jmax(1, digitalOrder / 2);
     const auto lowerBandEdge = juce::jlimit(minimumFrequency, maximumFrequency, lowerEdge);
-    const auto upperBandEdge = juce::jlimit(minimumFrequency, maximumFrequency, upperEdge);
 
-    if (upperBandEdge <= lowerBandEdge)
+    if (upperEdge <= lowerEdge)
         return;
 
     const auto bandwidthRadians = juce::jlimit(1.0e-6,
                                                juce::MathConstants<double>::pi * nyquistSafetyFactor,
                                                2.0 * juce::MathConstants<double>::pi
-                                                   * (upperBandEdge - lowerBandEdge) / currentSampleRate);
+                                                   * (upperEdge - lowerBandEdge) / currentSampleRate);
     const auto centreRadians = 2.0 * juce::MathConstants<double>::pi * centreFrequency / currentSampleRate;
     const auto sectionCount = juce::jlimit(1,
                                            static_cast<int>(filter.sections.size()),
@@ -524,6 +523,9 @@ void EqeModuleProcessor::updatePhaseFirFilter(PhaseFirFilter& target,
 
     std::array<juce::dsp::Complex<float>, phaseFirSize> spectrum {};
 
+    const auto nyquistFrequency = currentSampleRate * 0.5;
+    const auto highShelfTaperStart = juce::jmin(20000.0, nyquistFrequency * 0.95);
+
     for (int bin = 0; bin <= phaseFirSize / 2; ++bin)
     {
         const auto binFrequency = static_cast<float>((static_cast<double>(bin) * currentSampleRate)
@@ -533,9 +535,18 @@ void EqeModuleProcessor::updatePhaseFirFilter(PhaseFirFilter& target,
                                              static_cast<float>(frequency),
                                              static_cast<float>(octaveBandwidth),
                                              static_cast<float>(slope));
-        const auto phaseRadians = (bin == 0 || bin == phaseFirSize / 2)
-            ? 0.0f
-            : static_cast<float>(phaseAmountRadians) * shape;
+        auto phaseRadians = static_cast<float>(phaseAmountRadians) * shape;
+
+        if (filterType == FilterType::highShelf && binFrequency > highShelfTaperStart)
+        {
+            const auto progress = juce::jlimit(0.0f,
+                                               1.0f,
+                                               static_cast<float>((binFrequency - highShelfTaperStart)
+                                                                  / (nyquistFrequency - highShelfTaperStart)));
+            const auto smoothProgress = progress * progress * (3.0f - (2.0f * progress));
+            phaseRadians *= 1.0f - smoothProgress;
+        }
+
         spectrum[static_cast<size_t>(bin)] = { std::cos(phaseRadians), std::sin(phaseRadians) };
 
         if (bin > 0 && bin < phaseFirSize / 2)

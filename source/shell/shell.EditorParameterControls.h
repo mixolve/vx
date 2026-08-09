@@ -9,9 +9,10 @@
 
 namespace shell_parameter_focus
 {
-juce::Slider* getFocusedValueSlider() noexcept;
+juce::Slider* getFocusedValueSlider(juce::Component& owner) noexcept;
 void clearFocus() noexcept;
-void clearFocusIfNotShowing() noexcept;
+void clearFocus(juce::Component& owner) noexcept;
+void clearFocusIfNotShowing(juce::Component& owner) noexcept;
 }
 
 class ChoiceControl final : public juce::Component
@@ -78,7 +79,6 @@ public:
     void setInteractionEnabled(bool shouldEnable);
     void setValueClickAction(std::function<void()> action);
     juce::Rectangle<int> getValueBounds() const noexcept;
-    void setTitleBorderVisible(bool shouldShow);
     void setTitleMouseEnabled(bool shouldEnable);
     void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);
     void setTextToValueParser(std::function<double(const juce::String&)> parser);

@@ -14,8 +14,8 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
         {
             section->setStoredValues(filterType,
                                      defaultFilterFrequencyForType(filterType),
-                                     defaultFilterBandwidthForType(filterType),
-                                     defaultFilterSlopeForType(filterType),
+                                     defaultFilterBandwidth(),
+                                     defaultFilterSlope(),
                                      0,
                                      false);
         }
@@ -64,8 +64,7 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
             if (filterSection == nullptr)
                 return;
 
-            const auto filterType = filterSection->getFilterType();
-            filterSection->bandwidthControl->setValue(defaultFilterBandwidthForType(filterType), true);
+            filterSection->bandwidthControl->setValue(defaultFilterBandwidth(), true);
         };
         section->slopeControl->onTitleClick = [this, filterIndex]
         {
@@ -74,9 +73,8 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
             if (filterSection == nullptr)
                 return;
 
-            const auto filterType = filterSection->getFilterType();
             filterSection->slopeControl->setSelectedChoiceIndex(
-                EqeModuleProcessor::getBellSlopeChoiceIndexForValue(defaultFilterSlopeForType(filterType)),
+                EqeModuleProcessor::getBellSlopeChoiceIndexForValue(defaultFilterSlope()),
                 true);
         };
         section->gainControl->onTitleClick = [this, filterIndex]
@@ -232,5 +230,10 @@ void VxAudioProcessorEditor::setupEqeControls(juce::AudioProcessorValueTreeState
 
         clearKeyboardFocus(*this);
     };
+    addFilterButton->setLongPressAction([this]
+    {
+        clearAllFilters();
+        clearKeyboardFocus(*this);
+    }, 500, "SURE?");
     addAndMakeVisible(*addFilterButton);
 }

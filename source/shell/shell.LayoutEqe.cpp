@@ -24,9 +24,8 @@ void VxAudioProcessorEditor::layoutEqeModuleSections(juce::Rectangle<int>& bound
     actionRowBounds.removeFromLeft(editorInsetX);
     actionRowBounds.removeFromRight(editorInsetX);
 
-    std::array<BoxTextButton*, 5> actionButtons {
+    std::array<BoxTextButton*, 4> actionButtons {
         addFilterButton.get(),
-        clearFiltersButton.get(),
         sortPlaceButton.get(),
         sortFreqButton.get(),
         sortDuoButton.get()

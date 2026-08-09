@@ -5,24 +5,7 @@
 #include "../modules/multiband/tse/module.tse.TseProcessor.h"
 #include "shell.ShellState.h"
 
-namespace
-{
-struct ScopedProcessingSuspend
-{
-    explicit ScopedProcessingSuspend(VxAudioProcessor& processorIn) noexcept
-        : processor(processorIn)
-    {
-        processor.suspendProcessing(true);
-    }
-
-    ~ScopedProcessingSuspend()
-    {
-        processor.suspendProcessing(false);
-    }
-
-    VxAudioProcessor& processor;
-};
-}
+#include <optional>
 
 const char* VxAudioProcessor::stateIdForModule(const ActiveModule module) noexcept
 {
@@ -271,7 +254,7 @@ bool VxAudioProcessor::createModuleInstance(const ActiveModule module)
     switch (module)
     {
         case ActiveModule::eqe:
-            eqeModuleProcessor = std::make_unique<EqeModuleProcessor>(*this);
+            eqeModuleProcessor = std::make_unique<EqeModuleProcessor>();
             return prepareModule(eqeModuleProcessor);
 
         case ActiveModule::spe:
@@ -279,11 +262,11 @@ bool VxAudioProcessor::createModuleInstance(const ActiveModule module)
             return prepareModule(speModuleProcessor);
 
         case ActiveModule::mie:
-            mieModuleProcessor = std::make_unique<MieAudioProcessor>(*this);
+            mieModuleProcessor = std::make_unique<MieAudioProcessor>();
             return prepareModule(mieModuleProcessor);
 
         case ActiveModule::mxe:
-            mxeModuleProcessor = std::make_unique<MxeAudioProcessor>(*this);
+            mxeModuleProcessor = std::make_unique<MxeAudioProcessor>();
             return prepareModule(mxeModuleProcessor);
 
         case ActiveModule::tse:
@@ -311,10 +294,10 @@ void VxAudioProcessor::restoreLoadedModuleFromStateText(const juce::String& text
 {
     const juce::ScopedLock lock(processingLock);
 
-    std::unique_ptr<ScopedProcessingSuspend> suspendGuard;
+    std::optional<ScopedProcessingSuspend> suspendGuard;
 
     if (publishActiveModule)
-        suspendGuard = std::make_unique<ScopedProcessingSuspend>(*this);
+        suspendGuard.emplace(*this);
 
     clearActiveModuleStateListeners();
     resetModuleProcessors();

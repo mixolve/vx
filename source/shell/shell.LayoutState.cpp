@@ -170,7 +170,6 @@ void VxAudioProcessorEditor::updateSectionStates()
         filterViewport.setVisible(shouldShow);
         setPresetsVisible(shouldShow);
         setComponentVisible(addFilterButton.get(), shouldShow);
-        setComponentVisible(clearFiltersButton.get(), shouldShow);
         setComponentVisible(sortPlaceButton.get(), shouldShow);
         setComponentVisible(sortFreqButton.get(), shouldShow);
         setComponentVisible(sortDuoButton.get(), shouldShow);
@@ -306,7 +305,6 @@ void VxAudioProcessorEditor::updateSectionStates()
         setSpeControlsVisible(true);
         filterViewport.setVisible(true);
         setComponentVisible(addFilterButton.get(), false);
-        setComponentVisible(clearFiltersButton.get(), false);
         setComponentVisible(sortPlaceButton.get(), false);
         setComponentVisible(sortFreqButton.get(), false);
         setComponentVisible(sortDuoButton.get(), false);
@@ -316,13 +314,6 @@ void VxAudioProcessorEditor::updateSectionStates()
     }
 
     setSpeControlsVisible(false);
-
-    if (clearFiltersButton != nullptr)
-    {
-        clearFiltersButton->setVisible(eqeModuleLoaded);
-        clearFiltersButton->setEnabled(activeFilterCount > 0);
-        clearFiltersButton->setAlpha(activeFilterCount > 0 ? 1.0f : 0.45f);
-    }
 
     updateUndoRedoButtons();
     const auto canSortFilters = activeFilterCount > 1;
@@ -395,6 +386,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         else
             section->slopeControl->clearOverrideText();
         section->frequencyControl->setVisible(sectionExpanded);
+        section->updateFrequencyRangeForType();
         section->frequencyControl->setInteractionEnabled(! isVolume);
         if (isVolume)
             section->frequencyControl->setOverrideText("OFF");
@@ -418,9 +410,8 @@ void VxAudioProcessorEditor::updateSectionStates()
 
     if (addFilterButton != nullptr)
     {
-        const auto canAddFilter = activeFilterCount < VxAudioProcessor::maxEqeFilterCount;
         addFilterButton->setVisible(eqeModuleLoaded);
-        addFilterButton->setEnabled(canAddFilter);
-        addFilterButton->setAlpha(canAddFilter ? 1.0f : 0.45f);
+        addFilterButton->setEnabled(true);
+        addFilterButton->setAlpha(1.0f);
     }
 }

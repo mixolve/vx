@@ -118,8 +118,7 @@ void TseModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    for (auto channel = ownerProcessor.getTotalNumInputChannels(); channel < ownerProcessor.getTotalNumOutputChannels(); ++channel)
-        buffer.clear(channel, 0, buffer.getNumSamples());
+    vx::multiband::detail::clearOutputOnlyChannels(ownerProcessor, buffer);
 
     if (buffer.getNumSamples() <= 0 || buffer.getNumChannels() <= 0)
         return;

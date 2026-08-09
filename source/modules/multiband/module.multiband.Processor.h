@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <vector>
 
@@ -13,6 +14,18 @@ namespace vx::multiband
 {
 namespace detail
 {
+inline constexpr double epsilon = 1.0e-9;
+
+inline double roundToParameterStep(const double value)
+{
+    return std::floor((value * 10.0) + 0.5) * 0.1;
+}
+
+inline double dbToAmp(const double decibels)
+{
+    return std::pow(10.0, decibels / 20.0);
+}
+
 inline int wrapIndex(int index, const int size)
 {
     jassert(size > 0);
@@ -23,6 +36,23 @@ inline int wrapIndex(int index, const int size)
         index += size;
 
     return index;
+}
+
+inline bool supportsMatchingMonoOrStereoLayout(const juce::AudioProcessor::BusesLayout& layouts)
+{
+    const auto mainInput = layouts.getMainInputChannelSet();
+    const auto mainOutput = layouts.getMainOutputChannelSet();
+
+    return mainInput == mainOutput
+        && (mainOutput == juce::AudioChannelSet::mono()
+            || mainOutput == juce::AudioChannelSet::stereo());
+}
+
+inline void clearOutputOnlyChannels(const juce::AudioProcessor& processor,
+                                    juce::AudioBuffer<float>& buffer)
+{
+    for (auto channel = processor.getTotalNumInputChannels(); channel < processor.getTotalNumOutputChannels(); ++channel)
+        buffer.clear(channel, 0, buffer.getNumSamples());
 }
 } // namespace detail
 

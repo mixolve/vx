@@ -280,7 +280,7 @@ void VxAudioProcessorEditor::layoutModuleTabButton(juce::Rectangle<int>& bounds,
 void VxAudioProcessorEditor::finalizeLayout() noexcept
 {
     updateTooltipBoundsConstraint();
-    shell_parameter_focus::clearFocusIfNotShowing();
+    shell_parameter_focus::clearFocusIfNotShowing(*this);
 
     if (moduleTabButton != nullptr)
         moduleTabButton->toFront(false);
@@ -318,7 +318,6 @@ void VxAudioProcessorEditor::resized()
         || clipButton == nullptr
         || presetsSection == nullptr
         || globalBypassButton == nullptr
-        || clearFiltersButton == nullptr
         || undoButton == nullptr
         || redoButton == nullptr
         || abCompareButton == nullptr

@@ -15,14 +15,12 @@ float defaultFilterFrequencyForType(const EqeModuleProcessor::FilterType type)
     }
 }
 
-float defaultFilterBandwidthForType(const EqeModuleProcessor::FilterType type)
+float defaultFilterBandwidth()
 {
-    juce::ignoreUnused(type);
     return 1.0f;
 }
 
-float defaultFilterSlopeForType(const EqeModuleProcessor::FilterType type)
+float defaultFilterSlope()
 {
-    juce::ignoreUnused(type);
     return EqeModuleProcessor::fixedSlopeDbPerOct;
 }

@@ -86,6 +86,7 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
     }
 
     const auto readPos = wrapIndex(bufPos - derived.lookaheadSamples, derived.bufferSize);
+    std::array<double, branchCount> branchProcessed {};
     std::array<double, branchCount> branchOutput {};
 
     for (size_t branchIndex = 0; branchIndex < branchCount; ++branchIndex)
@@ -98,20 +99,22 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
             ? derived.thresholds[branchIndex] * satShape(delayedBase / derived.thresholds[branchIndex], derived.clipKneeDb)
             : satShape(delayedBase, derived.clipKneeDb);
 
-        branchOutput[branchIndex] = (clipped + (reducedBase - clipped) * derived.morph)
-            * derived.branchOutGains[branchIndex];
+        branchProcessed[branchIndex] = clipped + (reducedBase - clipped) * derived.morph;
+        branchOutput[branchIndex] = branchProcessed[branchIndex] * derived.branchOutGains[branchIndex];
     }
 
     const auto outL = branchOutput[branchLu] + branchOutput[branchLd];
     const auto outR = branchOutput[branchRu] + branchOutput[branchRd];
+    const auto deltaProcessedL = branchProcessed[branchLu] + branchProcessed[branchLd];
+    const auto deltaProcessedR = branchProcessed[branchRu] + branchProcessed[branchRd];
 
     const auto readPosDry = wrapIndex(bufPosDry - derived.latencySamples, derived.dryBufferSize);
     const auto delayedDryL = dryL[static_cast<size_t>(readPosDry)];
     const auto delayedDryR = dryR[static_cast<size_t>(readPosDry)];
 
     StereoSample output;
-    output.left = derived.delta ? (delayedDryL - outL) : outL;
-    output.right = derived.delta ? (delayedDryR - outR) : outR;
+    output.left = derived.delta ? (delayedDryL - deltaProcessedL) : outL;
+    output.right = derived.delta ? (delayedDryR - deltaProcessedR) : outR;
 
     bufPos = wrapIndex(bufPos + 1, derived.bufferSize);
     bufPosDry = wrapIndex(bufPosDry + 1, derived.dryBufferSize);

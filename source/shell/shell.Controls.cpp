@@ -255,7 +255,7 @@ void NoTickComboBox::mouseDown(const juce::MouseEvent& event)
     if (! isEnabled())
         return;
 
-    shell_parameter_focus::clearFocus();
+    shell_parameter_focus::clearFocus(*this);
 
     pointerDown = true;
     dragDetected = false;

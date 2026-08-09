@@ -28,10 +28,10 @@ inline constexpr auto mxeCrossoverFullbandOrder = std::to_array<ParameterOrderEn
 });
 
 inline constexpr auto mxeBandOrder = std::to_array<ParameterOrderEntry>({
-    { "moRph", "Morph" },
-    { "peakHoldHz", "Peak Hold" },
-    { "TensionFlooR", "Tension Floor" },
-    { "TensionHysT", "Tension Hysteresis" },
+    { "morph", "Morph" },
+    { "peak_hold_frequency", "Peak Hold" },
+    { "tension_floor", "Tension Floor" },
+    { "tension_hysteresis", "Tension Hysteresis" },
     { "linkUpDn", "Link UP/DN (Dual-Mono)" },
     { "linkLr", "Link L/R (Stereo)" },
     { "linkOpp", "Link Opp" },
@@ -51,7 +51,7 @@ inline constexpr auto mxeBandOrder = std::to_array<ParameterOrderEntry>({
     { "tensRD", "R.DN.TENS" },
     { "relRD", "R.DN.REL" },
     { "outRD", "R.DN.OUT" },
-    { "delTa", "DELTA" },
+    { "delta", "DELTA" },
 });
 
 constexpr size_t numBands = mxe::dsp::MultibandProcessor::numBands;

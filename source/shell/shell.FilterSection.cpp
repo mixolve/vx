@@ -210,10 +210,29 @@ bool VxAudioProcessorEditor::FilterSection::isGainInactive() const noexcept
         || filterType == FilterType::highCut;
 }
 
+void VxAudioProcessorEditor::FilterSection::updateFrequencyRangeForType()
+{
+    if (frequencyControl == nullptr)
+        return;
+
+    const auto maximumFrequency = getFilterType() == FilterType::lowCut
+        ? static_cast<double>(maximumLowCutFrequency)
+        : static_cast<double>(maximumVisibleFilterFrequency);
+    frequencyControl->setValueRange(minimumVisibleFilterFrequency, maximumFrequency, 0.01);
+
+    if (frequencyControl->getValue() > maximumFrequency)
+        frequencyControl->setValue(maximumFrequency, true);
+}
+
 void VxAudioProcessorEditor::FilterSection::setGainDisplaysDegrees(const bool shouldDisplayDegrees)
 {
     if (gainControl == nullptr)
         return;
+
+    static constexpr auto degreesPerDb = 7.5;
+    gainControl->setValueRange(shouldDisplayDegrees ? -180.0 / degreesPerDb : -48.0,
+                               shouldDisplayDegrees ? 180.0 / degreesPerDb : 48.0,
+                               0.01);
 
     if (gainDisplaysDegrees == shouldDisplayDegrees)
         return;
@@ -222,7 +241,6 @@ void VxAudioProcessorEditor::FilterSection::setGainDisplaysDegrees(const bool sh
 
     if (gainDisplaysDegrees)
     {
-        static constexpr auto degreesPerDb = 7.5;
         const auto formatDegrees = [] (const double value)
         {
             auto degrees = juce::jlimit(-180.0, 180.0, value * degreesPerDb);
@@ -259,7 +277,8 @@ void VxAudioProcessorEditor::FilterSection::updatePlaceChoicesForType(const bool
     if (placeControl == nullptr)
         return;
 
-    const auto phasePlaceAllowed = ! isCutFilterType(getFilterType());
+    const auto phasePlaceAllowed = ! isCutFilterType(getFilterType())
+        && ! isVolumeFilterType(getFilterType());
     placeControl->setChoiceEnabled(5, phasePlaceAllowed);
     placeControl->setChoiceEnabled(6, phasePlaceAllowed);
     placeControl->setChoiceEnabled(7, phasePlaceAllowed);
@@ -279,7 +298,8 @@ void VxAudioProcessorEditor::FilterSection::setStoredValues(const FilterType typ
     storedFrequencies[index] = frequency;
     storedBandwidths[index] = bandwidth;
     storedSlopes[index] = slope;
-    storedPlace[index] = isCutFilterType(type) && isPhasePlaceChoice(place) ? 0 : place;
+    const auto phasePlaceAllowed = ! isCutFilterType(type) && ! isVolumeFilterType(type);
+    storedPlace[index] = ! phasePlaceAllowed && isPhasePlaceChoice(place) ? 0 : place;
     storedValuesCustom[index] = isCustom;
 }
 

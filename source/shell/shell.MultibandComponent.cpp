@@ -224,7 +224,7 @@ private:
 
         void mouseDown(const juce::MouseEvent&) override
         {
-            shell_parameter_focus::clearFocus();
+            shell_parameter_focus::clearFocus(*this);
         }
 
         int topGapMultiplier = 1;
@@ -969,6 +969,7 @@ MultibandModuleComponent::MultibandModuleComponent(Config configIn)
 
 MultibandModuleComponent::~MultibandModuleComponent()
 {
+    saveUiState();
     pageViewport.setViewedComponent(nullptr, false);
 }
 
@@ -981,6 +982,7 @@ void MultibandModuleComponent::loadUiState()
     visibleBandIndex = static_cast<size_t>(juce::jlimit(0,
                                                        static_cast<int>(numBands - 1),
                                                        getInt(state, config.moduleKey, "visibleBandIndex", 0)));
+    restoredPageScrollY = juce::jmax(0, getInt(state, config.moduleKey, "pageScrollY", 0));
 
     manualSoloMask = {};
 
@@ -993,15 +995,18 @@ void MultibandModuleComponent::loadUiState()
     }
 
     uiStateLoaded = getBool(state, config.moduleKey, "hasUiState", false);
+    uiStateSignature = getUiStateSignature();
 }
 
 void MultibandModuleComponent::saveUiState()
 {
     auto& state = valueTreeState.state;
+    restoredPageScrollY = pageViewport.getViewPositionY();
     setBool(state, config.moduleKey, "autoSoloEnabled", autoSoloEnabled);
     setBool(state, config.moduleKey, "manualSoloInclusive", manualSoloInclusive);
     setBool(state, config.moduleKey, "allBandsActive", allBandsActive);
     setInt(state, config.moduleKey, "visibleBandIndex", static_cast<int>(visibleBandIndex));
+    setInt(state, config.moduleKey, "pageScrollY", restoredPageScrollY);
     setBool(state, config.moduleKey, "hasUiState", true);
 
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
@@ -1009,6 +1014,41 @@ void MultibandModuleComponent::saveUiState()
                 config.moduleKey,
                 "manualSolo." + juce::String(static_cast<int>(bandIndex)),
                 manualSoloMask[bandIndex]);
+
+    uiStateSignature = getUiStateSignature();
+}
+
+bool MultibandModuleComponent::restoreUiStateIfChanged()
+{
+    if (getUiStateSignature() == uiStateSignature)
+        return false;
+
+    loadUiState();
+    visibleBandIndex = juce::jmin(visibleBandIndex, getActiveBandCount() - 1);
+    updateMonitorButtons();
+    updatePageVisibility();
+    return true;
+}
+
+juce::String MultibandModuleComponent::getUiStateSignature() const
+{
+    const auto& state = valueTreeState.state;
+    juce::StringArray values;
+    values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "hasUiState"), false).toString());
+    values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "autoSoloEnabled"), false).toString());
+    values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "manualSoloInclusive"), false).toString());
+    values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "allBandsActive"), true).toString());
+    values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "visibleBandIndex"), 0).toString());
+    values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "pageScrollY"), 0).toString());
+
+    for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
+    {
+        values.add(state.getProperty(makeStatePropertyId(config.moduleKey,
+                                                          "manualSolo." + juce::String(static_cast<int>(bandIndex))),
+                                      false).toString());
+    }
+
+    return values.joinIntoString("|");
 }
 
 void MultibandModuleComponent::paint(juce::Graphics& graphics)
@@ -1088,6 +1128,9 @@ void MultibandModuleComponent::refreshCurrentPageLayout()
 
 void MultibandModuleComponent::refreshExternalState()
 {
+    if (! restoreUiStateIfChanged() && pageViewport.getViewPositionY() != restoredPageScrollY)
+        saveUiState();
+
     if (config.refreshExternalState != nullptr && ! config.refreshExternalState())
         return;
 
@@ -1316,7 +1359,7 @@ void MultibandModuleComponent::updatePageViewport()
         return;
 
     const auto preserveScroll = pageViewport.getViewedComponent() == currentPage;
-    const auto previousScrollY = preserveScroll ? pageViewport.getViewPositionY() : 0;
+    const auto previousScrollY = preserveScroll ? pageViewport.getViewPositionY() : restoredPageScrollY;
 
     if (! preserveScroll)
         pageViewport.setViewedComponent(currentPage, false);
@@ -1435,7 +1478,7 @@ bool MultibandModuleComponent::assignButtonHostSlot(const juce::String& paramete
 
 void MultibandModuleComponent::clearFocus()
 {
-    shell_parameter_focus::clearFocus();
+    shell_parameter_focus::clearFocus(*this);
 
     if (config.clearKeyboardFocus != nullptr)
         config.clearKeyboardFocus();
