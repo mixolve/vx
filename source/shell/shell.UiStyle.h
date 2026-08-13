@@ -22,7 +22,7 @@ inline constexpr int globalToFilterGap = uiGap;
 inline constexpr int addFilterToFooterGap = uiGap;
 inline constexpr int addFilterToPresetsGap = uiGap;
 inline constexpr int rowHeight = 30;
-inline constexpr int speInlineAnalyserHeight = rowHeight * speInlineAnalyserHeightRows;
+inline constexpr int fftInlineAnalyserHeight = rowHeight * fftInlineAnalyserHeightRows;
 inline constexpr int presetRowGap = uiGap;
 inline constexpr float uiFontSize = 22.0f;
 
@@ -34,6 +34,7 @@ inline const auto uiGrey700 = juce::Colour(0xff363636);
 inline const auto uiGrey500 = juce::Colour(0xff707070);
 inline const auto analyserLeftColour = juce::Colour(0xff99cc99);
 inline const auto analyserRightColour = juce::Colour(0xffff9999);
+inline const auto analyserPhaseColour = juce::Colour(0xffffcc99);
 
 int getEditorInsetX(int width);
 juce::Typeface::Ptr getUiRegularTypeface();

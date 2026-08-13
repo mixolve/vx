@@ -78,16 +78,16 @@ void VxAudioProcessorEditor::timerCallback()
             clipButton->clearTextColourOverride();
     }
 
-    if (auto* mieEditor = dynamic_cast<MultibandModuleComponent*>(mieModuleEditor.get()))
-        mieEditor->refreshExternalState();
+    if (auto* tlsEditor = dynamic_cast<MultibandModuleComponent*>(tlsModuleEditor.get()))
+        tlsEditor->refreshExternalState();
 
-    if (auto* mxeEditor = dynamic_cast<MultibandModuleComponent*>(mxeModuleEditor.get()))
-        mxeEditor->refreshExternalState();
+    if (auto* dynEditor = dynamic_cast<MultibandModuleComponent*>(dynModuleEditor.get()))
+        dynEditor->refreshExternalState();
 
-    if (auto* tseEditor = dynamic_cast<MultibandModuleComponent*>(tseModuleEditor.get()))
-        tseEditor->refreshExternalState();
+    if (auto* trsEditor = dynamic_cast<MultibandModuleComponent*>(trsModuleEditor.get()))
+        trsEditor->refreshExternalState();
 
-    refreshSpeAnalyserResponse();
+    refreshFftAnalyserResponse();
 }
 
 double VxAudioProcessorEditor::getFocusedParameterControlValueForTarget() const noexcept
@@ -118,7 +118,7 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
     if (nextTarget != focusedParameterTargetSlider)
     {
         const auto preservedFilterScrollY = filterViewport.getViewPositionY();
-        const auto preservedSpeAnalyserScrollY = speAnalyserViewport.getViewPositionY();
+        const auto preservedFftAnalyserScrollY = fftAnalyserViewport.getViewPositionY();
 
         focusedParameterTargetSlider = nextTarget;
 
@@ -145,8 +145,8 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
         const auto filterMaxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
         filterViewport.setViewPosition(0, juce::jlimit(0, filterMaxOffset, preservedFilterScrollY));
 
-        const auto analyserMaxOffset = juce::jmax(0, speAnalyserContent.getHeight() - speAnalyserViewport.getHeight());
-        speAnalyserViewport.setViewPosition(0, juce::jlimit(0, analyserMaxOffset, preservedSpeAnalyserScrollY));
+        const auto analyserMaxOffset = juce::jmax(0, fftAnalyserContent.getHeight() - fftAnalyserViewport.getHeight());
+        fftAnalyserViewport.setViewPosition(0, juce::jlimit(0, analyserMaxOffset, preservedFftAnalyserScrollY));
     }
 
     if (focusedParameterTargetSlider == nullptr || focusedParameterControl->isMouseButtonDown())
@@ -161,46 +161,28 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
     }
 }
 
-void VxAudioProcessorEditor::mouseDown(const juce::MouseEvent& event)
+void VxAudioProcessorEditor::mouseDown(const juce::MouseEvent&)
 {
-    juce::ignoreUnused(event);
     shell_parameter_focus::clearFocus(*this);
     clearKeyboardFocus(*this);
 }
 
 void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
 {
-    const auto clearFocusedParameterForViewportScroll = [this]
-    {
-        shell_parameter_focus::clearFocus(*this);
-        syncFocusedParameterControl();
-    };
-
     if (hostParametersViewport.getBounds().contains(event.getPosition()))
     {
-        clearFocusedParameterForViewportScroll();
-
         if (scrollViewportWithWheel(hostParametersViewport, hostParametersContent.getHeight(), wheel, event.mods.isShiftDown()))
             return;
     }
 
-    if (speAnalyserViewport.getBounds().contains(event.getPosition()))
+    if (fftAnalyserViewport.getBounds().contains(event.getPosition()))
     {
-        clearFocusedParameterForViewportScroll();
-
-        if (scrollViewportWithWheel(speAnalyserViewport, speAnalyserContent.getHeight(), wheel, event.mods.isShiftDown()))
+        if (scrollViewportWithWheel(fftAnalyserViewport, fftAnalyserContent.getHeight(), wheel, event.mods.isShiftDown()))
             return;
     }
 
     if (! filterViewport.getBounds().contains(event.getPosition()))
         return;
 
-    clearFocusedParameterForViewportScroll();
     scrollViewportWithWheel(filterViewport, getActiveFilterContentHeight(), wheel, event.mods.isShiftDown());
-}
-
-bool VxAudioProcessorEditor::keyPressed(const juce::KeyPress& key)
-{
-    juce::ignoreUnused(key);
-    return false;
 }

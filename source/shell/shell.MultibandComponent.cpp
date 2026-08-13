@@ -181,17 +181,35 @@ public:
 
     void refreshExternalState()
     {
+        reorderRows("gain");
         refreshSoloButtonState();
         updateToggleLabels();
         updateTimeModeControls();
+        resized();
     }
 
     int getPreferredHeight() const
     {
         auto height = rowHeight;
 
-        for (const auto& row : rows)
-            height += row->getTopGap() + row->getPreferredHeight();
+        for (size_t index = 0; index < rows.size();)
+        {
+            const auto& row = rows[index];
+            const auto controlsInRow = juce::jlimit<size_t>(1,
+                                                            rows.size() - index,
+                                                            static_cast<size_t>(juce::jmax(1, row->controlsInRow)));
+            auto topGap = 0;
+            auto preferredHeight = 0;
+
+            for (size_t offset = 0; offset < controlsInRow; ++offset)
+            {
+                topGap = juce::jmax(topGap, rows[index + offset]->getTopGap());
+                preferredHeight = juce::jmax(preferredHeight, rows[index + offset]->getPreferredHeight());
+            }
+
+            height += topGap + preferredHeight;
+            index += controlsInRow;
+        }
 
         return height + moduleContentBottomGap;
     }
@@ -201,12 +219,41 @@ public:
         auto bounds = getLocalBounds();
         soloButton.setBounds(bounds.removeFromTop(rowHeight));
 
-        for (auto& row : rows)
+        for (size_t index = 0; index < rows.size();)
         {
-            if (! bounds.isEmpty())
-                bounds.removeFromTop(juce::jmin(row->getTopGap(), bounds.getHeight()));
+            auto& row = rows[index];
+            const auto controlsInRow = juce::jlimit<size_t>(1,
+                                                            rows.size() - index,
+                                                            static_cast<size_t>(juce::jmax(1, row->controlsInRow)));
+            auto topGap = 0;
+            auto preferredHeight = 0;
 
-            row->setBounds(bounds.removeFromTop(row->getPreferredHeight()));
+            for (size_t offset = 0; offset < controlsInRow; ++offset)
+            {
+                topGap = juce::jmax(topGap, rows[index + offset]->getTopGap());
+                preferredHeight = juce::jmax(preferredHeight, rows[index + offset]->getPreferredHeight());
+            }
+
+            if (! bounds.isEmpty())
+                bounds.removeFromTop(juce::jmin(topGap, bounds.getHeight()));
+
+            auto rowBounds = bounds.removeFromTop(preferredHeight);
+            const auto availableWidth = juce::jmax(0,
+                                                   rowBounds.getWidth()
+                                                       - (parameterGap * static_cast<int>(controlsInRow - 1)));
+            const auto controlWidth = availableWidth / static_cast<int>(controlsInRow);
+
+            for (size_t offset = 0; offset < controlsInRow; ++offset)
+            {
+                const auto isLast = offset + 1 == controlsInRow;
+                rows[index + offset]->setBounds(rowBounds.removeFromLeft(isLast ? rowBounds.getWidth()
+                                                                                : controlWidth));
+
+                if (! isLast)
+                    rowBounds.removeFromLeft(juce::jmin(parameterGap, rowBounds.getWidth()));
+            }
+
+            index += controlsInRow;
         }
     }
 
@@ -228,13 +275,22 @@ private:
         }
 
         int topGapMultiplier = 1;
+        int controlsInRow = 1;
+        juce::String reorderGroup;
+        juce::String orderParameterId;
+        bool fixedOrder = false;
     };
 
     struct ParameterRow final : public RowBase
     {
-        ParameterRow(MultibandModuleComponent& ownerIn,
+        ParameterRow(BandPageComponent& pageIn,
+                     MultibandModuleComponent& ownerIn,
                      juce::String parameterId,
+                     juce::String auxiliaryToggleParameterId,
                      const BandControlSpec& spec)
+            : page(pageIn),
+              owner(ownerIn),
+              auxiliaryToggleId(std::move(auxiliaryToggleParameterId))
         {
             control = std::make_unique<ParameterControl>(
                 ownerIn.valueTreeState,
@@ -242,18 +298,118 @@ private:
                 spec.label,
                 spec.decimals);
             topGapMultiplier = spec.topGapMultiplier;
+            reorderGroup = spec.reorderGroup != nullptr ? spec.reorderGroup : "";
+            fixedOrder = spec.fixedOrder;
+
+            if (spec.orderSuffix != nullptr && juce::String(spec.orderSuffix).isNotEmpty())
+                orderParameterId = owner.config.makeBandParameterId(page.bandIndex, spec.orderSuffix);
+
             addAndMakeVisible(*control);
+
+            if (reorderGroup.isNotEmpty())
+            {
+                moveUpButton = makeTextButton({});
+                moveUpButton->setArrowDirection(BoxTextButton::ArrowDirection::up);
+                moveUpButton->setCancelClickOnLeave(true);
+                moveUpButton->onClick = [this]
+                {
+                    page.moveReorderRow(*this, -1);
+                    owner.clearFocus();
+                };
+                addAndMakeVisible(*moveUpButton);
+
+                moveDownButton = makeTextButton({});
+                moveDownButton->setArrowDirection(BoxTextButton::ArrowDirection::down);
+                moveDownButton->setCancelClickOnLeave(true);
+                moveDownButton->onClick = [this]
+                {
+                    page.moveReorderRow(*this, 1);
+                    owner.clearFocus();
+                };
+                addAndMakeVisible(*moveDownButton);
+            }
+
+            if (auxiliaryToggleId.isNotEmpty())
+            {
+                auxiliaryToggle = makeTextButton(spec.auxiliaryToggleLabel);
+                auxiliaryToggle->setClickingTogglesState(true);
+                auxiliaryToggleAttachment = std::make_unique<ButtonAttachment>(owner.valueTreeState,
+                                                                                auxiliaryToggleId,
+                                                                                *auxiliaryToggle);
+                auxiliaryToggle->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+                {
+                    return owner.assignButtonHostSlot(auxiliaryToggleId,
+                                                      auxiliaryToggleId,
+                                                      auxiliaryToggle.get(),
+                                                      modifiers);
+                };
+                auxiliaryToggle->onClick = [this] { owner.clearFocus(); };
+                addAndMakeVisible(*auxiliaryToggle);
+            }
         }
 
         int getPreferredHeight() const override { return rowHeight; }
 
         void resized() override
         {
-            if (control != nullptr)
-                control->setBounds(getLocalBounds());
+            if (control == nullptr)
+                return;
+
+            auto bounds = getLocalBounds();
+
+            if (moveUpButton != nullptr && moveDownButton != nullptr)
+            {
+                moveUpButton->setBounds(bounds.removeFromLeft(rowHeight));
+                bounds.removeFromLeft(juce::jmin(parameterGap, bounds.getWidth()));
+                moveDownButton->setBounds(bounds.removeFromRight(rowHeight));
+                bounds.removeFromRight(juce::jmin(parameterGap, bounds.getWidth()));
+            }
+
+            if (auxiliaryToggle == nullptr)
+            {
+                control->setBounds(bounds);
+                return;
+            }
+
+            const auto availableWidth = juce::jmax(0, bounds.getWidth() - (parameterGap * 2));
+            const auto columnWidth = availableWidth / 3;
+            control->setTitleWidthOverride(columnWidth);
+            control->setValueLeadingInset(columnWidth + parameterGap);
+            control->setBounds(bounds);
+            auxiliaryToggle->setBounds(bounds.getX() + columnWidth + parameterGap,
+                                       bounds.getY(),
+                                       columnWidth,
+                                       bounds.getHeight());
         }
 
+        void refreshExternalState() override
+        {
+            if (moveUpButton == nullptr || moveDownButton == nullptr)
+                return;
+
+            const auto order = orderParameterId.isNotEmpty()
+                ? juce::roundToInt(readRawParameter(owner.valueTreeState, orderParameterId, 0.0f))
+                : -1;
+            const auto canMoveUp = ! fixedOrder && order > 0;
+            const auto canMoveDown = ! fixedOrder && order >= 0 && order < 3;
+            moveUpButton->setEnabled(canMoveUp);
+            moveUpButton->setAlpha(canMoveUp ? 1.0f : 0.45f);
+            moveUpButton->setPressFillEnabled(canMoveUp);
+            moveUpButton->setInterceptsMouseClicks(canMoveUp, canMoveUp);
+            moveDownButton->setEnabled(canMoveDown);
+            moveDownButton->setAlpha(canMoveDown ? 1.0f : 0.45f);
+            moveDownButton->setPressFillEnabled(canMoveDown);
+            moveDownButton->setInterceptsMouseClicks(canMoveDown, canMoveDown);
+        }
+
+        BandPageComponent& page;
+        MultibandModuleComponent& owner;
+        juce::String auxiliaryToggleId;
         std::unique_ptr<ParameterControl> control;
+        std::unique_ptr<BoxTextButton> auxiliaryToggle;
+        std::unique_ptr<ButtonAttachment> auxiliaryToggleAttachment;
+        std::unique_ptr<BoxTextButton> moveUpButton;
+        std::unique_ptr<BoxTextButton> moveDownButton;
     };
 
     struct HeadingRow final : public RowBase
@@ -281,6 +437,30 @@ private:
         }
 
         std::unique_ptr<BoxTextButton> heading;
+    };
+
+    struct InactiveRow final : public RowBase
+    {
+        explicit InactiveRow(const BandControlSpec& spec)
+        {
+            button = makeTextButton(spec.label);
+            button->setEnabled(false);
+            button->setClickingTogglesState(false);
+            button->setPressFillEnabled(false);
+            button->setInterceptsMouseClicks(false, false);
+            topGapMultiplier = spec.topGapMultiplier;
+            addAndMakeVisible(*button);
+        }
+
+        int getPreferredHeight() const override { return rowHeight; }
+
+        void resized() override
+        {
+            if (button != nullptr)
+                button->setBounds(getLocalBounds());
+        }
+
+        std::unique_ptr<BoxTextButton> button;
     };
 
     struct ToggleRow final : public RowBase
@@ -359,10 +539,14 @@ private:
               degreeParameterIdToRead(std::move(degreeParameterId)),
               flipParameterIdToRead(std::move(flipParameterId))
         {
-            value = makeTextButton({}, uiGrey500);
-            value->setPressFillEnabled(false);
-            value->setInterceptsMouseClicks(false, false);
-            addAndMakeVisible(*value);
+            value.setFont(makeUiFont());
+            value.setColour(juce::Label::textColourId, uiWhite);
+            value.setColour(juce::Label::backgroundColourId, juce::Colours::transparentBlack);
+            value.setColour(juce::Label::outlineColourId, uiGrey500);
+            value.setJustificationType(juce::Justification::centred);
+            value.setBorderSize(juce::BorderSize<int> { 1 });
+            value.setInterceptsMouseClicks(false, false);
+            addAndMakeVisible(value);
 
             topGapMultiplier = spec.topGapMultiplier;
             updateText();
@@ -377,24 +561,20 @@ private:
 
         void resized() override
         {
-            if (value != nullptr)
-                value->setBounds(getLocalBounds());
+            value.setBounds(getLocalBounds());
         }
 
         void updateText()
         {
-            if (value == nullptr)
-                return;
-
             const auto degree = readRawParameter(owner.valueTreeState, degreeParameterIdToRead, 0.0f);
             const auto flipRight = readRawParameter(owner.valueTreeState, flipParameterIdToRead, 0.0f) >= 0.5f;
-            value->setButtonText(getOrthogonalPositionDescription(degree, flipRight));
+            value.setText(getOrthogonalPositionDescription(degree, flipRight), juce::dontSendNotification);
         }
 
         MultibandModuleComponent& owner;
         juce::String degreeParameterIdToRead;
         juce::String flipParameterIdToRead;
-        std::unique_ptr<BoxTextButton> value;
+        juce::Label value;
     };
 
     struct TimeRow final : public RowBase
@@ -570,6 +750,7 @@ private:
             if (spec.kind == ControlKind::heading)
             {
                 auto row = std::make_unique<HeadingRow>(spec);
+                row->controlsInRow = spec.controlsInRow;
                 addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
                 continue;
@@ -578,6 +759,16 @@ private:
             if (spec.kind == ControlKind::toggle)
             {
                 auto row = std::make_unique<ToggleRow>(*this, owner, getBandParameterId(spec), spec);
+                row->controlsInRow = spec.controlsInRow;
+                addAndMakeVisible(*row);
+                rows.push_back(std::move(row));
+                continue;
+            }
+
+            if (spec.kind == ControlKind::inactive)
+            {
+                auto row = std::make_unique<InactiveRow>(spec);
+                row->controlsInRow = spec.controlsInRow;
                 addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
                 continue;
@@ -589,6 +780,7 @@ private:
                 const auto modeId = owner.config.makeBandParameterId(bandIndex, spec.modeSuffix);
                 const auto syncId = owner.config.makeBandParameterId(bandIndex, spec.syncSuffix);
                 auto row = std::make_unique<TimeRow>(owner, valueId, modeId, syncId, spec);
+                row->controlsInRow = spec.controlsInRow;
                 listenedParameterIds.push_back(modeId);
                 listenedParameterIds.push_back(syncId);
                 owner.valueTreeState.addParameterListener(modeId, this);
@@ -603,6 +795,7 @@ private:
                 const auto degreeId = getBandParameterId(spec);
                 const auto flipId = owner.config.makeBandParameterId(bandIndex, spec.modeSuffix);
                 auto row = std::make_unique<ReadoutRow>(owner, degreeId, flipId, spec);
+                row->controlsInRow = spec.controlsInRow;
                 listenedParameterIds.push_back(degreeId);
                 listenedParameterIds.push_back(flipId);
                 owner.valueTreeState.addParameterListener(degreeId, this);
@@ -612,10 +805,96 @@ private:
                 continue;
             }
 
-            auto row = std::make_unique<ParameterRow>(owner, getBandParameterId(spec), spec);
+            const auto auxiliaryToggleId = spec.auxiliaryToggleSuffix != nullptr
+                                               && juce::String(spec.auxiliaryToggleSuffix).isNotEmpty()
+                ? owner.config.makeBandParameterId(bandIndex, spec.auxiliaryToggleSuffix)
+                : juce::String {};
+            auto row = std::make_unique<ParameterRow>(*this,
+                                                      owner,
+                                                      getBandParameterId(spec),
+                                                      auxiliaryToggleId,
+                                                      spec);
+            row->controlsInRow = spec.controlsInRow;
+
+            if (row->orderParameterId.isNotEmpty())
+            {
+                listenedParameterIds.push_back(row->orderParameterId);
+                owner.valueTreeState.addParameterListener(row->orderParameterId, this);
+            }
+
             addAndMakeVisible(*row);
             rows.push_back(std::move(row));
         }
+
+        reorderRows("gain");
+    }
+
+    void moveReorderRow(ParameterRow& sourceRow, const int delta)
+    {
+        if (sourceRow.fixedOrder || sourceRow.orderParameterId.isEmpty() || delta == 0)
+            return;
+
+        const auto sourceOrder = juce::roundToInt(
+            readRawParameter(owner.valueTreeState, sourceRow.orderParameterId, 0.0f));
+        const auto destinationOrder = sourceOrder + delta;
+
+        if (! juce::isPositiveAndBelow(destinationOrder, 4))
+            return;
+
+        for (auto& row : rows)
+        {
+            if (row.get() == &sourceRow
+                || row->reorderGroup != sourceRow.reorderGroup
+                || row->orderParameterId.isEmpty())
+            {
+                continue;
+            }
+
+            if (juce::roundToInt(readRawParameter(owner.valueTreeState,
+                                                  row->orderParameterId,
+                                                  -1.0f)) == destinationOrder)
+            {
+                if (owner.swapParameterPlainValues(sourceRow.orderParameterId,
+                                                   row->orderParameterId))
+                {
+                    reorderRows(sourceRow.reorderGroup);
+                    refreshExternalState();
+                    owner.refreshCurrentPageLayout();
+                }
+
+                return;
+            }
+        }
+    }
+
+    void reorderRows(const juce::String& group)
+    {
+        auto first = std::find_if(rows.begin(), rows.end(), [&group] (const auto& row)
+        {
+            return row->reorderGroup == group;
+        });
+
+        if (first == rows.end())
+            return;
+
+        auto last = first;
+
+        while (last != rows.end() && (*last)->reorderGroup == group)
+            ++last;
+
+        std::stable_sort(first, last, [this] (const auto& firstRow, const auto& secondRow)
+        {
+            const auto getOrder = [this] (const auto& row)
+            {
+                return row->fixedOrder
+                    ? -1
+                    : juce::roundToInt(readRawParameter(owner.valueTreeState,
+                                                        row->orderParameterId,
+                                                        0.0f));
+            };
+
+            return getOrder(firstRow) < getOrder(secondRow);
+        });
     }
 
     void clearExclusiveToggleGroup(const juce::String& activeParameterId, const juce::String& exclusiveGroup)
@@ -666,7 +945,7 @@ private:
         juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<BandPageComponent>(this)]
         {
             if (safeThis != nullptr)
-                safeThis->updateTimeModeControls();
+                safeThis->refreshExternalState();
         });
     }
 
@@ -741,7 +1020,7 @@ public:
                 owner.valueTreeState,
                 owner.config.makeFullbandParameterId(crossoverSuffixes[index]),
                 crossoverLabels[index],
-                0);
+                owner.config.crossoverDecimals);
             control->onValueChanged = [this, index]
             {
                 owner.constrainCrossoverFrequency(index);
@@ -1392,6 +1671,37 @@ bool MultibandModuleComponent::setParameterPlainValue(const juce::String& parame
         return setParameterNormalisedValue(*parameter, parameter->convertTo0to1(plainValue));
 
     return false;
+}
+
+bool MultibandModuleComponent::swapParameterPlainValues(const juce::String& firstParameterId,
+                                                        const juce::String& secondParameterId)
+{
+    auto* firstParameter = valueTreeState.getParameter(firstParameterId);
+    auto* secondParameter = valueTreeState.getParameter(secondParameterId);
+
+    if (firstParameter == nullptr || secondParameter == nullptr)
+        return false;
+
+    const auto firstValue = firstParameter->convertFrom0to1(firstParameter->getValue());
+    const auto secondValue = secondParameter->convertFrom0to1(secondParameter->getValue());
+
+    if (std::abs(firstValue - secondValue) <= 1.0e-6f)
+        return false;
+
+    if (config.undoManager != nullptr)
+        config.undoManager->beginNewTransaction();
+
+    firstParameter->beginChangeGesture();
+    secondParameter->beginChangeGesture();
+    firstParameter->setValueNotifyingHost(firstParameter->convertTo0to1(secondValue));
+    secondParameter->setValueNotifyingHost(secondParameter->convertTo0to1(firstValue));
+    secondParameter->endChangeGesture();
+    firstParameter->endChangeGesture();
+
+    if (config.markParametersDirty != nullptr)
+        config.markParametersDirty();
+
+    return true;
 }
 
 bool MultibandModuleComponent::constrainCrossoverFrequency(const size_t crossoverIndex)

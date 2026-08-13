@@ -329,11 +329,6 @@ void NoTickComboBox::setPromptStylePopupEnabled(const bool shouldEnable) noexcep
     promptStylePopupEnabled = shouldEnable;
 }
 
-bool NoTickComboBox::isPromptStylePopupEnabled() const noexcept
-{
-    return promptStylePopupEnabled;
-}
-
 void NoTickComboBox::setChoiceEnabled(const int choiceIndex, const bool shouldEnable)
 {
     if (choiceIndex < 0)

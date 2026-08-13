@@ -17,6 +17,25 @@ struct MarkdownLink
     juce::String url;
 };
 
+juce::URL createOfflineManualUrl()
+{
+    const auto manualDirectory = juce::File::getSpecialLocation(juce::File::tempDirectory)
+                                     .getChildFile("mixolve-vx");
+
+    if (manualDirectory.createDirectory().failed())
+        return {};
+
+    const auto manualFile = manualDirectory.getChildFile("manual.md");
+    manualFile.setReadOnly(false);
+
+    if (! manualFile.replaceWithData(BinaryData::manual_md,
+                                      static_cast<size_t>(BinaryData::manual_mdSize)))
+        return {};
+
+    manualFile.setReadOnly(true);
+    return juce::URL(manualFile);
+}
+
 juce::String getDisplayNameFromUrl(const juce::String& urlText)
 {
     auto displayName = urlText.trim();
@@ -268,7 +287,9 @@ class MarkdownLinkRow final : public MarkdownRowComponent
 {
 public:
     MarkdownLinkRow(juce::String text, juce::String urlText)
-        : linkButton(std::move(text), juce::URL(std::move(urlText)))
+        : linkButton(std::move(text),
+                     urlText.startsWithIgnoreCase("vx-manual://") ? juce::URL {}
+                                                                  : juce::URL(urlText))
     {
         setOpaque(false);
         setWantsKeyboardFocus(false);
@@ -285,6 +306,18 @@ public:
         linkButton.setWantsKeyboardFocus(false);
         linkButton.setSize(1, linkHeight);
         linkButton.changeWidthToFitText();
+
+        if (urlText.startsWithIgnoreCase("vx-manual://"))
+        {
+            linkButton.onClick = []
+            {
+                const auto manualUrl = createOfflineManualUrl();
+
+                if (manualUrl.isWellFormed())
+                    manualUrl.launchInDefaultBrowser();
+            };
+        }
+
         addAndMakeVisible(linkButton);
     }
 
@@ -981,7 +1014,7 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
     dismissTextPrompt();
 
     const auto preservedFilterScrollY = filterViewport.getViewPositionY();
-    const auto preservedSpeAnalyserScrollY = speAnalyserViewport.getViewPositionY();
+    const auto preservedFftAnalyserScrollY = fftAnalyserViewport.getViewPositionY();
 
     auto* prompt = new FloatingTextPrompt(currentText,
                                           std::move(onCommit),
@@ -990,7 +1023,7 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
                                           [this, closeCallback = std::move(onClose)]
                                           {
                                               const auto closePreservedFilterScrollY = filterViewport.getViewPositionY();
-                                              const auto closePreservedSpeAnalyserScrollY = speAnalyserViewport.getViewPositionY();
+                                              const auto closePreservedFftAnalyserScrollY = fftAnalyserViewport.getViewPositionY();
                                               dismissTextPrompt();
 
                                               if (filterViewport.isVisible())
@@ -999,10 +1032,10 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
                                                   filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedFilterScrollY));
                                               }
 
-                                              if (speAnalyserViewport.isVisible())
+                                              if (fftAnalyserViewport.isVisible())
                                               {
-                                                  const auto maxOffset = juce::jmax(0, speAnalyserContent.getHeight() - speAnalyserViewport.getHeight());
-                                                  speAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedSpeAnalyserScrollY));
+                                                  const auto maxOffset = juce::jmax(0, fftAnalyserContent.getHeight() - fftAnalyserViewport.getHeight());
+                                                  fftAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedFftAnalyserScrollY));
                                               }
 
                                               if (closeCallback)
@@ -1019,10 +1052,10 @@ void VxAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
         filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedFilterScrollY));
     }
 
-    if (speAnalyserViewport.isVisible())
+    if (fftAnalyserViewport.isVisible())
     {
-        const auto maxOffset = juce::jmax(0, speAnalyserContent.getHeight() - speAnalyserViewport.getHeight());
-        speAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedSpeAnalyserScrollY));
+        const auto maxOffset = juce::jmax(0, fftAnalyserContent.getHeight() - fftAnalyserViewport.getHeight());
+        fftAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedFftAnalyserScrollY));
     }
 
     juce::MessageManager::callAsync([safePrompt = juce::Component::SafePointer<FloatingTextPrompt>(prompt)]
@@ -1052,7 +1085,7 @@ void VxAudioProcessorEditor::showChoicePrompt(const juce::Rectangle<int>& anchor
                                                juce::StringArray itemTooltips)
 {
     const auto preservedFilterScrollY = filterViewport.getViewPositionY();
-    const auto preservedSpeAnalyserScrollY = speAnalyserViewport.getViewPositionY();
+    const auto preservedFftAnalyserScrollY = fftAnalyserViewport.getViewPositionY();
 
     dismissTextPrompt();
 
@@ -1066,7 +1099,7 @@ void VxAudioProcessorEditor::showChoicePrompt(const juce::Rectangle<int>& anchor
                                             [this, closeCallback = std::move(onClose)]
                                             {
                                                 const auto closePreservedFilterScrollY = filterViewport.getViewPositionY();
-                                                const auto closePreservedSpeAnalyserScrollY = speAnalyserViewport.getViewPositionY();
+                                                const auto closePreservedFftAnalyserScrollY = fftAnalyserViewport.getViewPositionY();
                                                dismissTextPrompt();
 
                                                if (filterViewport.isVisible())
@@ -1075,10 +1108,10 @@ void VxAudioProcessorEditor::showChoicePrompt(const juce::Rectangle<int>& anchor
                                                    filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedFilterScrollY));
                                                }
 
-                                               if (speAnalyserViewport.isVisible())
+                                               if (fftAnalyserViewport.isVisible())
                                                {
-                                                   const auto maxOffset = juce::jmax(0, speAnalyserContent.getHeight() - speAnalyserViewport.getHeight());
-                                                   speAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedSpeAnalyserScrollY));
+                                                   const auto maxOffset = juce::jmax(0, fftAnalyserContent.getHeight() - fftAnalyserViewport.getHeight());
+                                                   fftAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedFftAnalyserScrollY));
                                                }
 
                                                if (closeCallback)
@@ -1096,10 +1129,10 @@ void VxAudioProcessorEditor::showChoicePrompt(const juce::Rectangle<int>& anchor
         filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedFilterScrollY));
     }
 
-    if (speAnalyserViewport.isVisible())
+    if (fftAnalyserViewport.isVisible())
     {
-        const auto maxOffset = juce::jmax(0, speAnalyserContent.getHeight() - speAnalyserViewport.getHeight());
-        speAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedSpeAnalyserScrollY));
+        const auto maxOffset = juce::jmax(0, fftAnalyserContent.getHeight() - fftAnalyserViewport.getHeight());
+        fftAnalyserViewport.setViewPosition(0, juce::jlimit(0, maxOffset, preservedFftAnalyserScrollY));
     }
 
     prompt->toFront(true);

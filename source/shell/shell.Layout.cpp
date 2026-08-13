@@ -86,15 +86,15 @@ int VxAudioProcessorEditor::getFilterContentHeight() const
 
 int VxAudioProcessorEditor::getActiveFilterContentHeight() const
 {
-    if (mieModuleLoaded || mxeModuleLoaded || tseModuleLoaded)
+    if (tlsModuleLoaded || dynModuleLoaded || trsModuleLoaded)
         return 0;
 
-    if (speModuleLoaded)
+    if (fftModuleLoaded)
     {
-        return getSpeMainContentHeight() + moduleContentBottomGap;
+        return getFftMainContentHeight() + moduleContentBottomGap;
     }
 
-    if (eqeModuleLoaded)
+    if (eqlModuleLoaded)
         return getFilterContentHeight();
 
     return 0;
@@ -102,11 +102,11 @@ int VxAudioProcessorEditor::getActiveFilterContentHeight() const
 
 void VxAudioProcessorEditor::resetAnalyserPanelBounds()
 {
-    if (speAnalyserComponent != nullptr)
-        speAnalyserComponent->setBounds({});
+    if (fftAnalyserComponent != nullptr)
+        fftAnalyserComponent->setBounds({});
 
-    speAnalyserViewport.setBounds({});
-    speAnalyserContent.setSize(0, 0);
+    fftAnalyserViewport.setBounds({});
+    fftAnalyserContent.setSize(0, 0);
 }
 
 void VxAudioProcessorEditor::layoutGlobalControlsSection(juce::Rectangle<int>& bounds, const int editorInsetX)
@@ -327,12 +327,12 @@ void VxAudioProcessorEditor::resized()
         || footerTab == nullptr)
         return;
 
-    if (eqeModuleLoaded && addFilterButton == nullptr)
+    if (eqlModuleLoaded && addFilterButton == nullptr)
         return;
 
     for (const auto& section : filterSections)
     {
-        if (eqeModuleLoaded && section == nullptr)
+        if (eqlModuleLoaded && section == nullptr)
             return;
     }
 
@@ -362,7 +362,7 @@ void VxAudioProcessorEditor::resized()
     layoutFooter(bounds, editorInsetX);
     layoutGlobalControlsSection(bounds, editorInsetX);
 
-    if (! eqeModuleLoaded && ! speModuleLoaded && ! mieModuleLoaded && ! mxeModuleLoaded && ! tseModuleLoaded)
+    if (! eqlModuleLoaded && ! fftModuleLoaded && ! tlsModuleLoaded && ! dynModuleLoaded && ! trsModuleLoaded)
     {
         layoutNoModuleState(bounds);
         finalizeLayout();
@@ -371,17 +371,17 @@ void VxAudioProcessorEditor::resized()
 
     layoutModuleTabButton(bounds, editorInsetX);
 
-    if (mieModuleLoaded || mxeModuleLoaded || tseModuleLoaded)
+    if (tlsModuleLoaded || dynModuleLoaded || trsModuleLoaded)
     {
         layoutModuleEditorContent(bounds);
         finalizeLayout();
         return;
     }
 
-    if (speModuleLoaded)
-        layoutSpeModuleSections(bounds, editorInsetX);
+    if (fftModuleLoaded)
+        layoutFftModuleSections(bounds, editorInsetX);
     else
-        layoutEqeModuleSections(bounds, editorInsetX);
+        layoutEqlModuleSections(bounds, editorInsetX);
 
     finalizeLayout();
 }

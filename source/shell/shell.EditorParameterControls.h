@@ -57,6 +57,27 @@ private:
     bool interactionEnabled = true;
 };
 
+class LocalChoiceControl final : public juce::Component
+{
+public:
+    LocalChoiceControl(const juce::String& titleText,
+                       const juce::StringArray& choices,
+                       int defaultChoiceIndexIn);
+
+    int getPreferredHeight() const noexcept;
+    int getSelectedChoiceIndex() const noexcept;
+    void setSelectedChoiceIndex(int choiceIndex, bool sendNotification);
+    void resized() override;
+
+    std::function<void()> onValueChanged;
+
+private:
+    const int defaultChoiceIndex = 0;
+    std::unique_ptr<BoxTextButton> titleButton;
+    NoTickComboBox comboBox;
+    bool ignoreCallbacks = false;
+};
+
 class LocalParameterControl final : public juce::Component
 {
 public:
@@ -74,6 +95,8 @@ public:
     int getPreferredHeight() const noexcept;
     double getValue() const noexcept;
     void setValue(double value, bool sendNotification);
+    void setValueRange(double minimum, double maximum, double interval);
+    void setTitleText(const juce::String& text);
     void setOverrideText(const juce::String& text);
     void clearOverrideText();
     void setInteractionEnabled(bool shouldEnable);
@@ -81,7 +104,6 @@ public:
     juce::Rectangle<int> getValueBounds() const noexcept;
     void setTitleMouseEnabled(bool shouldEnable);
     void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);
-    void setTextToValueParser(std::function<double(const juce::String&)> parser);
     void resized() override;
 
     std::function<void()> onValueChanged;
@@ -99,6 +121,5 @@ private:
     std::unique_ptr<ValueBoxComponent> valueBox;
     juce::String overrideText;
     std::function<void()> valueClickAction;
-    std::function<double(const juce::String&)> textToValueParser;
     bool interactionEnabled = true;
 };

@@ -18,6 +18,7 @@ public:
         heading,
         parameter,
         toggle,
+        inactive,
         readout,
         time
     };
@@ -33,8 +34,14 @@ public:
         const char* modeSuffix = "";
         const char* syncSuffix = "";
         const char* exclusiveGroup = "";
+        const char* auxiliaryToggleSuffix = "";
+        const char* auxiliaryToggleLabel = "";
+        const char* reorderGroup = "";
+        const char* orderSuffix = "";
+        bool fixedOrder = false;
         int topGapMultiplier = 1;
         int sourceBandIndex = -1;
+        int controlsInRow = 1;
     };
 
     struct Config
@@ -52,6 +59,7 @@ public:
         std::function<juce::String()> makeActiveSplitCountParameterId;
         std::vector<BandControlSpec> bandControls;
         std::vector<BandControlSpec> bandTailControls;
+        int crossoverDecimals = 0;
         bool showAutoSolo = true;
         std::function<juce::StringArray()> getHostSyncChoices;
         std::function<int()> getDefaultHostSyncChoiceIndex;
@@ -108,6 +116,8 @@ private:
     size_t getActiveBandCount() const;
     bool constrainCrossoverFrequency(size_t crossoverIndex);
     bool setParameterPlainValue(const juce::String& parameterId, float plainValue);
+    bool swapParameterPlainValues(const juce::String& firstParameterId,
+                                  const juce::String& secondParameterId);
     bool setParameterNormalisedValue(juce::RangedAudioParameter& parameter, float normalisedValue);
     bool assignButtonHostSlot(const juce::String& parameterId,
                               const juce::String& fallbackName,

@@ -4,49 +4,49 @@
 #include <array>
 #include <atomic>
 
-#include "../modules/eqe/module.eqe.Processor.h"
+#include "../modules/eql/module.eql.Processor.h"
 
-class SpeModuleProcessor;
-class MieAudioProcessor;
-class MxeAudioProcessor;
-class TseModuleProcessor;
+class FftModuleProcessor;
+class TlsAudioProcessor;
+class DynAudioProcessor;
+class TrsModuleProcessor;
 
 class VxAudioProcessor final : public juce::AudioProcessor,
                                private juce::AudioProcessorValueTreeState::Listener,
                                private juce::ValueTree::Listener
 {
 public:
-    using FilterType = EqeModuleProcessor::FilterType;
+    using FilterType = EqlModuleProcessor::FilterType;
 
     inline static constexpr auto paramGlobalBypassId = "global_bypass";
     inline static constexpr auto paramHostSlotPrefix = "host_slot_";
     inline static constexpr auto activeModuleStateKey = "vx.active_module";
-    inline static constexpr auto eqeModuleStateKey = "vx.eqe_state";
-    inline static constexpr auto speModuleStateKey = "vx.spe_state";
-    inline static constexpr auto mieModuleStateKey = "vx.mie_state";
-    inline static constexpr auto mxeModuleStateKey = "vx.mxe_state";
-    inline static constexpr auto tseModuleStateKey = "vx.tse_state";
+    inline static constexpr auto eqlModuleStateKey = "vx.eql_state";
+    inline static constexpr auto fftModuleStateKey = "vx.fft_state";
+    inline static constexpr auto tlsModuleStateKey = "vx.tls_state";
+    inline static constexpr auto dynModuleStateKey = "vx.dyn_state";
+    inline static constexpr auto trsModuleStateKey = "vx.trs_state";
     inline static constexpr auto abCompareSnapshotAStateKey = "vx.ab_compare.a";
     inline static constexpr auto abCompareSnapshotBStateKey = "vx.ab_compare.b";
     inline static constexpr auto abCompareActiveSlotStateKey = "vx.ab_compare.active";
-    inline static constexpr auto eqeModuleId = "eqe";
-    inline static constexpr auto speModuleId = "spe";
-    inline static constexpr auto mieModuleId = "mie";
-    inline static constexpr auto mxeModuleId = "mxe";
-    inline static constexpr auto tseModuleId = "tse";
+    inline static constexpr auto eqlModuleId = "eql";
+    inline static constexpr auto fftModuleId = "fft";
+    inline static constexpr auto tlsModuleId = "tls";
+    inline static constexpr auto dynModuleId = "dyn";
+    inline static constexpr auto trsModuleId = "trs";
     inline static constexpr auto editorWidthStateKey = "vx.editor.width";
     inline static constexpr auto editorHeightStateKey = "vx.editor.height";
-    static constexpr int maxEqeFilterCount = EqeModuleProcessor::maxFilterCount;
+    static constexpr int maxEqlFilterCount = EqlModuleProcessor::maxFilterCount;
     static constexpr int hostAutomationSlotCount = 64;
 
     enum class ActiveModule
     {
         none,
-        mie,
-        eqe,
-        spe,
-        mxe,
-        tse,
+        tls,
+        eql,
+        fft,
+        dyn,
+        trs,
     };
     inline static constexpr std::array<FilterType, 7> filterTypePresetOrder
     {
@@ -108,16 +108,16 @@ public:
     void setActiveModule(ActiveModule module);
     bool loadModule(ActiveModule module);
     bool clearLoadedModule();
-    EqeModuleProcessor* getEqeModuleProcessor() noexcept;
-    const EqeModuleProcessor* getEqeModuleProcessor() const noexcept;
-    SpeModuleProcessor* getSpeModuleProcessor() noexcept;
-    const SpeModuleProcessor* getSpeModuleProcessor() const noexcept;
-    MieAudioProcessor* getMieModuleProcessor() noexcept;
-    const MieAudioProcessor* getMieModuleProcessor() const noexcept;
-    MxeAudioProcessor* getMxeModuleProcessor() noexcept;
-    const MxeAudioProcessor* getMxeModuleProcessor() const noexcept;
-    TseModuleProcessor* getTseModuleProcessor() noexcept;
-    const TseModuleProcessor* getTseModuleProcessor() const noexcept;
+    EqlModuleProcessor* getEqlModuleProcessor() noexcept;
+    const EqlModuleProcessor* getEqlModuleProcessor() const noexcept;
+    FftModuleProcessor* getFftModuleProcessor() noexcept;
+    const FftModuleProcessor* getFftModuleProcessor() const noexcept;
+    TlsAudioProcessor* getTlsModuleProcessor() noexcept;
+    const TlsAudioProcessor* getTlsModuleProcessor() const noexcept;
+    DynAudioProcessor* getDynModuleProcessor() noexcept;
+    const DynAudioProcessor* getDynModuleProcessor() const noexcept;
+    TrsModuleProcessor* getTrsModuleProcessor() noexcept;
+    const TrsModuleProcessor* getTrsModuleProcessor() const noexcept;
     juce::Point<int> getLastEditorSize() const noexcept;
     void setLastEditorSize(int width, int height) noexcept;
     void notifyHostOfStateChange();
@@ -168,11 +168,11 @@ private:
     juce::ValueTree observedModuleState;
     std::atomic<float>* globalBypassParam = nullptr;
     std::atomic<float> globalClipIndicator { 0.0f };
-    std::unique_ptr<EqeModuleProcessor> eqeModuleProcessor;
-    std::unique_ptr<SpeModuleProcessor> speModuleProcessor;
-    std::unique_ptr<MieAudioProcessor> mieModuleProcessor;
-    std::unique_ptr<MxeAudioProcessor> mxeModuleProcessor;
-    std::unique_ptr<TseModuleProcessor> tseModuleProcessor;
+    std::unique_ptr<EqlModuleProcessor> eqlModuleProcessor;
+    std::unique_ptr<FftModuleProcessor> fftModuleProcessor;
+    std::unique_ptr<TlsAudioProcessor> tlsModuleProcessor;
+    std::unique_ptr<DynAudioProcessor> dynModuleProcessor;
+    std::unique_ptr<TrsModuleProcessor> trsModuleProcessor;
     std::atomic<ActiveModule> activeModule { ActiveModule::none };
     std::atomic<bool> processingPrepared { false };
     std::atomic<int> lastEditorWidth { 0 };

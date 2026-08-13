@@ -1,8 +1,8 @@
 #include "shell.Processor.h"
-#include "../modules/multiband/mie/module.mie.PluginProcessor.h"
-#include "../modules/multiband/mxe/module.mxe.PluginProcessor.h"
-#include "../modules/spe/module.spe.SpeProcessor.h"
-#include "../modules/multiband/tse/module.tse.TseProcessor.h"
+#include "../modules/multiband/tls/module.tls.PluginProcessor.h"
+#include "../modules/multiband/dyn/module.dyn.PluginProcessor.h"
+#include "../modules/fft/module.fft.FftProcessor.h"
+#include "../modules/multiband/trs/module.trs.TrsProcessor.h"
 
 #include <memory>
 #include <vector>
@@ -39,7 +39,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout VxAudioProcessor::createPara
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameterLayout;
     parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID { paramGlobalBypassId, 1 },
-        "BYPASS",
+        "VX / GLOBAL / BYPASS",
         false,
         juce::AudioParameterBoolAttributes().withAutomatable(false).withMeta(true)));
 

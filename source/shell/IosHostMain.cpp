@@ -1,6 +1,6 @@
 #include <JuceHeader.h>
 
-#include "module.eqe.ProcessorSupport.h"
+#include "module.eql.ProcessorSupport.h"
 #include "shell.Editor.h"
 
 class HostContent final : public juce::Component
@@ -65,14 +65,14 @@ public:
 
     void initialise(const juce::String&) override
     {
-        syncEqePresetStorageWithSharedContainer();
+        syncEqlPresetStorageWithSharedContainer();
         juce::Desktop::getInstance().setOrientationsEnabled(juce::Desktop::upright);
         mainWindow = std::make_unique<HostWindow>(getApplicationName());
     }
 
     void resumed() override
     {
-        syncEqePresetStorageWithSharedContainer();
+        syncEqlPresetStorageWithSharedContainer();
     }
 
     void shutdown() override

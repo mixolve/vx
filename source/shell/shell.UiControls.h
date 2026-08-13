@@ -117,7 +117,6 @@ public:
     explicit BoxTextButton(juce::Colour accent);
     ~BoxTextButton() override;
 
-    void setManualInteractionEnabled(bool shouldEnable) noexcept;
     void setAlwaysAccentOutline(bool shouldAlwaysAccent);
     void setPressFillEnabled(bool shouldEnable) noexcept;
     void setClearsParameterFocusOnMouseDown(bool shouldClear) noexcept;
@@ -126,7 +125,7 @@ public:
     void setTextJustification(juce::Justification justification) noexcept;
     void setArrowDirection(ArrowDirection direction) noexcept;
     void setBorderVisible(bool shouldShow) noexcept;
-    void setEqeFilterHeaderColouringEnabled(bool shouldEnable) noexcept;
+    void setEqlFilterHeaderColouringEnabled(bool shouldEnable) noexcept;
     void setABCompareHighlightIndex(int highlightedIndex) noexcept;
     void setCancelClickOnLeave(bool shouldEnable) noexcept;
     void setTextColourOverride(juce::Colour colour);
@@ -134,16 +133,13 @@ public:
     void setLongPressAction(std::function<void()> action, int delayMs = 500, juce::String promptText = "RESET?");
 
     void paintButton(juce::Graphics& graphics, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+    void enablementChanged() override;
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseDrag(const juce::MouseEvent& event) override;
     void mouseUp(const juce::MouseEvent& event) override;
     void mouseExit(const juce::MouseEvent&) override;
 
-    std::function<void()> onPressed;
     std::function<bool(const juce::ModifierKeys&)> onClickWithModifiers;
-    std::function<void(const juce::MouseEvent&)> onDragBegin;
-    std::function<void(const juce::MouseEvent&)> onDragMove;
-    std::function<void(const juce::MouseEvent&)> onDragFinish;
 
 private:
     juce::Colour accentColour;
@@ -152,9 +148,6 @@ private:
     bool clearsParameterFocusOnMouseDown = true;
     bool fillVisible = true;
     bool dividerLineVisible = false;
-    bool manualInteractionEnabled = false;
-    bool manualPointerDown = false;
-    bool manualDragActive = false;
     bool pointerDown = false;
     bool dragActive = false;
     bool pressHighlight = false;
@@ -163,7 +156,7 @@ private:
     juce::Justification textJustification = juce::Justification::centred;
     ArrowDirection arrowDirection = ArrowDirection::none;
     bool borderVisible = true;
-    bool eqeFilterHeaderColouringEnabled = false;
+    bool eqlFilterHeaderColouringEnabled = false;
     int abCompareHighlightIndex = -1;
     bool hasTextColourOverride = false;
     juce::Colour textColourOverride;

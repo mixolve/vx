@@ -1,8 +1,8 @@
 #include "shell.Processor.h"
-#include "../modules/multiband/mie/module.mie.PluginProcessor.h"
-#include "../modules/multiband/mxe/module.mxe.PluginProcessor.h"
-#include "../modules/spe/module.spe.SpeProcessor.h"
-#include "../modules/multiband/tse/module.tse.TseProcessor.h"
+#include "../modules/multiband/tls/module.tls.PluginProcessor.h"
+#include "../modules/multiband/dyn/module.dyn.PluginProcessor.h"
+#include "../modules/fft/module.fft.FftProcessor.h"
+#include "../modules/multiband/trs/module.trs.TrsProcessor.h"
 #include "shell.ShellState.h"
 
 #include <optional>
@@ -11,11 +11,11 @@ const char* VxAudioProcessor::stateIdForModule(const ActiveModule module) noexce
 {
     switch (module)
     {
-        case ActiveModule::mie: return mieModuleId;
-        case ActiveModule::eqe: return eqeModuleId;
-        case ActiveModule::spe: return speModuleId;
-        case ActiveModule::mxe: return mxeModuleId;
-        case ActiveModule::tse: return tseModuleId;
+        case ActiveModule::tls: return tlsModuleId;
+        case ActiveModule::eql: return eqlModuleId;
+        case ActiveModule::fft: return fftModuleId;
+        case ActiveModule::dyn: return dynModuleId;
+        case ActiveModule::trs: return trsModuleId;
         case ActiveModule::none: break;
     }
 
@@ -26,20 +26,20 @@ VxAudioProcessor::ActiveModule VxAudioProcessor::moduleFromStateId(const juce::S
 {
     const auto trimmed = moduleId.trim();
 
-    if (trimmed.equalsIgnoreCase(eqeModuleId))
-        return ActiveModule::eqe;
+    if (trimmed.equalsIgnoreCase(eqlModuleId))
+        return ActiveModule::eql;
 
-    if (trimmed.equalsIgnoreCase(speModuleId))
-        return ActiveModule::spe;
+    if (trimmed.equalsIgnoreCase(fftModuleId))
+        return ActiveModule::fft;
 
-    if (trimmed.equalsIgnoreCase(mieModuleId))
-        return ActiveModule::mie;
+    if (trimmed.equalsIgnoreCase(tlsModuleId))
+        return ActiveModule::tls;
 
-    if (trimmed.equalsIgnoreCase(mxeModuleId))
-        return ActiveModule::mxe;
+    if (trimmed.equalsIgnoreCase(dynModuleId))
+        return ActiveModule::dyn;
 
-    if (trimmed.equalsIgnoreCase(tseModuleId))
-        return ActiveModule::tse;
+    if (trimmed.equalsIgnoreCase(trsModuleId))
+        return ActiveModule::trs;
 
     return ActiveModule::none;
 }
@@ -93,9 +93,9 @@ bool VxAudioProcessor::loadModule(const ActiveModule module)
         return false;
     }
 
-    if (module == ActiveModule::eqe)
-        if (auto* eqe = getEqeModuleProcessor())
-            eqe->loadInitialFilterPreset();
+    if (module == ActiveModule::eql)
+        if (auto* eql = getEqlModuleProcessor())
+            eql->loadInitialFilterPreset();
 
     setActiveModule(module);
     registerActiveModuleStateListeners();
@@ -135,11 +135,11 @@ void VxAudioProcessor::registerActiveModuleStateListeners()
 
     switch (getActiveModule())
     {
-        case ActiveModule::eqe: observeModule(getEqeModuleProcessor()); break;
-        case ActiveModule::spe: observeModule(getSpeModuleProcessor()); break;
-        case ActiveModule::mie: observeModule(getMieModuleProcessor()); break;
-        case ActiveModule::mxe: observeModule(getMxeModuleProcessor()); break;
-        case ActiveModule::tse: observeModule(getTseModuleProcessor()); break;
+        case ActiveModule::eql: observeModule(getEqlModuleProcessor()); break;
+        case ActiveModule::fft: observeModule(getFftModuleProcessor()); break;
+        case ActiveModule::tls: observeModule(getTlsModuleProcessor()); break;
+        case ActiveModule::dyn: observeModule(getDynModuleProcessor()); break;
+        case ActiveModule::trs: observeModule(getTrsModuleProcessor()); break;
         case ActiveModule::none: break;
     }
 
@@ -192,53 +192,53 @@ void VxAudioProcessor::valueTreePropertyChanged(juce::ValueTree&, const juce::Id
     notifyHostOfStateChange();
 }
 
-MieAudioProcessor* VxAudioProcessor::getMieModuleProcessor() noexcept
+TlsAudioProcessor* VxAudioProcessor::getTlsModuleProcessor() noexcept
 {
-    return mieModuleProcessor.get();
+    return tlsModuleProcessor.get();
 }
 
-const MieAudioProcessor* VxAudioProcessor::getMieModuleProcessor() const noexcept
+const TlsAudioProcessor* VxAudioProcessor::getTlsModuleProcessor() const noexcept
 {
-    return mieModuleProcessor.get();
+    return tlsModuleProcessor.get();
 }
 
-SpeModuleProcessor* VxAudioProcessor::getSpeModuleProcessor() noexcept
+FftModuleProcessor* VxAudioProcessor::getFftModuleProcessor() noexcept
 {
-    return speModuleProcessor.get();
+    return fftModuleProcessor.get();
 }
 
-const SpeModuleProcessor* VxAudioProcessor::getSpeModuleProcessor() const noexcept
+const FftModuleProcessor* VxAudioProcessor::getFftModuleProcessor() const noexcept
 {
-    return speModuleProcessor.get();
+    return fftModuleProcessor.get();
 }
 
-MxeAudioProcessor* VxAudioProcessor::getMxeModuleProcessor() noexcept
+DynAudioProcessor* VxAudioProcessor::getDynModuleProcessor() noexcept
 {
-    return mxeModuleProcessor.get();
+    return dynModuleProcessor.get();
 }
 
-const MxeAudioProcessor* VxAudioProcessor::getMxeModuleProcessor() const noexcept
+const DynAudioProcessor* VxAudioProcessor::getDynModuleProcessor() const noexcept
 {
-    return mxeModuleProcessor.get();
+    return dynModuleProcessor.get();
 }
 
-TseModuleProcessor* VxAudioProcessor::getTseModuleProcessor() noexcept
+TrsModuleProcessor* VxAudioProcessor::getTrsModuleProcessor() noexcept
 {
-    return tseModuleProcessor.get();
+    return trsModuleProcessor.get();
 }
 
-const TseModuleProcessor* VxAudioProcessor::getTseModuleProcessor() const noexcept
+const TrsModuleProcessor* VxAudioProcessor::getTrsModuleProcessor() const noexcept
 {
-    return tseModuleProcessor.get();
+    return trsModuleProcessor.get();
 }
 
 void VxAudioProcessor::resetModuleProcessors() noexcept
 {
-    eqeModuleProcessor.reset();
-    speModuleProcessor.reset();
-    mieModuleProcessor.reset();
-    mxeModuleProcessor.reset();
-    tseModuleProcessor.reset();
+    eqlModuleProcessor.reset();
+    fftModuleProcessor.reset();
+    tlsModuleProcessor.reset();
+    dynModuleProcessor.reset();
+    trsModuleProcessor.reset();
 }
 
 bool VxAudioProcessor::createModuleInstance(const ActiveModule module)
@@ -253,25 +253,25 @@ bool VxAudioProcessor::createModuleInstance(const ActiveModule module)
 
     switch (module)
     {
-        case ActiveModule::eqe:
-            eqeModuleProcessor = std::make_unique<EqeModuleProcessor>();
-            return prepareModule(eqeModuleProcessor);
+        case ActiveModule::eql:
+            eqlModuleProcessor = std::make_unique<EqlModuleProcessor>();
+            return prepareModule(eqlModuleProcessor);
 
-        case ActiveModule::spe:
-            speModuleProcessor = std::make_unique<SpeModuleProcessor>(*this);
-            return prepareModule(speModuleProcessor);
+        case ActiveModule::fft:
+            fftModuleProcessor = std::make_unique<FftModuleProcessor>(*this);
+            return prepareModule(fftModuleProcessor);
 
-        case ActiveModule::mie:
-            mieModuleProcessor = std::make_unique<MieAudioProcessor>();
-            return prepareModule(mieModuleProcessor);
+        case ActiveModule::tls:
+            tlsModuleProcessor = std::make_unique<TlsAudioProcessor>();
+            return prepareModule(tlsModuleProcessor);
 
-        case ActiveModule::mxe:
-            mxeModuleProcessor = std::make_unique<MxeAudioProcessor>();
-            return prepareModule(mxeModuleProcessor);
+        case ActiveModule::dyn:
+            dynModuleProcessor = std::make_unique<DynAudioProcessor>();
+            return prepareModule(dynModuleProcessor);
 
-        case ActiveModule::tse:
-            tseModuleProcessor = std::make_unique<TseModuleProcessor>(*this);
-            return prepareModule(tseModuleProcessor);
+        case ActiveModule::trs:
+            trsModuleProcessor = std::make_unique<TrsModuleProcessor>(*this);
+            return prepareModule(trsModuleProcessor);
 
         case ActiveModule::none:
             break;
@@ -280,14 +280,14 @@ bool VxAudioProcessor::createModuleInstance(const ActiveModule module)
     return false;
 }
 
-EqeModuleProcessor* VxAudioProcessor::getEqeModuleProcessor() noexcept
+EqlModuleProcessor* VxAudioProcessor::getEqlModuleProcessor() noexcept
 {
-    return eqeModuleProcessor.get();
+    return eqlModuleProcessor.get();
 }
 
-const EqeModuleProcessor* VxAudioProcessor::getEqeModuleProcessor() const noexcept
+const EqlModuleProcessor* VxAudioProcessor::getEqlModuleProcessor() const noexcept
 {
-    return eqeModuleProcessor.get();
+    return eqlModuleProcessor.get();
 }
 
 void VxAudioProcessor::restoreLoadedModuleFromStateText(const juce::String& text, const bool publishActiveModule)

@@ -8,4 +8,4 @@ inline constexpr int internalFrameInsetY = 4;
 inline constexpr int contentFrameInsetX = internalFrameInsetX;
 inline constexpr int contentFrameInsetY = internalFrameInsetY;
 inline constexpr int frameLineThickness = 1;
-inline constexpr int speInlineAnalyserHeightRows = 6;
+inline constexpr int fftInlineAnalyserHeightRows = 6;

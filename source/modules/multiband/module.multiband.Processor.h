@@ -155,9 +155,6 @@ public:
         auto* leftChannel = buffer.getWritePointer(0);
         auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
 
-        for (auto& bandProcessor : bandProcessors)
-            bandProcessor.beginBlock(buffer.getNumSamples());
-
         for (int sampleIndex = 0; sampleIndex < buffer.getNumSamples(); ++sampleIndex)
         {
             const auto leftInput = static_cast<double>(leftChannel[sampleIndex]);

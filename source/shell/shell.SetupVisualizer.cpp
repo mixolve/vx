@@ -1,16 +1,16 @@
 #include "shell.SetupSupport.h"
 #include "shell.Editor.h"
 #include "shell.UiStyle.h"
-#include "../modules/spe/module.spe.SpeProcessor.h"
+#include "../modules/fft/module.fft.FftProcessor.h"
 
 #include <cmath>
 
 namespace
 {
-class SpeSpectrumAnalyserComponent final : public juce::Component
+class FftSpectrumAnalyserComponent final : public juce::Component
 {
 public:
-    explicit SpeSpectrumAnalyserComponent(SpeModuleProcessor& processorIn)
+    explicit FftSpectrumAnalyserComponent(FftModuleProcessor& processorIn)
         : processor(processorIn)
     {
         setInterceptsMouseClicks(false, false);
@@ -21,8 +21,19 @@ public:
     void refreshResponse()
     {
         processor.copyAnalyserData(scopeData, sampleRate);
-        processor.copyGainReductionData(leftGainReductionData, rightGainReductionData);
         displaySettings = processor.getDisplaySettings();
+
+        if (displaySettings.phaseMode)
+        {
+            processor.copyPhaseAnalysisData(phaseCorrelationData,
+                                            leftGainReductionData,
+                                            rightGainReductionData);
+        }
+        else
+        {
+            processor.copyGainReductionData(leftGainReductionData, rightGainReductionData);
+        }
+
         repaint();
     }
 
@@ -54,9 +65,15 @@ public:
                                             sourceMaximumHz,
                                             displaySettings.rightFrequencyHz);
 
-        for (auto index = 0; index < static_cast<int>(SpeModuleProcessor::analyserScopeSize); ++index)
+        if (displaySettings.phaseMode)
         {
-            const auto proportion = static_cast<float>(index) / static_cast<float>(SpeModuleProcessor::analyserScopeSize - 1);
+            paintPhaseResponse(g, plotBounds, minimumHz, maximumHz, sourceMaximumHz);
+            return;
+        }
+
+        for (auto index = 0; index < static_cast<int>(FftModuleProcessor::analyserScopeSize); ++index)
+        {
+            const auto proportion = static_cast<float>(index) / static_cast<float>(FftModuleProcessor::analyserScopeSize - 1);
             const auto x = plotBounds.getX() + proportion * plotBounds.getWidth();
             const auto frequency = juce::mapToLog10(proportion, minimumHz, maximumHz);
             const auto sampledDecibels = sampleScopeAtFrequency(scopeData, frequency, sourceMaximumHz);
@@ -69,13 +86,13 @@ public:
                                                                                    frequency,
                                                                                    sourceMaximumHz));
             const auto octavesFromSlopeReference = std::log2(frequency / 632.455532f);
-            const auto displaySlopeOffset = displaySettings.slopeDbPerOct * octavesFromSlopeReference;
+            const auto displaySlopeOffset = displaySettings.slopePerOctave * octavesFromSlopeReference;
             const auto postDecibels = sampledDecibels + displaySlopeOffset;
             const auto postY = decibelsToY(postDecibels, plotBounds);
-            const auto leftThresholdY = decibelsToY(displaySettings.leftThresholdDb, plotBounds);
-            const auto rightThresholdY = decibelsToY(displaySettings.rightThresholdDb, plotBounds);
-            const auto leftReductionY = decibelsToY(displaySettings.leftThresholdDb - sampledLeftReductionDb, plotBounds);
-            const auto rightReductionY = decibelsToY(displaySettings.rightThresholdDb - sampledRightReductionDb, plotBounds);
+            const auto leftThresholdY = decibelsToY(displaySettings.leftThreshold, plotBounds);
+            const auto rightThresholdY = decibelsToY(displaySettings.rightThreshold, plotBounds);
+            const auto leftReductionY = decibelsToY(displaySettings.leftThreshold - sampledLeftReductionDb, plotBounds);
+            const auto rightReductionY = decibelsToY(displaySettings.rightThreshold - sampledRightReductionDb, plotBounds);
 
             if (index == 0)
             {
@@ -102,12 +119,12 @@ public:
         spectrumFillPath.lineTo(plotBounds.getX(), plotBounds.getBottom());
         spectrumFillPath.closeSubPath();
 
-        for (auto index = static_cast<int>(SpeModuleProcessor::analyserScopeSize) - 1; index >= 0; --index)
+        for (auto index = static_cast<int>(FftModuleProcessor::analyserScopeSize) - 1; index >= 0; --index)
         {
-            const auto proportion = static_cast<float>(index) / static_cast<float>(SpeModuleProcessor::analyserScopeSize - 1);
+            const auto proportion = static_cast<float>(index) / static_cast<float>(FftModuleProcessor::analyserScopeSize - 1);
             const auto x = plotBounds.getX() + proportion * plotBounds.getWidth();
-            leftReductionPath.lineTo(x, decibelsToY(displaySettings.leftThresholdDb, plotBounds));
-            rightReductionPath.lineTo(x, decibelsToY(displaySettings.rightThresholdDb, plotBounds));
+            leftReductionPath.lineTo(x, decibelsToY(displaySettings.leftThreshold, plotBounds));
+            rightReductionPath.lineTo(x, decibelsToY(displaySettings.rightThreshold, plotBounds));
         }
 
         leftReductionPath.closeSubPath();
@@ -128,7 +145,91 @@ public:
     }
 
 private:
-    static float sampleScopeAtFrequency(const std::array<float, SpeModuleProcessor::analyserScopeSize>& data,
+    void paintPhaseResponse(juce::Graphics& g,
+                            const juce::Rectangle<float> plotBounds,
+                            const float minimumHz,
+                            const float maximumHz,
+                            const float sourceMaximumHz) const
+    {
+        const auto low = juce::jmin(displaySettings.rangeLow, displaySettings.rangeHigh - 0.01f);
+        const auto high = juce::jmax(displaySettings.rangeHigh, low + 0.01f);
+        const auto correlationToY = [&plotBounds, low, high] (const float correlation)
+        {
+            return juce::jmap(juce::jlimit(low, high, correlation),
+                              low,
+                              high,
+                              plotBounds.getBottom(),
+                              plotBounds.getY());
+        };
+
+        if (low <= 0.0f && high >= 0.0f)
+        {
+            g.setColour(uiGrey500.withAlpha(0.45f));
+            g.drawHorizontalLine(juce::roundToInt(correlationToY(0.0f)),
+                                 plotBounds.getX(),
+                                 plotBounds.getRight());
+        }
+
+        juce::Path correlationPath;
+        juce::Path reductionPath;
+        juce::Path thresholdPath;
+        const auto displayedThreshold = -displaySettings.leftThreshold;
+        const auto thresholdY = correlationToY(displayedThreshold);
+
+        for (auto index = 0; index < static_cast<int>(FftModuleProcessor::analyserScopeSize); ++index)
+        {
+            const auto proportion = static_cast<float>(index)
+                                  / static_cast<float>(FftModuleProcessor::analyserScopeSize - 1);
+            const auto x = plotBounds.getX() + proportion * plotBounds.getWidth();
+            const auto frequency = juce::mapToLog10(proportion, minimumHz, maximumHz);
+            const auto correlation = sampleScopeAtFrequency(phaseCorrelationData,
+                                                            frequency,
+                                                            sourceMaximumHz);
+            const auto y = correlationToY(correlation);
+            const auto reduction = juce::jmax(0.0f,
+                                              sampleScopeAtFrequency(leftGainReductionData,
+                                                                     frequency,
+                                                                     sourceMaximumHz));
+            const auto reductionDirection = displayedThreshold <= 0.0f ? 1.0f : -1.0f;
+            const auto reductionY = correlationToY(displayedThreshold
+                                                    + (reductionDirection * reduction));
+
+            if (index == 0)
+            {
+                correlationPath.startNewSubPath(x, y);
+                thresholdPath.startNewSubPath(x, thresholdY);
+                reductionPath.startNewSubPath(x, thresholdY);
+                reductionPath.lineTo(x, reductionY);
+            }
+            else
+            {
+                correlationPath.lineTo(x, y);
+                thresholdPath.lineTo(x, thresholdY);
+                reductionPath.lineTo(x, reductionY);
+            }
+        }
+
+        for (auto index = static_cast<int>(FftModuleProcessor::analyserScopeSize) - 1; index >= 0; --index)
+        {
+            const auto proportion = static_cast<float>(index)
+                                  / static_cast<float>(FftModuleProcessor::analyserScopeSize - 1);
+            const auto x = plotBounds.getX() + proportion * plotBounds.getWidth();
+            reductionPath.lineTo(x, thresholdY);
+        }
+
+        reductionPath.closeSubPath();
+
+        g.setColour(analyserPhaseColour.withAlpha(0.55f));
+        g.fillPath(reductionPath);
+        g.setColour(analyserPhaseColour);
+        g.strokePath(thresholdPath, juce::PathStrokeType(1.0f));
+        g.setColour(uiAccent);
+        g.strokePath(correlationPath, juce::PathStrokeType(1.5f));
+        g.setColour(uiGrey500);
+        g.drawRect(plotBounds, 1.0f);
+    }
+
+    static float sampleScopeAtFrequency(const std::array<float, FftModuleProcessor::analyserScopeSize>& data,
                                         const float frequency,
                                         const float sourceMaximumHz)
     {
@@ -136,13 +237,13 @@ private:
         const auto sourceProportion = std::log10(clampedFrequency / 20.0f)
                                     / std::log10(sourceMaximumHz / 20.0f);
         const auto scopePosition = juce::jlimit(0.0f,
-                                                static_cast<float>(SpeModuleProcessor::analyserScopeSize - 1),
-                                                sourceProportion * static_cast<float>(SpeModuleProcessor::analyserScopeSize - 1));
+                                                static_cast<float>(FftModuleProcessor::analyserScopeSize - 1),
+                                                sourceProportion * static_cast<float>(FftModuleProcessor::analyserScopeSize - 1));
         const auto lowerIndex = juce::jlimit(0,
-                                             static_cast<int>(SpeModuleProcessor::analyserScopeSize) - 1,
+                                             static_cast<int>(FftModuleProcessor::analyserScopeSize) - 1,
                                              static_cast<int>(std::floor(scopePosition)));
         const auto upperIndex = juce::jlimit(0,
-                                             static_cast<int>(SpeModuleProcessor::analyserScopeSize) - 1,
+                                             static_cast<int>(FftModuleProcessor::analyserScopeSize) - 1,
                                              lowerIndex + 1);
         const auto interpolation = scopePosition - static_cast<float>(lowerIndex);
         return juce::jmap(interpolation,
@@ -152,8 +253,8 @@ private:
 
     float decibelsToY(const float decibels, const juce::Rectangle<float> bounds) const
     {
-        const auto low = juce::jmin(displaySettings.rangeLowDb, displaySettings.rangeHighDb - 6.0f);
-        const auto high = juce::jmax(displaySettings.rangeHighDb, low + 6.0f);
+        const auto low = juce::jmin(displaySettings.rangeLow, displaySettings.rangeHigh - 6.0f);
+        const auto high = juce::jmax(displaySettings.rangeHigh, low + 6.0f);
         return juce::jmap(juce::jlimit(low, high, decibels),
                           low,
                           high,
@@ -161,17 +262,18 @@ private:
                           bounds.getY());
     }
 
-    SpeModuleProcessor& processor;
-    std::array<float, SpeModuleProcessor::analyserScopeSize> scopeData {};
-    std::array<float, SpeModuleProcessor::analyserScopeSize> leftGainReductionData {};
-    std::array<float, SpeModuleProcessor::analyserScopeSize> rightGainReductionData {};
-    SpeModuleProcessor::DisplaySettings displaySettings;
+    FftModuleProcessor& processor;
+    std::array<float, FftModuleProcessor::analyserScopeSize> scopeData {};
+    std::array<float, FftModuleProcessor::analyserScopeSize> leftGainReductionData {};
+    std::array<float, FftModuleProcessor::analyserScopeSize> rightGainReductionData {};
+    std::array<float, FftModuleProcessor::analyserScopeSize> phaseCorrelationData {};
+    FftModuleProcessor::DisplaySettings displaySettings;
     double sampleRate = 44100.0;
 };
 
-SpeSpectrumAnalyserComponent* getSpeAnalyserComponent(juce::Component* component) noexcept
+FftSpectrumAnalyserComponent* getFftAnalyserComponent(juce::Component* component) noexcept
 {
-    return dynamic_cast<SpeSpectrumAnalyserComponent*>(component);
+    return dynamic_cast<FftSpectrumAnalyserComponent*>(component);
 }
 }
 
@@ -182,14 +284,14 @@ juce::String getMixolveInfoMarkdown()
     return juce::String::fromUTF8(BinaryData::about_md, BinaryData::about_mdSize);
 }
 
-std::unique_ptr<juce::Component> createSpeAnalyserComponent(SpeModuleProcessor& processor)
+std::unique_ptr<juce::Component> createFftAnalyserComponent(FftModuleProcessor& processor)
 {
-    return std::make_unique<SpeSpectrumAnalyserComponent>(processor);
+    return std::make_unique<FftSpectrumAnalyserComponent>(processor);
 }
 
-void refreshSpeAnalyserComponent(juce::Component* component)
+void refreshFftAnalyserComponent(juce::Component* component)
 {
-    if (auto* analyser = getSpeAnalyserComponent(component))
+    if (auto* analyser = getFftAnalyserComponent(component))
         analyser->refreshResponse();
 }
 
@@ -203,8 +305,13 @@ void removeOwnedChild(juce::Component& owner, std::unique_ptr<juce::Component>& 
 }
 }
 
-void VxAudioProcessorEditor::refreshSpeAnalyserResponse()
+void VxAudioProcessorEditor::refreshFftAnalyserResponse()
 {
-    if (speModuleLoaded)
-        shell_setup_support::refreshSpeAnalyserComponent(speAnalyserComponent.get());
+    if (fftModuleLoaded)
+    {
+        if (auto* processor = audioProcessor.getFftModuleProcessor())
+            rebindFftModeControls(*processor);
+
+        shell_setup_support::refreshFftAnalyserComponent(fftAnalyserComponent.get());
+    }
 }

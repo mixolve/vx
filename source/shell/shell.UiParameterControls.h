@@ -20,6 +20,8 @@ public:
     double getValue() const noexcept;
     void detach() noexcept;
     void rebind(juce::AudioProcessorValueTreeState& state);
+    void rebind(juce::AudioProcessorValueTreeState& state, const juce::String& parameterIdIn);
+    bool isBoundTo(const juce::String& parameterIdIn) const noexcept;
     void setValue(double value, bool sendNotification);
     void setOverrideText(const juce::String& text);
     void clearOverrideText();
@@ -27,6 +29,7 @@ public:
     void setValueClickAction(std::function<void()> action);
     void setValueRange(double minimum, double maximum, double interval);
     void setTitleWidthOverride(int width) noexcept;
+    void setValueLeadingInset(int width) noexcept;
     void setTitleText(const juce::String& text);
     void setValueTextTransform(std::function<juce::String(double)> displayFormatter,
                                std::function<juce::String(double)> editorFormatter,
@@ -56,5 +59,6 @@ private:
     std::function<juce::String(double)> customEditorFormatter;
     std::function<double(const juce::String&)> customTextParser;
     int titleWidthOverride = -1;
+    int valueLeadingInset = 0;
     bool interactionEnabled = true;
 };

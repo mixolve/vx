@@ -11,7 +11,7 @@ const juce::Colour midTokenColour { 0xFF99CCCC };
 const juce::Colour sideTokenColour { 0xFFFFCC99 };
 const juce::Colour volumeTokenColour { 0xFF9999FF };
 
-juce::Colour colourForEqeFilterHeaderToken(const juce::String& token)
+juce::Colour colourForEqlFilterHeaderToken(const juce::String& token)
 {
     if (token == "LL")
         return leftTokenColour;
@@ -168,7 +168,7 @@ void drawFittedSingleLineSegments(juce::Graphics& graphics,
     }
 }
 
-bool drawEqeFilterHeaderHighlight(juce::Graphics& graphics,
+bool drawEqlFilterHeaderHighlight(juce::Graphics& graphics,
                                   const juce::String& text,
                                   const juce::Rectangle<int>& bounds,
                                   const juce::Font& font,
@@ -202,7 +202,7 @@ bool drawEqeFilterHeaderHighlight(juce::Graphics& graphics,
         }
         else
         {
-            const auto tokenColour = colourForEqeFilterHeaderToken(token);
+            const auto tokenColour = colourForEqlFilterHeaderToken(token);
 
             if (tokenColour != uiWhite)
                 foundToken = true;
@@ -239,11 +239,6 @@ BoxTextButton::BoxTextButton(const juce::Colour accent)
 BoxTextButton::~BoxTextButton()
 {
     stopTimer();
-}
-
-void BoxTextButton::setManualInteractionEnabled(const bool shouldEnable) noexcept
-{
-    manualInteractionEnabled = shouldEnable;
 }
 
 void BoxTextButton::setAlwaysAccentOutline(const bool shouldAlwaysAccent)
@@ -304,12 +299,12 @@ void BoxTextButton::setBorderVisible(const bool shouldShow) noexcept
     repaint();
 }
 
-void BoxTextButton::setEqeFilterHeaderColouringEnabled(const bool shouldEnable) noexcept
+void BoxTextButton::setEqlFilterHeaderColouringEnabled(const bool shouldEnable) noexcept
 {
-    if (eqeFilterHeaderColouringEnabled == shouldEnable)
+    if (eqlFilterHeaderColouringEnabled == shouldEnable)
         return;
 
-    eqeFilterHeaderColouringEnabled = shouldEnable;
+    eqlFilterHeaderColouringEnabled = shouldEnable;
     repaint();
 }
 
@@ -354,13 +349,12 @@ void BoxTextButton::flashConfirmationOutline()
     startTimer(500);
 }
 
-void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown)
+void BoxTextButton::paintButton(juce::Graphics& graphics, bool, bool)
 {
-    juce::ignoreUnused(shouldDrawButtonAsHighlighted, shouldDrawButtonAsDown);
-
-    const auto buttonDown = pressFillEnabled
-        && (manualInteractionEnabled ? manualPointerDown : pressHighlight);
-    const auto accentActive = alwaysAccentOutline || getToggleState();
+    const auto buttonDown = isEnabled()
+        && pressFillEnabled
+        && pressHighlight;
+    const auto accentActive = isEnabled() && (alwaysAccentOutline || getToggleState());
     const auto fill = buttonDown ? uiGrey700 : uiGrey800;
     const auto outline = confirmationFlashActive ? juce::Colour { 0xFF99CCCC }
                                                    : (accentActive ? accentColour : uiGrey500);
@@ -399,8 +393,8 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
 
         const auto textBounds = getLocalBounds().reduced(6, 0);
 
-        if (eqeFilterHeaderColouringEnabled
-            && drawEqeFilterHeaderHighlight(graphics, getButtonText(), textBounds, font, textJustification))
+        if (eqlFilterHeaderColouringEnabled
+            && drawEqlFilterHeaderHighlight(graphics, getButtonText(), textBounds, font, textJustification))
         {
             drawBottomDivider();
             return;
@@ -466,173 +460,148 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool shouldDrawButtonA
     drawBottomDivider();
 }
 
+void BoxTextButton::enablementChanged()
+{
+    if (! isEnabled())
+    {
+        stopTimer();
+        pointerDown = false;
+        dragActive = false;
+        pressHighlight = false;
+        pressCanceled = false;
+        longPressEligible = false;
+        confirmationFlashActive = false;
+        setViewportIgnoreDragFlag(false);
+
+        if (longPressArmed && getButtonText() != longPressOriginalText)
+            setButtonText(longPressOriginalText);
+
+        longPressArmed = false;
+    }
+
+    repaint();
+}
+
 void BoxTextButton::mouseDown(const juce::MouseEvent& event)
 {
+    if (! isEnabled())
+        return;
+
     if (clearsParameterFocusOnMouseDown)
         shell_parameter_focus::clearFocus(*this);
 
-    if (! manualInteractionEnabled)
-    {
-        if (event.mods.isPopupMenu() || ! event.mods.isLeftButtonDown())
-            return;
-
-        pointerDown = true;
-        dragActive = false;
-        pressCanceled = false;
-        pressHighlight = true;
-        longPressEligible = longPressAction != nullptr;
-        longPressArmed = false;
-        setViewportIgnoreDragFlag(false);
-        longPressOriginalText = getButtonText();
-        if (longPressEligible)
-            startTimer(longPressDelayMs);
-        else
-            stopTimer();
-        repaint();
+    if (event.mods.isPopupMenu() || ! event.mods.isLeftButtonDown())
         return;
-    }
 
-    manualPointerDown = true;
-    manualDragActive = false;
+    pointerDown = true;
+    dragActive = false;
+    pressCanceled = false;
     pressHighlight = true;
+    longPressEligible = longPressAction != nullptr;
+    longPressArmed = false;
+    setViewportIgnoreDragFlag(false);
+    longPressOriginalText = getButtonText();
+    if (longPressEligible)
+        startTimer(longPressDelayMs);
+    else
+        stopTimer();
     repaint();
 }
 
 void BoxTextButton::mouseDrag(const juce::MouseEvent& event)
 {
-    if (! manualInteractionEnabled)
-    {
-        if (! pointerDown)
-            return;
-
-        if (longPressArmed)
-            return;
-
-        if (cancelClickOnLeave && ! pressCanceled && ! contains(event.getPosition()))
-        {
-            pressCanceled = true;
-            pressHighlight = false;
-            longPressEligible = false;
-            stopTimer();
-            repaint();
-        }
-
-        if (! dragActive && event.getDistanceFromDragStart() >= 4)
-        {
-            dragActive = true;
-            longPressEligible = false;
-            stopTimer();
-        }
-
-        const auto shouldHighlight = contains(event.getPosition());
-
-        if (pressHighlight != shouldHighlight)
-        {
-            pressHighlight = shouldHighlight;
-            repaint();
-        }
-
-        if (! shouldHighlight)
-        {
-            longPressEligible = false;
-            stopTimer();
-        }
-
+    if (! isEnabled())
         return;
-    }
 
-    if (! manualDragActive && event.getDistanceFromDragStart() >= 4)
+    if (! pointerDown || longPressArmed)
+        return;
+
+    if (cancelClickOnLeave && ! pressCanceled && ! contains(event.getPosition()))
     {
-        manualDragActive = true;
-
-        if (onDragBegin)
-            onDragBegin(event);
+        pressCanceled = true;
+        pressHighlight = false;
+        longPressEligible = false;
+        stopTimer();
+        repaint();
     }
 
-    if (manualDragActive && onDragMove)
-        onDragMove(event);
+    if (! dragActive && event.getDistanceFromDragStart() >= 4)
+    {
+        dragActive = true;
+        longPressEligible = false;
+        stopTimer();
+    }
+
+    const auto shouldHighlight = contains(event.getPosition());
+
+    if (pressHighlight != shouldHighlight)
+    {
+        pressHighlight = shouldHighlight;
+        repaint();
+    }
+
+    if (! shouldHighlight)
+    {
+        longPressEligible = false;
+        stopTimer();
+    }
 }
 
 void BoxTextButton::mouseUp(const juce::MouseEvent& event)
 {
-    if (! manualInteractionEnabled)
-    {
-        stopTimer();
+    if (! isEnabled())
+        return;
 
-        const auto wasLongPressArmed = longPressArmed;
-        const auto wasPressCanceled = pressCanceled;
-        pointerDown = false;
-        dragActive = false;
-        pressHighlight = false;
-        longPressEligible = false;
-        longPressArmed = false;
-        pressCanceled = false;
-        setViewportIgnoreDragFlag(false);
+    stopTimer();
+
+    const auto wasLongPressArmed = longPressArmed;
+    const auto wasPressCanceled = pressCanceled;
+    pointerDown = false;
+    dragActive = false;
+    pressHighlight = false;
+    longPressEligible = false;
+    longPressArmed = false;
+    pressCanceled = false;
+    setViewportIgnoreDragFlag(false);
+    repaint();
+
+    if (wasLongPressArmed)
+    {
+        if (getButtonText() != longPressOriginalText)
+            setButtonText(longPressOriginalText);
+
         repaint();
 
-        if (wasLongPressArmed)
+        if (! wasPressCanceled && contains(event.getPosition()) && longPressAction != nullptr)
         {
-            if (getButtonText() != longPressOriginalText)
-                setButtonText(longPressOriginalText);
-
-            repaint();
-
-            if (! wasPressCanceled && contains(event.getPosition()) && longPressAction != nullptr)
-            {
-                flashConfirmationOutline();
-                longPressAction();
-            }
-
-            return;
-        }
-
-        if (wasPressCanceled)
-            return;
-
-        if (contains(event.getPosition()))
-        {
-            if (onClickWithModifiers && event.mods.isCtrlDown())
-            {
-                if (onClickWithModifiers(event.mods))
-                    flashConfirmationOutline();
-
-                return;
-            }
-
-            triggerClick();
+            flashConfirmationOutline();
+            longPressAction();
         }
 
         return;
     }
 
-    const auto wasManualDrag = manualDragActive;
-    manualPointerDown = false;
-    manualDragActive = false;
-    pressHighlight = false;
-    repaint();
+    if (wasPressCanceled)
+        return;
 
-    if (wasManualDrag)
+    if (contains(event.getPosition()))
     {
-        if (onDragFinish)
-            onDragFinish(event);
-    }
-    else if (contains(event.getPosition()) && onPressed)
-    {
-        onPressed();
+        if (onClickWithModifiers && event.mods.isCtrlDown())
+        {
+            if (onClickWithModifiers(event.mods))
+                flashConfirmationOutline();
+
+            return;
+        }
+
+        triggerClick();
     }
 }
 
 void BoxTextButton::mouseExit(const juce::MouseEvent&)
 {
-    if (manualInteractionEnabled)
-    {
-        if (! manualPointerDown)
-            return;
-
-        manualPointerDown = false;
-        repaint();
+    if (! isEnabled())
         return;
-    }
 
     if (! pointerDown || ! pressHighlight)
         return;
@@ -660,6 +629,9 @@ void BoxTextButton::timerCallback()
 {
     stopTimer();
 
+    if (! isEnabled())
+        return;
+
     if (confirmationFlashActive)
     {
         confirmationFlashActive = false;
@@ -667,7 +639,7 @@ void BoxTextButton::timerCallback()
         return;
     }
 
-    if (! pointerDown || ! pressHighlight || ! longPressEligible || dragActive || manualInteractionEnabled)
+    if (! pointerDown || ! pressHighlight || ! longPressEligible || dragActive)
         return;
 
     longPressEligible = false;

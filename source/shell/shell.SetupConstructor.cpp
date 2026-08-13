@@ -1,7 +1,7 @@
 #include "shell.EditorFilterSection.h"
 #include "shell.EditorPresetSections.h"
 #include "shell.SetupSupport.h"
-#include "../modules/spe/module.spe.SpeProcessor.h"
+#include "../modules/fft/module.fft.FftProcessor.h"
 
 namespace
 {
@@ -151,8 +151,6 @@ public:
 #if ! JUCE_IOS
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override
     {
-        juce::ignoreUnused(event);
-
         if (onWheel != nullptr && onWheel(event, wheel))
             return;
 
@@ -252,11 +250,11 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     hostParametersViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
     hostParametersViewport.setWantsKeyboardFocus(false);
     addAndMakeVisible(hostParametersViewport);
-    speAnalyserViewport.setViewedComponent(&speAnalyserContent, false);
-    speAnalyserViewport.setScrollBarsShown(false, false);
-    speAnalyserViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
-    speAnalyserViewport.setWantsKeyboardFocus(false);
-    addAndMakeVisible(speAnalyserViewport);
+    fftAnalyserViewport.setViewedComponent(&fftAnalyserContent, false);
+    fftAnalyserViewport.setScrollBarsShown(false, false);
+    fftAnalyserViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
+    fftAnalyserViewport.setWantsKeyboardFocus(false);
+    addAndMakeVisible(fftAnalyserViewport);
     filterViewport.setViewedComponent(&filterContent, false);
     filterViewport.setScrollBarsShown(false, false);
     filterViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
@@ -341,25 +339,25 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
 
     setLoadedModuleFlags(audioProcessor.getActiveModule());
 
-    if (auto* speProcessor = audioProcessor.getSpeModuleProcessor())
+    if (auto* fftProcessor = audioProcessor.getFftModuleProcessor())
     {
-        auto& speState = speProcessor->getValueTreeState();
+        auto& fftState = fftProcessor->getValueTreeState();
 
-        setupSpeControls(speState, *speProcessor);
-        speAnalyserComponent = shell_setup_support::createSpeAnalyserComponent(*speProcessor);
-        speAnalyserContent.addAndMakeVisible(*speAnalyserComponent);
+        setupFftControls(fftState, *fftProcessor);
+        fftAnalyserComponent = shell_setup_support::createFftAnalyserComponent(*fftProcessor);
+        fftAnalyserContent.addAndMakeVisible(*fftAnalyserComponent);
     }
 
     setupShellControls();
 
     setupPresetControls();
 
-    filterDisplayOrder.reserve(VxAudioProcessor::maxEqeFilterCount);
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
+    filterDisplayOrder.reserve(VxAudioProcessor::maxEqlFilterCount);
+    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
         filterDisplayOrder.push_back(filterIndex);
 
-    if (auto* initialEqeProcessor = audioProcessor.getEqeModuleProcessor())
-        setupEqeControls(initialEqeProcessor->getValueTreeState());
+    if (auto* initialEqlProcessor = audioProcessor.getEqlModuleProcessor())
+        setupEqlControls(initialEqlProcessor->getValueTreeState());
 
     restoreEditorStateFromValueTree();
 
@@ -389,7 +387,7 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
 
     suppressEditorSizeStateSave = false;
     syncFocusedParameterControl();
-    refreshSpeAnalyserResponse();
+    refreshFftAnalyserResponse();
 
     audioProcessor.getStateInformationForABCompareSnapshot(committedHistorySnapshot);
 

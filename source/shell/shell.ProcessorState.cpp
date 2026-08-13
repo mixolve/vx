@@ -1,8 +1,8 @@
 #include "shell.Processor.h"
-#include "../modules/multiband/mie/module.mie.PluginProcessor.h"
-#include "../modules/multiband/mxe/module.mxe.PluginProcessor.h"
-#include "../modules/spe/module.spe.SpeProcessor.h"
-#include "../modules/multiband/tse/module.tse.TseProcessor.h"
+#include "../modules/multiband/tls/module.tls.PluginProcessor.h"
+#include "../modules/multiband/dyn/module.dyn.PluginProcessor.h"
+#include "../modules/fft/module.fft.FftProcessor.h"
+#include "../modules/multiband/trs/module.trs.TrsProcessor.h"
 
 #include <optional>
 
@@ -12,11 +12,11 @@ bool hasRestoredModuleProcessor(VxAudioProcessor& processor, const VxAudioProces
 {
     switch (module)
     {
-        case VxAudioProcessor::ActiveModule::eqe: return processor.getEqeModuleProcessor() != nullptr;
-        case VxAudioProcessor::ActiveModule::spe: return processor.getSpeModuleProcessor() != nullptr;
-        case VxAudioProcessor::ActiveModule::mie: return processor.getMieModuleProcessor() != nullptr;
-        case VxAudioProcessor::ActiveModule::mxe: return processor.getMxeModuleProcessor() != nullptr;
-        case VxAudioProcessor::ActiveModule::tse: return processor.getTseModuleProcessor() != nullptr;
+        case VxAudioProcessor::ActiveModule::eql: return processor.getEqlModuleProcessor() != nullptr;
+        case VxAudioProcessor::ActiveModule::fft: return processor.getFftModuleProcessor() != nullptr;
+        case VxAudioProcessor::ActiveModule::tls: return processor.getTlsModuleProcessor() != nullptr;
+        case VxAudioProcessor::ActiveModule::dyn: return processor.getDynModuleProcessor() != nullptr;
+        case VxAudioProcessor::ActiveModule::trs: return processor.getTrsModuleProcessor() != nullptr;
         case VxAudioProcessor::ActiveModule::none: break;
     }
 
@@ -54,19 +54,19 @@ void copyStateProperties(juce::ValueTree& target, const juce::ValueTree& source)
 struct RestoredModuleStateProperties
 {
     explicit RestoredModuleStateProperties(const juce::ValueTree& state)
-        : eqeBase64(state.getProperty(VxAudioProcessor::eqeModuleStateKey).toString()),
-          speXml(state.getProperty(VxAudioProcessor::speModuleStateKey).toString()),
-          mieBase64(state.getProperty(VxAudioProcessor::mieModuleStateKey).toString()),
-          mxeBase64(state.getProperty(VxAudioProcessor::mxeModuleStateKey).toString()),
-          tseXml(state.getProperty(VxAudioProcessor::tseModuleStateKey).toString())
+        : eqlBase64(state.getProperty(VxAudioProcessor::eqlModuleStateKey).toString()),
+          fftXml(state.getProperty(VxAudioProcessor::fftModuleStateKey).toString()),
+          tlsBase64(state.getProperty(VxAudioProcessor::tlsModuleStateKey).toString()),
+          dynBase64(state.getProperty(VxAudioProcessor::dynModuleStateKey).toString()),
+          trsXml(state.getProperty(VxAudioProcessor::trsModuleStateKey).toString())
     {
     }
 
-    juce::String eqeBase64;
-    juce::String speXml;
-    juce::String mieBase64;
-    juce::String mxeBase64;
-    juce::String tseXml;
+    juce::String eqlBase64;
+    juce::String fftXml;
+    juce::String tlsBase64;
+    juce::String dynBase64;
+    juce::String trsXml;
 };
 
 struct RestoredABCompareState
@@ -154,13 +154,13 @@ bool restoreXmlModuleState(Processor* processor, const juce::String& stateXml)
     return true;
 }
 
-bool restoreEqeModuleState(VxAudioProcessor& processor,
+bool restoreEqlModuleState(VxAudioProcessor& processor,
                            const juce::String& stateBase64,
                            const bool useABCompareRestore)
 {
-    auto* eqeProcessor = processor.getEqeModuleProcessor();
+    auto* eqlProcessor = processor.getEqlModuleProcessor();
 
-    if (eqeProcessor == nullptr)
+    if (eqlProcessor == nullptr)
         return false;
 
     juce::MemoryBlock stateData;
@@ -169,9 +169,9 @@ bool restoreEqeModuleState(VxAudioProcessor& processor,
         return false;
 
     if (useABCompareRestore)
-        return eqeProcessor->applyStateInformationForABCompare(stateData.getData(), static_cast<int>(stateData.getSize()));
+        return eqlProcessor->applyStateInformationForABCompare(stateData.getData(), static_cast<int>(stateData.getSize()));
 
-    eqeProcessor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
+    eqlProcessor->setStateInformation(stateData.getData(), static_cast<int>(stateData.getSize()));
     return true;
 }
 
@@ -182,20 +182,20 @@ bool restoreActiveModuleState(VxAudioProcessor& processor,
 {
     switch (module)
     {
-        case VxAudioProcessor::ActiveModule::eqe:
-            return restoreEqeModuleState(processor, moduleStates.eqeBase64, useABCompareRestore);
+        case VxAudioProcessor::ActiveModule::eql:
+            return restoreEqlModuleState(processor, moduleStates.eqlBase64, useABCompareRestore);
 
-        case VxAudioProcessor::ActiveModule::spe:
-            return restoreXmlModuleState(processor.getSpeModuleProcessor(), moduleStates.speXml);
+        case VxAudioProcessor::ActiveModule::fft:
+            return restoreXmlModuleState(processor.getFftModuleProcessor(), moduleStates.fftXml);
 
-        case VxAudioProcessor::ActiveModule::mie:
-            return restoreBinaryModuleState(processor.getMieModuleProcessor(), moduleStates.mieBase64);
+        case VxAudioProcessor::ActiveModule::tls:
+            return restoreBinaryModuleState(processor.getTlsModuleProcessor(), moduleStates.tlsBase64);
 
-        case VxAudioProcessor::ActiveModule::mxe:
-            return restoreBinaryModuleState(processor.getMxeModuleProcessor(), moduleStates.mxeBase64);
+        case VxAudioProcessor::ActiveModule::dyn:
+            return restoreBinaryModuleState(processor.getDynModuleProcessor(), moduleStates.dynBase64);
 
-        case VxAudioProcessor::ActiveModule::tse:
-            return restoreXmlModuleState(processor.getTseModuleProcessor(), moduleStates.tseXml);
+        case VxAudioProcessor::ActiveModule::trs:
+            return restoreXmlModuleState(processor.getTrsModuleProcessor(), moduleStates.trsXml);
 
         case VxAudioProcessor::ActiveModule::none:
             return true;
@@ -248,11 +248,11 @@ void storeXmlModuleState(juce::ValueTree& state,
 void VxAudioProcessor::removeModuleStateProperties(juce::ValueTree& state)
 {
     state.removeProperty(activeModuleStateKey, nullptr);
-    state.removeProperty(eqeModuleStateKey, nullptr);
-    state.removeProperty(speModuleStateKey, nullptr);
-    state.removeProperty(mieModuleStateKey, nullptr);
-    state.removeProperty(mxeModuleStateKey, nullptr);
-    state.removeProperty(tseModuleStateKey, nullptr);
+    state.removeProperty(eqlModuleStateKey, nullptr);
+    state.removeProperty(fftModuleStateKey, nullptr);
+    state.removeProperty(tlsModuleStateKey, nullptr);
+    state.removeProperty(dynModuleStateKey, nullptr);
+    state.removeProperty(trsModuleStateKey, nullptr);
 }
 
 void VxAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
@@ -286,11 +286,11 @@ void VxAudioProcessor::writeStateInformation(juce::MemoryBlock& destData, const 
     else
     {
         state.setProperty(activeModuleStateKey, stateIdForModule(active), nullptr);
-        storeBinaryModuleState(state, eqeModuleStateKey, getEqeModuleProcessor());
-        storeXmlModuleState(state, speModuleStateKey, getSpeModuleProcessor());
-        storeBinaryModuleState(state, mieModuleStateKey, getMieModuleProcessor());
-        storeBinaryModuleState(state, mxeModuleStateKey, getMxeModuleProcessor());
-        storeXmlModuleState(state, tseModuleStateKey, getTseModuleProcessor());
+        storeBinaryModuleState(state, eqlModuleStateKey, getEqlModuleProcessor());
+        storeXmlModuleState(state, fftModuleStateKey, getFftModuleProcessor());
+        storeBinaryModuleState(state, tlsModuleStateKey, getTlsModuleProcessor());
+        storeBinaryModuleState(state, dynModuleStateKey, getDynModuleProcessor());
+        storeXmlModuleState(state, trsModuleStateKey, getTrsModuleProcessor());
     }
 
     if (includeABCompareState)

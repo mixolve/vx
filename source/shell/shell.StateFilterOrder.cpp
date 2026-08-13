@@ -4,7 +4,7 @@
 
 void VxAudioProcessorEditor::selectFilterSection(const int filterIndex)
 {
-    if (! eqeModuleLoaded)
+    if (! eqlModuleLoaded)
         return;
 
     if (! juce::isPositiveAndBelow(filterIndex, getActiveFilterCount()))
@@ -13,9 +13,8 @@ void VxAudioProcessorEditor::selectFilterSection(const int filterIndex)
     updateSectionStates();
     resized();
 
-    if (auto* section = filterSections[static_cast<size_t>(filterIndex)].get())
+    if (filterSections[static_cast<size_t>(filterIndex)] != nullptr)
     {
-        juce::ignoreUnused(section);
         const auto sectionBounds = getFilterSectionBounds(filterIndex);
         const auto currentY = filterViewport.getViewPositionY();
         const auto viewportHeight = filterViewport.getHeight();
@@ -30,7 +29,7 @@ void VxAudioProcessorEditor::selectFilterSection(const int filterIndex)
         filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, targetY));
     }
 
-    refreshSpeAnalyserResponse();
+    refreshFftAnalyserResponse();
 }
 
 juce::Rectangle<int> VxAudioProcessorEditor::getFilterSectionBounds(const int filterIndex) const
@@ -108,7 +107,7 @@ void VxAudioProcessorEditor::normalizeSlopeForType(const int filterIndex)
 
     auto* filterSection = filterSections[static_cast<size_t>(filterIndex)].get();
 
-    if (filterSection == nullptr || filterSection->getFilterType() != EqeModuleProcessor::FilterType::bell)
+    if (filterSection == nullptr || filterSection->getFilterType() != EqlModuleProcessor::FilterType::bell)
         return;
 
     const auto selectedChoiceIndex = filterSection->slopeControl->getSelectedChoiceIndex();
@@ -118,7 +117,7 @@ void VxAudioProcessorEditor::normalizeSlopeForType(const int filterIndex)
 
     const juce::ScopedValueSetter<bool> suppressHandlers(suppressFilterSectionValueChangeHandlers, true);
     filterSection->slopeControl->setSelectedChoiceIndex(
-        EqeModuleProcessor::getBellSlopeChoiceIndexForValue(EqeModuleProcessor::fixedSlopeDbPerOct),
+        EqlModuleProcessor::getBellSlopeChoiceIndexForValue(EqlModuleProcessor::fixedSlopeDbPerOct),
         true);
 }
 
@@ -161,7 +160,7 @@ void VxAudioProcessorEditor::sortFilterSectionsByPlace()
         if (section == nullptr)
             return;
 
-        const auto sortFrequency = section->getFilterType() == EqeModuleProcessor::FilterType::volume ? 0.0
+        const auto sortFrequency = section->getFilterType() == EqlModuleProcessor::FilterType::volume ? 0.0
                                                                                                       : section->getFrequency();
         sortKeys.push_back({ filterIndex, sortPlaceFor(section->getPlace()), sortFrequency });
     }
@@ -199,7 +198,7 @@ void VxAudioProcessorEditor::sortFilterSectionsByFrequency()
         if (section == nullptr)
             return;
 
-        const auto sortFrequency = section->getFilterType() == EqeModuleProcessor::FilterType::volume ? 0.0
+        const auto sortFrequency = section->getFilterType() == EqlModuleProcessor::FilterType::volume ? 0.0
                                                                                                       : section->getFrequency();
         sortKeys.push_back({ filterIndex, sortPlaceFor(section->getPlace()), sortFrequency });
     }
@@ -237,7 +236,7 @@ void VxAudioProcessorEditor::sortFilterSectionsByDuo()
         if (section == nullptr)
             return;
 
-        const auto sortFrequency = section->getFilterType() == EqeModuleProcessor::FilterType::volume ? 0.0
+        const auto sortFrequency = section->getFilterType() == EqlModuleProcessor::FilterType::volume ? 0.0
                                                                                                       : section->getFrequency();
         sortKeys.push_back({ filterIndex, sortPlaceFor(section->getPlace()), sortFrequency });
     }

@@ -19,30 +19,26 @@ void VxAudioProcessorEditor::showModulePicker()
     anchorBounds.setCentre(moduleAddButton->getBounds().getCentre());
 
     showChoicePrompt(anchorBounds,
-                     { "MIE", "EQE", "SPE", "MXE", "TSE" },
+                     { "TLS", "EQL", "FFT", "DYN", "TRS" },
                      -1,
                      { canLoadModule, canLoadModule, canLoadModule, canLoadModule, canLoadModule },
                      juce::Justification::centred,
                        [this] (const int selectedIndex)
                        {
                            if (selectedIndex == 0)
-                               loadMieModule();
+                               loadTlsModule();
                            else if (selectedIndex == 1)
-                               loadEqeModule();
+                               loadEqlModule();
                            else if (selectedIndex == 2)
-                               loadSpeModule();
+                               loadFftModule();
                            else if (selectedIndex == 3)
-                               loadMxeModule();
+                               loadDynModule();
                            else if (selectedIndex == 4)
-                               loadTseModule();
-                       },
+                               loadTrsModule();
+                     },
                      {},
                      {},
-                     { "MULTIBAND/SINGLEBAND TOOLS",
-                       "PARAMETRIC EQUALIZER",
-                       "DUAL-MONO SPECTRAL PROCESSOR",
-                       "MULTIBAND/SINGLEBAND/DUAL-MONO/HALFWAVE DYNAMIC PROCESSOR",
-                       "MULTIBAND/SINGLEBAND TRANSIENT PROCESSOR" });
+                     {});
 }
 
 void VxAudioProcessorEditor::closeActiveModule()
@@ -116,12 +112,12 @@ void VxAudioProcessorEditor::closeActiveModule()
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::loadEqeModule()
+void VxAudioProcessorEditor::loadEqlModule()
 {
-    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::eqe))
+    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::eql))
         return;
 
-    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::eqe);
+    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::eql);
 
     hostParametersExpanded = false;
 
@@ -135,12 +131,12 @@ void VxAudioProcessorEditor::loadEqeModule()
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::loadMieModule()
+void VxAudioProcessorEditor::loadTlsModule()
 {
-    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::mie))
+    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::tls))
         return;
 
-    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::mie);
+    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::tls);
 
     hostParametersExpanded = false;
 
@@ -153,12 +149,12 @@ void VxAudioProcessorEditor::loadMieModule()
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::loadMxeModule()
+void VxAudioProcessorEditor::loadDynModule()
 {
-    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::mxe))
+    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::dyn))
         return;
 
-    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::mxe);
+    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::dyn);
 
     hostParametersExpanded = false;
 
@@ -171,12 +167,12 @@ void VxAudioProcessorEditor::loadMxeModule()
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::loadTseModule()
+void VxAudioProcessorEditor::loadTrsModule()
 {
-    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::tse))
+    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::trs))
         return;
 
-    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::tse);
+    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::trs);
 
     hostParametersExpanded = false;
 

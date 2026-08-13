@@ -11,121 +11,6 @@ void VxAudioProcessorEditor::updateSectionStates()
 
     const auto activeFilterCount = getActiveFilterCount();
     const auto activeModule = audioProcessor.getActiveModule();
-    auto setActiveSpeFilterControlState = [] (auto* control, const bool visible, const bool active)
-    {
-        if (control == nullptr)
-            return;
-
-        control->setVisible(visible);
-        control->setInteractionEnabled(active);
-
-        if (active)
-            control->clearOverrideText();
-        else
-            control->setOverrideText("OFF");
-    };
-
-    auto setSpeFilterControlsVisible = [setActiveSpeFilterControlState] (const bool shouldShow,
-                                                                         auto* addButton,
-                                                                         const int activeSpeFilterCount,
-                                                                         auto& bypassButtons,
-                                                                         auto& headerButtons,
-                                                                         auto& typeControls,
-                                                                         auto& placeControls,
-                                                                         auto& slopeControls,
-                                                                         auto& frequencyControls,
-                                                                         auto& bandwidthControls,
-                                                                         auto& impactControls,
-                                                                         auto& expandedStates,
-                                                                         auto getHeaderText,
-                                                                         auto shouldEnableOrder,
-                                                                         auto shouldEnableFrequency,
-                                                                         auto shouldEnableBandwidth,
-                                                                         auto shouldShowImpact)
-    {
-        if (addButton != nullptr)
-        {
-            addButton->setVisible(shouldShow);
-            addButton->setEnabled(activeSpeFilterCount < speFilterControlCount);
-            addButton->setAlpha(activeSpeFilterCount < speFilterControlCount ? 1.0f : 0.45f);
-        }
-
-        for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
-        {
-            const auto filterVisible = shouldShow && filterIndex < activeSpeFilterCount;
-            const auto filterExpanded = filterVisible && expandedStates[static_cast<size_t>(filterIndex)];
-
-            if (bypassButtons[static_cast<size_t>(filterIndex)] != nullptr)
-                bypassButtons[static_cast<size_t>(filterIndex)]->setVisible(filterVisible);
-            if (headerButtons[static_cast<size_t>(filterIndex)] != nullptr)
-            {
-                headerButtons[static_cast<size_t>(filterIndex)]->setVisible(filterVisible);
-                headerButtons[static_cast<size_t>(filterIndex)]->setButtonText(filterVisible ? getHeaderText(filterIndex) : juce::String {});
-                headerButtons[static_cast<size_t>(filterIndex)]->setToggleState(filterExpanded, juce::dontSendNotification);
-            }
-
-            if (typeControls[static_cast<size_t>(filterIndex)] != nullptr)
-                typeControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-            if (placeControls[static_cast<size_t>(filterIndex)] != nullptr)
-                placeControls[static_cast<size_t>(filterIndex)]->setVisible(filterExpanded);
-
-            setActiveSpeFilterControlState(slopeControls[static_cast<size_t>(filterIndex)].get(),
-                                           filterExpanded,
-                                           shouldEnableOrder(filterIndex));
-            setActiveSpeFilterControlState(frequencyControls[static_cast<size_t>(filterIndex)].get(),
-                                           filterExpanded,
-                                           shouldEnableFrequency(filterIndex));
-            setActiveSpeFilterControlState(bandwidthControls[static_cast<size_t>(filterIndex)].get(),
-                                           filterExpanded,
-                                           shouldEnableBandwidth(filterIndex));
-            setActiveSpeFilterControlState(impactControls[static_cast<size_t>(filterIndex)].get(),
-                                           filterExpanded,
-                                           shouldShowImpact(filterIndex));
-        }
-    };
-
-    auto setSpePhaseControlsVisible = [this, setSpeFilterControlsVisible] (const bool shouldShow)
-    {
-        setSpeFilterControlsVisible(shouldShow,
-                                    spePhaseAddButton.get(),
-                                    shouldShow ? getActiveSpePhaseFilterCount() : 0,
-                                    spePhaseBypassButtons,
-                                    spePhaseHeaderButtons,
-                                    spePhaseTypeControls,
-                                    spePhasePlaceControls,
-                                    spePhaseSlopeControls,
-                                    spePhaseFrequencyControls,
-                                    spePhaseBandwidthControls,
-                                    spePhaseImpactControls,
-                                    spePhaseExpanded,
-                                    [this] (const int filterIndex) { return getSpePhaseFilterHeaderText(filterIndex); },
-                                    [this] (const int filterIndex) { return shouldEnableSpePhaseOrder(filterIndex); },
-                                    [this] (const int filterIndex) { return shouldEnableSpePhaseFrequency(filterIndex); },
-                                    [this] (const int filterIndex) { return shouldEnableSpePhaseBandwidth(filterIndex); },
-                                    [this] (const int filterIndex) { return shouldShowSpePhaseImpact(filterIndex); });
-    };
-
-    auto setSpeAmplitudeControlsVisible = [this, setSpeFilterControlsVisible] (const bool shouldShow)
-    {
-        setSpeFilterControlsVisible(shouldShow,
-                                    speAmplitudeAddButton.get(),
-                                    shouldShow ? getActiveSpeAmplitudeFilterCount() : 0,
-                                    speAmplitudeBypassButtons,
-                                    speAmplitudeHeaderButtons,
-                                    speAmplitudeTypeControls,
-                                    speAmplitudePlaceControls,
-                                    speAmplitudeSlopeControls,
-                                    speAmplitudeFrequencyControls,
-                                    speAmplitudeBandwidthControls,
-                                    speAmplitudeImpactControls,
-                                    speAmplitudeExpanded,
-                                    [this] (const int filterIndex) { return getSpeAmplitudeFilterHeaderText(filterIndex); },
-                                    [this] (const int filterIndex) { return shouldEnableSpeAmplitudeOrder(filterIndex); },
-                                    [this] (const int filterIndex) { return shouldEnableSpeAmplitudeFrequency(filterIndex); },
-                                    [this] (const int filterIndex) { return shouldEnableSpeAmplitudeBandwidth(filterIndex); },
-                                    [this] (const int filterIndex) { return shouldShowSpeAmplitudeImpact(filterIndex); });
-    };
-
     auto setComponentVisible = [] (auto* component, const bool shouldShow)
     {
         if (component != nullptr)
@@ -145,7 +30,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         setComponentVisible(presetsSection->deleteButton.get(), shouldShow);
     };
 
-    auto setEqeFilterSectionsVisible = [this] (const bool shouldShow)
+    auto setEqlFilterSectionsVisible = [this] (const bool shouldShow)
     {
         for (auto& section : filterSections)
         {
@@ -165,7 +50,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         }
     };
 
-    auto setEqeControlsVisible = [this, setComponentVisible, setPresetsVisible, setEqeFilterSectionsVisible] (const bool shouldShow)
+    auto setEqlControlsVisible = [this, setComponentVisible, setPresetsVisible, setEqlFilterSectionsVisible] (const bool shouldShow)
     {
         filterViewport.setVisible(shouldShow);
         setPresetsVisible(shouldShow);
@@ -173,43 +58,71 @@ void VxAudioProcessorEditor::updateSectionStates()
         setComponentVisible(sortPlaceButton.get(), shouldShow);
         setComponentVisible(sortFreqButton.get(), shouldShow);
         setComponentVisible(sortDuoButton.get(), shouldShow);
-        setEqeFilterSectionsVisible(shouldShow);
+        setEqlFilterSectionsVisible(shouldShow);
     };
 
-    auto setSpeControlsVisible = [this, setComponentVisible, setSpePhaseControlsVisible, setSpeAmplitudeControlsVisible] (const bool shouldShow)
+    auto setFftControlsVisible = [this, setComponentVisible] (const bool shouldShow)
     {
-        speAnalyserViewport.setVisible(shouldShow);
-        setComponentVisible(speAnalyserComponent.get(), shouldShow);
-        setComponentVisible(speAttackControl.get(), shouldShow);
-        setComponentVisible(speReleaseControl.get(), shouldShow);
-        setComponentVisible(speKneeControl.get(), shouldShow);
-        setComponentVisible(speRatioControl.get(), shouldShow);
-        setComponentVisible(speFftProcessorHeader.get(), shouldShow);
-        setComponentVisible(speDspFftSizeControl.get(), shouldShow);
-        setComponentVisible(speDspHopDivisorControl.get(), shouldShow);
-        setComponentVisible(speDspSlopeControl.get(), shouldShow);
-        setComponentVisible(speDeltaButton.get(), shouldShow);
-        setComponentVisible(speDualMonoLeftThresholdControl.get(), shouldShow);
-        setComponentVisible(speDualMonoLeftAdaptiveControl.get(), shouldShow);
-        setComponentVisible(speDualMonoLeftAdaptiveOffsetControl.get(), shouldShow);
-        setComponentVisible(speDualMonoRightThresholdControl.get(), shouldShow);
-        setComponentVisible(speDualMonoRightAdaptiveControl.get(), shouldShow);
-        setComponentVisible(speDualMonoRightAdaptiveOffsetControl.get(), shouldShow);
-        setComponentVisible(speDynamicProcessorHeader.get(), shouldShow);
-        setComponentVisible(speDualMonoLinkButton.get(), shouldShow);
-        setComponentVisible(spePhaseProcessorHeader.get(), shouldShow);
-        setSpePhaseControlsVisible(shouldShow);
-        setComponentVisible(speAmplitudeProcessorHeader.get(), shouldShow);
-        setSpeAmplitudeControlsVisible(shouldShow);
-        setComponentVisible(speAnalyserSettingsHeader.get(), shouldShow);
-        setComponentVisible(speAnalyserFftSizeControl.get(), shouldShow);
-        setComponentVisible(speAnalyserOverlapControl.get(), shouldShow);
-        setComponentVisible(speAnalyserLeftControl.get(), shouldShow);
-        setComponentVisible(speAnalyserRightControl.get(), shouldShow);
-        setComponentVisible(speAnalyserRangeLowControl.get(), shouldShow);
-        setComponentVisible(speAnalyserRangeHighControl.get(), shouldShow);
-        setComponentVisible(speAnalyserSlopeControl.get(), shouldShow);
-        setComponentVisible(speAnalyserTimeControl.get(), shouldShow);
+        const auto phaseMode = fftDynamicModeButton != nullptr && fftDynamicModeButton->getToggleState();
+
+        fftAnalyserViewport.setVisible(shouldShow);
+        setComponentVisible(fftAnalyserComponent.get(), shouldShow);
+        setComponentVisible(fftAttackControl.get(), shouldShow);
+        setComponentVisible(fftReleaseControl.get(), shouldShow);
+        setComponentVisible(fftKneeControl.get(), shouldShow);
+        setComponentVisible(fftRatioControl.get(), shouldShow);
+        setComponentVisible(fftFloorControl.get(), shouldShow && phaseMode);
+        setComponentVisible(fftGeneralProcessorHeader.get(), shouldShow);
+        setComponentVisible(fftDspFftSizeControl.get(), shouldShow);
+        setComponentVisible(fftDspHopDivisorControl.get(), shouldShow);
+        setComponentVisible(fftDspSlopeControl.get(), shouldShow);
+        setComponentVisible(fftPhaseImpactControl.get(), shouldShow && phaseMode);
+        setComponentVisible(fftDeltaButton.get(), shouldShow);
+        setComponentVisible(fftDualMonoLeftThresholdControl.get(), shouldShow);
+        setComponentVisible(fftDualMonoLeftAdaptiveControl.get(), shouldShow);
+        setComponentVisible(fftDualMonoRightThresholdControl.get(), shouldShow && ! phaseMode);
+        setComponentVisible(fftDualMonoRightAdaptiveControl.get(), shouldShow && ! phaseMode);
+        setComponentVisible(fftDynamicProcessorHeader.get(), shouldShow);
+        setComponentVisible(fftDynamicModeButton.get(), shouldShow);
+        setComponentVisible(fftDualMonoLinkButton.get(), shouldShow && ! phaseMode);
+        setComponentVisible(fftAdaptiveSettingsButton.get(), shouldShow);
+        setComponentVisible(fftAdaptiveOffsetControl.get(), shouldShow && fftAdaptiveSettingsExpanded);
+        setComponentVisible(fftAdaptiveAttackControl.get(), shouldShow && fftAdaptiveSettingsExpanded);
+        setComponentVisible(fftAdaptiveHoldControl.get(), shouldShow && fftAdaptiveSettingsExpanded);
+        setComponentVisible(fftAdaptiveReleaseControl.get(), shouldShow && fftAdaptiveSettingsExpanded);
+        setComponentVisible(fftDynamicBypassButton.get(), shouldShow);
+        setComponentVisible(fftAnalyserSettingsHeader.get(), shouldShow);
+        setComponentVisible(fftAnalyserFftSizeControl.get(), shouldShow);
+        setComponentVisible(fftAnalyserOverlapControl.get(), shouldShow);
+        setComponentVisible(fftAnalyserLeftControl.get(), shouldShow);
+        setComponentVisible(fftAnalyserRightControl.get(), shouldShow);
+        setComponentVisible(fftAnalyserRangeLowControl.get(), shouldShow);
+        setComponentVisible(fftAnalyserRangeHighControl.get(), shouldShow);
+        setComponentVisible(fftAnalyserSlopeControl.get(), shouldShow && ! phaseMode);
+        setComponentVisible(fftAnalyserTimeControl.get(), shouldShow);
+
+        if (fftDynamicModeButton != nullptr)
+            fftDynamicModeButton->setButtonText(phaseMode ? "PHASE CORR" : "SPECTRAL");
+
+        if (fftDualMonoLeftThresholdControl != nullptr)
+            fftDualMonoLeftThresholdControl->setTitleText(phaseMode ? "THRESH" : "L.THRESH");
+        if (fftDualMonoLeftAdaptiveControl != nullptr)
+            fftDualMonoLeftAdaptiveControl->setTitleText(phaseMode ? "ADAP" : "L.ADAP");
+        if (fftDualMonoRightThresholdControl != nullptr)
+            fftDualMonoRightThresholdControl->setTitleText("R.THRESH");
+        if (fftDualMonoRightAdaptiveControl != nullptr)
+            fftDualMonoRightAdaptiveControl->setTitleText("R.ADAP");
+
+        if (fftAdaptiveSettingsButton != nullptr)
+            fftAdaptiveSettingsButton->setToggleState(fftAdaptiveSettingsExpanded, juce::dontSendNotification);
+        if (fftAdaptiveOffsetControl != nullptr)
+            fftAdaptiveOffsetControl->setTitleText("OFFSET");
+
+        if (fftDualMonoLinkButton != nullptr)
+        {
+            fftDualMonoLinkButton->setButtonText("LINK-LR (STEREO)");
+            fftDualMonoLinkButton->setEnabled(true);
+        }
     };
 
     if (clipButton != nullptr)
@@ -268,81 +181,81 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (hostSlotButton != nullptr)
             hostSlotButton->setVisible(hostParametersVisible);
 
-    if (mieModuleEditor != nullptr)
-        mieModuleEditor->setVisible(mieModuleLoaded);
+    if (tlsModuleEditor != nullptr)
+        tlsModuleEditor->setVisible(tlsModuleLoaded);
 
-    if (mxeModuleEditor != nullptr)
-        mxeModuleEditor->setVisible(mxeModuleLoaded);
+    if (dynModuleEditor != nullptr)
+        dynModuleEditor->setVisible(dynModuleLoaded);
 
-    if (tseModuleEditor != nullptr)
-        tseModuleEditor->setVisible(tseModuleLoaded);
+    if (trsModuleEditor != nullptr)
+        trsModuleEditor->setVisible(trsModuleLoaded);
 
-    if (! eqeModuleLoaded && ! speModuleLoaded && ! mieModuleLoaded && ! mxeModuleLoaded && ! tseModuleLoaded)
+    if (! eqlModuleLoaded && ! fftModuleLoaded && ! tlsModuleLoaded && ! dynModuleLoaded && ! trsModuleLoaded)
     {
-        setEqeControlsVisible(false);
-        setSpeControlsVisible(false);
-        setComponentVisible(mieModuleEditor.get(), false);
-        setComponentVisible(mxeModuleEditor.get(), false);
-        setComponentVisible(tseModuleEditor.get(), false);
+        setEqlControlsVisible(false);
+        setFftControlsVisible(false);
+        setComponentVisible(tlsModuleEditor.get(), false);
+        setComponentVisible(dynModuleEditor.get(), false);
+        setComponentVisible(trsModuleEditor.get(), false);
 
         return;
     }
 
-    if (mieModuleLoaded || mxeModuleLoaded || tseModuleLoaded)
+    if (tlsModuleLoaded || dynModuleLoaded || trsModuleLoaded)
     {
-        setEqeControlsVisible(false);
-        setSpeControlsVisible(false);
-        setComponentVisible(mieModuleEditor.get(), mieModuleLoaded);
-        setComponentVisible(mxeModuleEditor.get(), mxeModuleLoaded);
-        setComponentVisible(tseModuleEditor.get(), tseModuleLoaded);
+        setEqlControlsVisible(false);
+        setFftControlsVisible(false);
+        setComponentVisible(tlsModuleEditor.get(), tlsModuleLoaded);
+        setComponentVisible(dynModuleEditor.get(), dynModuleLoaded);
+        setComponentVisible(trsModuleEditor.get(), trsModuleLoaded);
 
         return;
     }
 
-    if (speModuleLoaded)
+    if (fftModuleLoaded)
     {
         setPresetsVisible(false);
-        setSpeControlsVisible(true);
+        setFftControlsVisible(true);
         filterViewport.setVisible(true);
         setComponentVisible(addFilterButton.get(), false);
         setComponentVisible(sortPlaceButton.get(), false);
         setComponentVisible(sortFreqButton.get(), false);
         setComponentVisible(sortDuoButton.get(), false);
-        setEqeFilterSectionsVisible(false);
+        setEqlFilterSectionsVisible(false);
 
         return;
     }
 
-    setSpeControlsVisible(false);
+    setFftControlsVisible(false);
 
     updateUndoRedoButtons();
     const auto canSortFilters = activeFilterCount > 1;
 
     if (sortPlaceButton != nullptr)
     {
-        sortPlaceButton->setVisible(eqeModuleLoaded);
+        sortPlaceButton->setVisible(eqlModuleLoaded);
         sortPlaceButton->setEnabled(canSortFilters);
         sortPlaceButton->setAlpha(canSortFilters ? 1.0f : 0.45f);
     }
 
     if (sortFreqButton != nullptr)
     {
-        sortFreqButton->setVisible(eqeModuleLoaded);
+        sortFreqButton->setVisible(eqlModuleLoaded);
         sortFreqButton->setEnabled(canSortFilters);
         sortFreqButton->setAlpha(canSortFilters ? 1.0f : 0.45f);
     }
 
     if (sortDuoButton != nullptr)
     {
-        sortDuoButton->setVisible(eqeModuleLoaded);
+        sortDuoButton->setVisible(eqlModuleLoaded);
         sortDuoButton->setEnabled(canSortFilters);
         sortDuoButton->setAlpha(canSortFilters ? 1.0f : 0.45f);
     }
 
-    filterViewport.setVisible(eqeModuleLoaded);
-    setPresetsVisible(eqeModuleLoaded);
+    filterViewport.setVisible(eqlModuleLoaded);
+    setPresetsVisible(eqlModuleLoaded);
 
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
+    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
     {
         auto* section = filterSections[static_cast<size_t>(filterIndex)].get();
 
@@ -350,16 +263,16 @@ void VxAudioProcessorEditor::updateSectionStates()
             continue;
 
         const auto orderPosition = getFilterOrderPositionForIndex(filterIndex);
-        const auto isActive = eqeModuleLoaded && orderPosition >= 0;
+        const auto isActive = eqlModuleLoaded && orderPosition >= 0;
         const auto sectionExpanded = isActive && section->expanded;
         const auto filterType = section->getFilterType();
-        const auto isVolume = filterType == EqeModuleProcessor::FilterType::volume;
-        const auto isBell = filterType == EqeModuleProcessor::FilterType::bell;
+        const auto isVolume = filterType == EqlModuleProcessor::FilterType::volume;
+        const auto isBell = filterType == EqlModuleProcessor::FilterType::bell;
         const auto isPhasePlace = section->getPlace() >= 5 && section->getPlace() <= 7;
         const auto bandwidthInactive = section->isBandwidthInactiveAtCurrentSlope();
         const auto slopeInactive = section->isSlopeInactive();
         const auto gainInactive = section->isGainInactive();
-        const auto filterOrderOff = filterType == EqeModuleProcessor::FilterType::bell
+        const auto filterOrderOff = filterType == EqlModuleProcessor::FilterType::bell
             && section->slopeControl->getSelectedChoiceIndex() == 0;
         const auto canMoveUp = isActive && orderPosition > 0;
         const auto canMoveDown = isActive && orderPosition + 1 < activeFilterCount;
@@ -371,8 +284,8 @@ void VxAudioProcessorEditor::updateSectionStates()
         section->moveDownButton->setVisible(isActive);
         section->moveDownButton->setEnabled(canMoveDown);
         section->moveDownButton->setAlpha(canMoveDown ? 1.0f : 0.45f);
-        if (auto* eqeProcessor = getActiveEqeProcessor())
-            section->header->setButtonText(eqeProcessor->getFilterHeaderText(filterIndex, orderPosition));
+        if (auto* eqlProcessor = getActiveEqlProcessor())
+            section->header->setButtonText(eqlProcessor->getFilterHeaderText(filterIndex, orderPosition));
         else
             section->header->setButtonText({});
         section->header->setVisible(isActive);
@@ -410,7 +323,7 @@ void VxAudioProcessorEditor::updateSectionStates()
 
     if (addFilterButton != nullptr)
     {
-        addFilterButton->setVisible(eqeModuleLoaded);
+        addFilterButton->setVisible(eqlModuleLoaded);
         addFilterButton->setEnabled(true);
         addFilterButton->setAlpha(1.0f);
     }

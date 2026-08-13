@@ -15,7 +15,7 @@ void VxAudioProcessorEditor::setupPresetControls()
 
         const juce::ScopedValueSetter<bool> suppressHandlers(suppressFilterSectionValueChangeHandlers, true);
 
-        if (auto* eqeProcessor = getActiveEqeProcessor(); eqeProcessor != nullptr && eqeProcessor->loadFilterPreset(presetName))
+        if (auto* eqlProcessor = getActiveEqlProcessor(); eqlProcessor != nullptr && eqlProcessor->loadFilterPreset(presetName))
         {
             reloadFilterPresetFromProcessor();
             refreshFilterPresetList(presetName);
@@ -58,6 +58,12 @@ void VxAudioProcessorEditor::setupPresetControls()
     addAndMakeVisible(*presetsSection->deleteButton);
     presetsSection->onRenameRequested = [this] (const juce::String& currentName)
     {
+        auto promptBounds = moduleTabButton != nullptr ? moduleTabButton->getBounds()
+                                                       : juce::Rectangle<int>();
+
+        if (! promptBounds.isEmpty())
+            promptBounds.setY(juce::roundToInt(static_cast<float>(getHeight()) * editorInsetTopRatio));
+
         showTextPrompt(currentName,
                        [this, currentName] (const juce::String& newName)
                        {
@@ -66,10 +72,11 @@ void VxAudioProcessorEditor::setupPresetControls()
 
                            clearKeyboardFocus(*this);
                            return true;
-                       });
+                       },
+                       promptBounds);
     };
-    if (auto* eqeProcessor = getActiveEqeProcessor())
-        refreshFilterPresetList(eqeProcessor->getLastFilterPresetName());
+    if (auto* eqlProcessor = getActiveEqlProcessor())
+        refreshFilterPresetList(eqlProcessor->getLastFilterPresetName());
     else
         refreshFilterPresetList({});
 }

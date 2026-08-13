@@ -4,12 +4,12 @@
 
 #include <memory>
 
-class SpeModuleProcessor;
+class FftModuleProcessor;
 
 namespace shell_setup_support
 {
 juce::String getMixolveInfoMarkdown();
-std::unique_ptr<juce::Component> createSpeAnalyserComponent(SpeModuleProcessor& processor);
-void refreshSpeAnalyserComponent(juce::Component* component);
+std::unique_ptr<juce::Component> createFftAnalyserComponent(FftModuleProcessor& processor);
+void refreshFftAnalyserComponent(juce::Component* component);
 void removeOwnedChild(juce::Component& owner, std::unique_ptr<juce::Component>& child);
 }

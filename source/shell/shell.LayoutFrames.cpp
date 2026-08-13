@@ -21,22 +21,22 @@ void VxAudioProcessorEditor::layoutModuleEditorContent(juce::Rectangle<int>& bou
     auto contentBounds = bounds;
     contentBounds.removeFromBottom(viewportToPotentiometerGap);
 
-    if (mieModuleEditor != nullptr)
+    if (tlsModuleEditor != nullptr)
     {
-        mieModuleEditor->setBounds(contentBounds);
-        mieModuleEditor->setVisible(mieModuleLoaded);
+        tlsModuleEditor->setBounds(contentBounds);
+        tlsModuleEditor->setVisible(tlsModuleLoaded);
     }
 
-    if (mxeModuleEditor != nullptr)
+    if (dynModuleEditor != nullptr)
     {
-        mxeModuleEditor->setBounds(contentBounds);
-        mxeModuleEditor->setVisible(mxeModuleLoaded);
+        dynModuleEditor->setBounds(contentBounds);
+        dynModuleEditor->setVisible(dynModuleLoaded);
     }
 
-    if (tseModuleEditor != nullptr)
+    if (trsModuleEditor != nullptr)
     {
-        tseModuleEditor->setBounds(contentBounds);
-        tseModuleEditor->setVisible(tseModuleLoaded);
+        trsModuleEditor->setBounds(contentBounds);
+        trsModuleEditor->setVisible(trsModuleLoaded);
     }
 
 }

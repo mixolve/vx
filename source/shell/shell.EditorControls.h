@@ -22,7 +22,6 @@ public:
     void setPopupMenuTextJustification(juce::Justification justification) noexcept;
     juce::Justification getPopupMenuTextJustification() const noexcept;
     void setPromptStylePopupEnabled(bool shouldEnable) noexcept;
-    bool isPromptStylePopupEnabled() const noexcept;
     void setChoiceEnabled(int choiceIndex, bool shouldEnable);
     bool isPressedHighlightEnabled() const noexcept;
 

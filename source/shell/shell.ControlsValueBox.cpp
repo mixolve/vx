@@ -262,10 +262,6 @@ void ValueBoxComponent::mouseExit(const juce::MouseEvent&)
 
 void ValueBoxComponent::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
 {
-    juce::ignoreUnused(event);
-
-    shell_parameter_focus::clearFocus(*this);
-
     if (auto* viewport = findParentComponentOfClass<juce::Viewport>())
     {
         const auto viewedHeight = viewport->getViewedComponent() != nullptr

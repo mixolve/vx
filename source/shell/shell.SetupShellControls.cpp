@@ -185,8 +185,17 @@ void VxAudioProcessorEditor::refreshHostSlotButtons()
             slotButton->setButtonText(slotName);
         else
         {
-            const auto parameterName = assignment.parameterName.isNotEmpty() ? assignment.parameterName
-                                                                             : assignment.parameterId;
+            auto parameterName = assignment.parameterName.isNotEmpty() ? assignment.parameterName
+                                                                        : assignment.parameterId;
+
+            if (auto* parameter = findHostAssignableParameter(assignment.parameterId))
+            {
+                const auto currentName = parameter->getName(256).trim();
+
+                if (currentName.isNotEmpty())
+                    parameterName = currentName;
+            }
+
             slotButton->setButtonText(parameterName + " (" + slotName + ")");
         }
     }
@@ -230,6 +239,14 @@ bool VxAudioProcessorEditor::handleHostSlotAssignRequest(const juce::String& par
     auto& assignment = hostSlotAssignments[static_cast<size_t>(targetSlot)];
     assignment.parameterId = trimmedParameterId;
     assignment.parameterName = parameterName.trim();
+
+    if (auto* parameter = findHostAssignableParameter(trimmedParameterId))
+    {
+        const auto currentName = parameter->getName(256).trim();
+
+        if (currentName.isNotEmpty())
+            assignment.parameterName = currentName;
+    }
 
     if (assignment.parameterName.isEmpty())
         assignment.parameterName = trimmedParameterId;

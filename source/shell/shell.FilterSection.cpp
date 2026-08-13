@@ -1,53 +1,53 @@
 #include "shell.EditorFilterSection.h"
-#include "../modules/eqe/module.eqe.ProcessorSupport.h"
+#include "../modules/eql/module.eql.ProcessorSupport.h"
 
 VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTreeState& state, const int bandIndexIn)
     : moveUpButton(std::make_unique<BoxTextButton>(uiGrey500)),
       header(std::make_unique<BoxTextButton>(uiAccent)),
       moveDownButton(std::make_unique<BoxTextButton>(uiGrey500)),
       typeControl(std::make_unique<ChoiceControl>(state,
-                                                  EqeModuleProcessor::getFilterTypeParamId(bandIndexIn),
+                                                  EqlModuleProcessor::getFilterTypeParamId(bandIndexIn),
                                                   "TYPE",
                                                   std::vector<int> { 0, 1, 2, 3, 4, 5, 6 })),
       placeControl(std::make_unique<ChoiceControl>(state,
-                                                  EqeModuleProcessor::getFilterPlaceParamId(bandIndexIn),
+                                                  EqlModuleProcessor::getFilterPlaceParamId(bandIndexIn),
                                                   "PLACE",
                                                   std::vector<int> { 0, 1, 2, 3, 4, 5, 6, 7 })),
       slopeControl(std::make_unique<ChoiceControl>(state,
-                                                   EqeModuleProcessor::getFilterSlopeParamId(bandIndexIn),
+                                                   EqlModuleProcessor::getFilterSlopeParamId(bandIndexIn),
                                                    "ORDER",
                                                    std::vector<int> { 0, 1, 2, 3, 4, 5 })),
       frequencyControl(std::make_unique<ParameterControl>(state,
-                                                          EqeModuleProcessor::getFilterFrequencyParamId(bandIndexIn),
+                                                          EqlModuleProcessor::getFilterFrequencyParamId(bandIndexIn),
                                                           "FREQ",
                                                           2)),
       bandwidthControl(std::make_unique<ParameterControl>(state,
-                                                          EqeModuleProcessor::getFilterBandwidthParamId(bandIndexIn),
+                                                          EqlModuleProcessor::getFilterBandwidthParamId(bandIndexIn),
                                                           "BW",
                                                           2)),
       gainControl(std::make_unique<ParameterControl>(state,
-                                                     EqeModuleProcessor::getFilterGainParamId(bandIndexIn),
+                                                     EqlModuleProcessor::getFilterGainParamId(bandIndexIn),
                                                      "GAIN",
                                                      2)),
       bypassButton(std::make_unique<BoxTextButton>(uiAccent)),
       bandIndex(bandIndexIn)
 {
-    if (auto* parameter = state.getParameter(EqeModuleProcessor::getFilterTypeParamId(bandIndexIn)))
+    if (auto* parameter = state.getParameter(EqlModuleProcessor::getFilterTypeParamId(bandIndexIn)))
         typeParameter = dynamic_cast<juce::AudioParameterChoice*>(parameter);
 
-    if (auto* parameter = state.getParameter(EqeModuleProcessor::getFilterPlaceParamId(bandIndexIn)))
+    if (auto* parameter = state.getParameter(EqlModuleProcessor::getFilterPlaceParamId(bandIndexIn)))
         placeParameter = dynamic_cast<juce::AudioParameterChoice*>(parameter);
 
-    if (auto* parameter = state.getParameter(EqeModuleProcessor::getFilterSlopeParamId(bandIndexIn)))
+    if (auto* parameter = state.getParameter(EqlModuleProcessor::getFilterSlopeParamId(bandIndexIn)))
         slopeParameter = dynamic_cast<juce::AudioParameterChoice*>(parameter);
 
-    if (auto* parameter = state.getParameter(EqeModuleProcessor::getFilterFrequencyParamId(bandIndexIn)))
+    if (auto* parameter = state.getParameter(EqlModuleProcessor::getFilterFrequencyParamId(bandIndexIn)))
         frequencyParameter = dynamic_cast<juce::AudioParameterFloat*>(parameter);
 
-    if (auto* parameter = state.getParameter(EqeModuleProcessor::getFilterBandwidthParamId(bandIndexIn)))
+    if (auto* parameter = state.getParameter(EqlModuleProcessor::getFilterBandwidthParamId(bandIndexIn)))
         bandwidthParameter = dynamic_cast<juce::AudioParameterFloat*>(parameter);
 
-    if (auto* parameter = state.getParameter(EqeModuleProcessor::getFilterGainParamId(bandIndexIn)))
+    if (auto* parameter = state.getParameter(EqlModuleProcessor::getFilterGainParamId(bandIndexIn)))
         gainParameter = dynamic_cast<juce::AudioParameterFloat*>(parameter);
 
     moveUpButton->setButtonText({});
@@ -57,7 +57,7 @@ VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTr
 
     header->setButtonText({});
     header->setTextJustification(juce::Justification::centred);
-    header->setEqeFilterHeaderColouringEnabled(true);
+    header->setEqlFilterHeaderColouringEnabled(true);
     header->setClickingTogglesState(true);
     header->setCancelClickOnLeave(true);
 
@@ -72,7 +72,7 @@ VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTr
     bypassButton->setCancelClickOnLeave(true);
     bypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         state,
-        EqeModuleProcessor::getFilterBypassParamId(bandIndexIn),
+        EqlModuleProcessor::getFilterBypassParamId(bandIndexIn),
         *bypassButton);
     bypassButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
     {
@@ -86,7 +86,7 @@ VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTr
         if (editor == nullptr)
             return false;
 
-        const auto parameterId = EqeModuleProcessor::getFilterBypassParamId(bandIndex);
+        const auto parameterId = EqlModuleProcessor::getFilterBypassParamId(bandIndex);
 
         if (auto* parameter = editor->findHostAssignableParameter(parameterId))
             return editor->handleHostSlotAssignRequest(parameterId, "B", parameter->getValue());
@@ -138,16 +138,16 @@ void VxAudioProcessorEditor::FilterSection::rebind(juce::AudioProcessorValueTree
     bandwidthControl->rebind(state);
     gainControl->rebind(state);
 
-    typeParameter = dynamic_cast<juce::AudioParameterChoice*>(state.getParameter(EqeModuleProcessor::getFilterTypeParamId(bandIndex)));
-    placeParameter = dynamic_cast<juce::AudioParameterChoice*>(state.getParameter(EqeModuleProcessor::getFilterPlaceParamId(bandIndex)));
-    slopeParameter = dynamic_cast<juce::AudioParameterChoice*>(state.getParameter(EqeModuleProcessor::getFilterSlopeParamId(bandIndex)));
-    frequencyParameter = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(EqeModuleProcessor::getFilterFrequencyParamId(bandIndex)));
-    bandwidthParameter = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(EqeModuleProcessor::getFilterBandwidthParamId(bandIndex)));
-    gainParameter = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(EqeModuleProcessor::getFilterGainParamId(bandIndex)));
+    typeParameter = dynamic_cast<juce::AudioParameterChoice*>(state.getParameter(EqlModuleProcessor::getFilterTypeParamId(bandIndex)));
+    placeParameter = dynamic_cast<juce::AudioParameterChoice*>(state.getParameter(EqlModuleProcessor::getFilterPlaceParamId(bandIndex)));
+    slopeParameter = dynamic_cast<juce::AudioParameterChoice*>(state.getParameter(EqlModuleProcessor::getFilterSlopeParamId(bandIndex)));
+    frequencyParameter = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(EqlModuleProcessor::getFilterFrequencyParamId(bandIndex)));
+    bandwidthParameter = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(EqlModuleProcessor::getFilterBandwidthParamId(bandIndex)));
+    gainParameter = dynamic_cast<juce::AudioParameterFloat*>(state.getParameter(EqlModuleProcessor::getFilterGainParamId(bandIndex)));
 
     bypassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         state,
-        EqeModuleProcessor::getFilterBypassParamId(bandIndex),
+        EqlModuleProcessor::getFilterBypassParamId(bandIndex),
         *bypassButton);
 
     lastFilterType = getFilterType();
@@ -161,7 +161,7 @@ VxAudioProcessorEditor::FilterSection::FilterType VxAudioProcessorEditor::Filter
     if (typeParameter == nullptr)
         return FilterType::bell;
 
-    return EqeModuleProcessor::filterTypeFromChoiceIndex(typeParameter->getIndex());
+    return EqlModuleProcessor::filterTypeFromChoiceIndex(typeParameter->getIndex());
 }
 
 int VxAudioProcessorEditor::FilterSection::getPlace() const noexcept
@@ -186,8 +186,8 @@ bool VxAudioProcessorEditor::FilterSection::isBandwidthInactiveAtCurrentSlope() 
         return slopeParameter != nullptr && slopeParameter->getIndex() == 0;
 
     const auto slope = slopeParameter != nullptr
-        ? EqeModuleProcessor::getBellSlopeValueForChoiceIndex(slopeParameter->getIndex())
-        : EqeModuleProcessor::fixedSlopeDbPerOct;
+        ? EqlModuleProcessor::getBellSlopeValueForChoiceIndex(slopeParameter->getIndex())
+        : EqlModuleProcessor::fixedSlopeDbPerOct;
 
     if (filterType == FilterType::tilt)
         return true;
@@ -294,7 +294,7 @@ void VxAudioProcessorEditor::FilterSection::setStoredValues(const FilterType typ
                                                            const int place,
                                                            const bool isCustom) noexcept
 {
-    const auto index = static_cast<size_t>(EqeModuleProcessor::choiceIndexFromFilterType(type));
+    const auto index = static_cast<size_t>(EqlModuleProcessor::choiceIndexFromFilterType(type));
     storedFrequencies[index] = frequency;
     storedBandwidths[index] = bandwidth;
     storedSlopes[index] = slope;
@@ -305,7 +305,7 @@ void VxAudioProcessorEditor::FilterSection::setStoredValues(const FilterType typ
 
 int VxAudioProcessorEditor::FilterSection::getStoredPlace(const FilterType type) const noexcept
 {
-    return storedPlace[static_cast<size_t>(EqeModuleProcessor::choiceIndexFromFilterType(type))];
+    return storedPlace[static_cast<size_t>(EqlModuleProcessor::choiceIndexFromFilterType(type))];
 }
 
 void VxAudioProcessorEditor::FilterSection::captureCurrentValuesForType(const FilterType type,
@@ -320,7 +320,7 @@ void VxAudioProcessorEditor::FilterSection::captureCurrentValuesForType(const Fi
     setStoredValues(type,
                     frequencyParameter->get(),
                     bandwidthParameter->get(),
-                    EqeModuleProcessor::getBellSlopeValueForChoiceIndex(slopeParameter->getIndex()),
+                    EqlModuleProcessor::getBellSlopeValueForChoiceIndex(slopeParameter->getIndex()),
                     placeParameter != nullptr ? placeParameter->getIndex() : getStoredPlace(type),
                     markCustom);
 }

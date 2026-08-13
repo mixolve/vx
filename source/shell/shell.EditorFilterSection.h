@@ -6,7 +6,7 @@
 
 struct VxAudioProcessorEditor::FilterSection
 {
-    using FilterType = EqeModuleProcessor::FilterType;
+    using FilterType = EqlModuleProcessor::FilterType;
 
     explicit FilterSection(juce::AudioProcessorValueTreeState& state, int bandIndex);
 

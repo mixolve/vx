@@ -312,12 +312,27 @@ void ParameterControl::detach() noexcept
 
 void ParameterControl::rebind(juce::AudioProcessorValueTreeState& state)
 {
+    rebind(state, parameterId);
+}
+
+void ParameterControl::rebind(juce::AudioProcessorValueTreeState& state,
+                              const juce::String& parameterIdIn)
+{
     attachment.reset();
+    parameterId = parameterIdIn;
     parameter = state.getParameter(parameterId);
     jassert(parameter != nullptr);
 
     if (parameter != nullptr)
+    {
+        const auto& range = parameter->getNormalisableRange();
+        slider.setNormalisableRange({ static_cast<double>(range.start),
+                                      static_cast<double>(range.end),
+                                      static_cast<double>(range.interval),
+                                      static_cast<double>(range.skew),
+                                      range.symmetricSkew });
         slider.setDoubleClickReturnValue(true, parameter->convertFrom0to1(parameter->getDefaultValue()));
+    }
 
     if (! canUseFocusedPotentiometer(parameter, valueClickAction))
         clearFocusedParameterTitleButton(titleButton.get(), &slider);
@@ -327,6 +342,11 @@ void ParameterControl::rebind(juce::AudioProcessorValueTreeState& state)
 
     attachment = std::make_unique<Attachment>(state, parameterId, slider);
     repaint();
+}
+
+bool ParameterControl::isBoundTo(const juce::String& parameterIdIn) const noexcept
+{
+    return parameterId == parameterIdIn;
 }
 
 void ParameterControl::setValue(const double value, const bool sendNotification)
@@ -373,7 +393,10 @@ void ParameterControl::setInteractionEnabled(const bool shouldEnable)
         clearFocusedParameterTitleButton(titleButton.get(), &slider);
 
     if (titleButton != nullptr)
+    {
+        titleButton->setEnabled(shouldEnable);
         titleButton->setPressFillEnabled(shouldEnable && canUseFocusedPotentiometer(parameter, valueClickAction));
+    }
 
     if (valueBox != nullptr)
         valueBox->setInteractionEnabled(shouldEnable);
@@ -408,6 +431,12 @@ void ParameterControl::setValueRange(const double minimum, const double maximum,
 void ParameterControl::setTitleWidthOverride(const int width) noexcept
 {
     titleWidthOverride = width;
+    resized();
+}
+
+void ParameterControl::setValueLeadingInset(const int width) noexcept
+{
+    valueLeadingInset = juce::jmax(0, width);
     resized();
 }
 
@@ -468,6 +497,7 @@ void ParameterControl::resized()
     titleButton->setBounds(row.removeFromLeft(titleWidth));
     if (titleWidth > 0)
         row.removeFromLeft(juce::jmin(parameterGap, row.getWidth()));
+    row.removeFromLeft(juce::jmin(valueLeadingInset, row.getWidth()));
     slider.setBounds(row);
 
     if (valueBox != nullptr)
@@ -543,7 +573,6 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
     titleButton = std::make_unique<BoxTextButton>(parameterTitleFocusColour);
     titleButton->setButtonText(titleText);
     titleButton->setTextJustification(juce::Justification::centredLeft);
-    titleButton->setPressFillEnabled(false);
     titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
     {
         return assignParameterTitleToHostSlot(*this, titleButton.get(), parameterId, parameter, modifiers);
@@ -785,7 +814,7 @@ void ChoiceControl::setTitleMouseEnabled(const bool shouldEnable)
     if (titleButton != nullptr)
     {
         titleButton->setInterceptsMouseClicks(shouldEnable, shouldEnable);
-        titleButton->setPressFillEnabled(false);
+        titleButton->setPressFillEnabled(shouldEnable);
     }
 }
 
@@ -798,6 +827,13 @@ void ChoiceControl::setTitleLongPressAction(std::function<void()> action, const 
 void ChoiceControl::setInteractionEnabled(const bool shouldEnable)
 {
     interactionEnabled = shouldEnable;
+
+    if (titleButton != nullptr)
+    {
+        titleButton->setEnabled(shouldEnable);
+        titleButton->setPressFillEnabled(shouldEnable);
+    }
+
     comboBox.setEnabled(true);
     comboBox.setAlpha(1.0f);
     comboBox.setInterceptsMouseClicks(shouldEnable, shouldEnable);
@@ -834,6 +870,80 @@ void ChoiceControl::clearOverrideText()
 }
 
 void ChoiceControl::resized()
+{
+    auto row = getLocalBounds();
+    const auto titleWidth = getScaledParameterNameWidth(row.getWidth());
+    titleButton->setBounds(row.removeFromLeft(titleWidth));
+    row.removeFromLeft(parameterGap);
+    comboBox.setBounds(row);
+}
+
+LocalChoiceControl::LocalChoiceControl(const juce::String& titleText,
+                                       const juce::StringArray& choices,
+                                       const int defaultChoiceIndexIn)
+    : defaultChoiceIndex(defaultChoiceIndexIn)
+{
+    setWantsKeyboardFocus(false);
+    setMouseClickGrabsKeyboardFocus(false);
+
+    titleButton = std::make_unique<BoxTextButton>(parameterTitleFocusColour);
+    titleButton->setButtonText(titleText);
+    titleButton->setTextJustification(juce::Justification::centredLeft);
+    titleButton->setClearsParameterFocusOnMouseDown(false);
+    titleButton->onClick = [] {};
+    titleButton->setLongPressAction([this]
+    {
+        setSelectedChoiceIndex(defaultChoiceIndex, true);
+    });
+
+    comboBox.setEditableText(false);
+    comboBox.setJustificationType(juce::Justification::centred);
+    comboBox.setColour(juce::ComboBox::backgroundColourId, uiGrey800);
+    comboBox.setColour(juce::ComboBox::outlineColourId, uiGrey500);
+    comboBox.setColour(juce::ComboBox::textColourId, uiWhite);
+    comboBox.setColour(juce::ComboBox::arrowColourId, uiWhite);
+    comboBox.setColour(juce::ComboBox::buttonColourId, uiGrey800);
+    comboBox.setWantsKeyboardFocus(false);
+    comboBox.setMouseClickGrabsKeyboardFocus(false);
+    comboBox.setName(titleText);
+    comboBox.setPromptStylePopupEnabled(true);
+
+    for (auto choiceIndex = 0; choiceIndex < choices.size(); ++choiceIndex)
+        comboBox.addItem(choices[choiceIndex], choiceIndex + 1);
+
+    comboBox.setSelectedItemIndex(juce::jlimit(0, juce::jmax(0, choices.size() - 1), defaultChoiceIndex),
+                                  juce::dontSendNotification);
+    comboBox.onChange = [this]
+    {
+        if (! ignoreCallbacks && onValueChanged)
+            onValueChanged();
+    };
+
+    addAndMakeVisible(*titleButton);
+    addAndMakeVisible(comboBox);
+}
+
+int LocalChoiceControl::getPreferredHeight() const noexcept
+{
+    return rowHeight;
+}
+
+int LocalChoiceControl::getSelectedChoiceIndex() const noexcept
+{
+    return juce::jmax(0, comboBox.getSelectedItemIndex());
+}
+
+void LocalChoiceControl::setSelectedChoiceIndex(const int choiceIndex, const bool sendNotification)
+{
+    const auto clampedChoiceIndex = juce::jlimit(0, juce::jmax(0, comboBox.getNumItems() - 1), choiceIndex);
+    const juce::ScopedValueSetter<bool> scopedIgnore(ignoreCallbacks, true);
+    comboBox.setSelectedItemIndex(clampedChoiceIndex, juce::dontSendNotification);
+
+    if (sendNotification && onValueChanged)
+        onValueChanged();
+}
+
+void LocalChoiceControl::resized()
 {
     auto row = getLocalBounds();
     const auto titleWidth = getScaledParameterNameWidth(row.getWidth());
@@ -916,9 +1026,6 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
     };
     slider.valueFromTextFunction = [this] (const juce::String& text)
     {
-        if (textToValueParser != nullptr)
-            return textToValueParser(text);
-
         if (brickwSupported && text.trim().containsIgnoreCase("brick"))
             return 96.1;
 
@@ -957,9 +1064,6 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
     };
     valueBox->textToValueParser = [this] (const juce::String& text)
     {
-        if (textToValueParser != nullptr)
-            return textToValueParser(text);
-
         if (brickwSupported && text.trim().containsIgnoreCase("brick"))
             return 96.1;
 
@@ -1003,6 +1107,29 @@ void LocalParameterControl::setValue(const double value, const bool sendNotifica
         parent->repaint();
 }
 
+void LocalParameterControl::setValueRange(const double minimum,
+                                           const double maximum,
+                                           const double interval)
+{
+    if (std::abs(slider.getMinimum() - minimum) <= 1.0e-9
+        && std::abs(slider.getMaximum() - maximum) <= 1.0e-9
+        && std::abs(slider.getInterval() - interval) <= 1.0e-9)
+    {
+        return;
+    }
+
+    slider.setRange(minimum, maximum, interval);
+}
+
+void LocalParameterControl::setTitleText(const juce::String& text)
+{
+    if (titleButton == nullptr || titleButton->getButtonText() == text)
+        return;
+
+    titleButton->setButtonText(text);
+    titleButton->repaint();
+}
+
 void LocalParameterControl::setOverrideText(const juce::String& text)
 {
     if (overrideText == text)
@@ -1033,7 +1160,10 @@ void LocalParameterControl::setInteractionEnabled(const bool shouldEnable)
         clearFocusedParameterTitleButton(titleButton.get(), &slider);
 
     if (titleButton != nullptr)
+    {
+        titleButton->setEnabled(shouldEnable);
         titleButton->setPressFillEnabled(shouldEnable);
+    }
 
     if (valueBox != nullptr)
         valueBox->setInteractionEnabled(shouldEnable);
@@ -1065,11 +1195,6 @@ void LocalParameterControl::setTitleLongPressAction(std::function<void()> action
 {
     if (titleButton != nullptr)
         titleButton->setLongPressAction(std::move(action), delayMs);
-}
-
-void LocalParameterControl::setTextToValueParser(std::function<double(const juce::String&)> parser)
-{
-    textToValueParser = std::move(parser);
 }
 
 void LocalParameterControl::resized()

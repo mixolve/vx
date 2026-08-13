@@ -1,6 +1,6 @@
 #include "shell.EditorFilterSection.h"
 #include "shell.EditorPresetSections.h"
-#include "../modules/eqe/module.eqe.ProcessorSupport.h"
+#include "../modules/eql/module.eql.ProcessorSupport.h"
 
 namespace
 {
@@ -77,15 +77,15 @@ void VxAudioProcessorEditor::refreshFilterPresetList(const juce::String& preferr
     if (presetsSection == nullptr)
         return;
 
-    const auto* eqeProcessor = getActiveEqeProcessor();
-    const auto presetNames = eqeProcessor != nullptr ? eqeProcessor->getFilterPresetNames()
+    const auto* eqlProcessor = getActiveEqlProcessor();
+    const auto presetNames = eqlProcessor != nullptr ? eqlProcessor->getFilterPresetNames()
                                                      : juce::StringArray {};
     presetsSection->setPresetNames(presetNames, preferredSelection);
 
     const auto hasPresetSelection = presetNames.size() > 0
         && presetsSection->getSelectedPresetName().isNotEmpty();
     const auto selectedPresetName = presetsSection->getSelectedPresetName();
-    const auto defaultPresetName = eqeProcessor != nullptr ? eqeProcessor->getDefaultFilterPresetName()
+    const auto defaultPresetName = eqlProcessor != nullptr ? eqlProcessor->getDefaultFilterPresetName()
                                                            : juce::String {};
     const auto selectedPresetIsDefault = hasPresetSelection
         && selectedPresetName.equalsIgnoreCase(defaultPresetName);
@@ -105,9 +105,9 @@ void VxAudioProcessorEditor::reloadFilterPresetFromProcessor()
         return;
 
     filterDisplayOrder.clear();
-    filterDisplayOrder.reserve(VxAudioProcessor::maxEqeFilterCount);
+    filterDisplayOrder.reserve(VxAudioProcessor::maxEqlFilterCount);
 
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
+    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
         filterDisplayOrder.push_back(filterIndex);
 
     for (auto& sectionPtr : filterSections)
@@ -120,7 +120,7 @@ void VxAudioProcessorEditor::reloadFilterPresetFromProcessor()
         const auto loadedType = section->getFilterType();
         section->lastFilterType = loadedType;
         section->slopeControl->setChoices(getBellSlopeDisplayChoicesForType(loadedType));
-        section->slopeControl->setChoiceEnabled(0, loadedType != EqeModuleProcessor::FilterType::bell);
+        section->slopeControl->setChoiceEnabled(0, loadedType != EqlModuleProcessor::FilterType::bell);
         section->updatePlaceChoicesForType(true);
 
         for (const auto filterType : VxAudioProcessor::filterTypePresetOrder)
@@ -144,10 +144,10 @@ void VxAudioProcessorEditor::reloadFilterPresetFromProcessor()
 
 void VxAudioProcessorEditor::commitFilterDisplayOrderToProcessor()
 {
-    auto* eqeProcessor = getActiveEqeProcessor();
+    auto* eqlProcessor = getActiveEqlProcessor();
     const auto activeCount = getActiveFilterCount();
 
-    if (eqeProcessor == nullptr || activeCount <= 1)
+    if (eqlProcessor == nullptr || activeCount <= 1)
         return;
 
     if (static_cast<int>(filterDisplayOrder.size()) < activeCount)
@@ -166,13 +166,13 @@ void VxAudioProcessorEditor::commitFilterDisplayOrderToProcessor()
             alreadyInOrder = false;
     }
 
-    if (alreadyInOrder || ! eqeProcessor->applyFilterOrder(orderedFilterIndices))
+    if (alreadyInOrder || ! eqlProcessor->applyFilterOrder(orderedFilterIndices))
         return;
 
     filterDisplayOrder.clear();
-    filterDisplayOrder.reserve(VxAudioProcessor::maxEqeFilterCount);
+    filterDisplayOrder.reserve(VxAudioProcessor::maxEqlFilterCount);
 
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqeFilterCount; ++filterIndex)
+    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
         filterDisplayOrder.push_back(filterIndex);
 
     for (auto& sectionPtr : filterSections)
@@ -185,7 +185,7 @@ void VxAudioProcessorEditor::commitFilterDisplayOrderToProcessor()
         const auto loadedType = section->getFilterType();
         section->lastFilterType = loadedType;
         section->slopeControl->setChoices(getBellSlopeDisplayChoicesForType(loadedType));
-        section->slopeControl->setChoiceEnabled(0, loadedType != EqeModuleProcessor::FilterType::bell);
+        section->slopeControl->setChoiceEnabled(0, loadedType != EqlModuleProcessor::FilterType::bell);
         section->updatePlaceChoicesForType(true);
         section->captureCurrentValuesForCurrentType(true);
     }
@@ -200,15 +200,15 @@ void VxAudioProcessorEditor::addFilterPreset()
     if (presetsSection == nullptr)
         return;
 
-    auto* eqeProcessor = getActiveEqeProcessor();
+    auto* eqlProcessor = getActiveEqlProcessor();
     const auto presetName = makeUniquePresetName(presetsSection->getEnteredPresetName(),
-                                                 eqeProcessor != nullptr ? eqeProcessor->getFilterPresetNames()
+                                                 eqlProcessor != nullptr ? eqlProcessor->getFilterPresetNames()
                                                                          : juce::StringArray {},
                                                  "PRESET");
 
     commitFilterDisplayOrderToProcessor();
 
-    if (eqeProcessor != nullptr && eqeProcessor->saveFilterPreset(presetName))
+    if (eqlProcessor != nullptr && eqlProcessor->saveFilterPreset(presetName))
         refreshFilterPresetList(presetName);
 }
 
@@ -218,20 +218,20 @@ void VxAudioProcessorEditor::saveFilterPreset()
         return;
 
     auto presetName = presetsSection->getEnteredPresetName();
-    auto* eqeProcessor = getActiveEqeProcessor();
+    auto* eqlProcessor = getActiveEqlProcessor();
 
-    if (eqeProcessor == nullptr)
+    if (eqlProcessor == nullptr)
         return;
 
     if (presetName.isEmpty())
-        presetName = makeUniquePresetName({}, eqeProcessor->getFilterPresetNames(), "PRESET");
+        presetName = makeUniquePresetName({}, eqlProcessor->getFilterPresetNames(), "PRESET");
 
     if (presetName.isEmpty())
         return;
 
     commitFilterDisplayOrderToProcessor();
 
-    if (eqeProcessor->saveFilterPreset(presetName))
+    if (eqlProcessor->saveFilterPreset(presetName))
         refreshFilterPresetList(presetName);
 }
 
@@ -243,9 +243,9 @@ bool VxAudioProcessorEditor::renameFilterPreset(const juce::String& sourcePreset
     if (trimmedSourceName.isEmpty() || trimmedNewName.isEmpty())
         return false;
 
-    auto* eqeProcessor = getActiveEqeProcessor();
+    auto* eqlProcessor = getActiveEqlProcessor();
 
-    if (eqeProcessor == nullptr || ! eqeProcessor->renameFilterPreset(trimmedSourceName, trimmedNewName))
+    if (eqlProcessor == nullptr || ! eqlProcessor->renameFilterPreset(trimmedSourceName, trimmedNewName))
         return false;
 
     refreshFilterPresetList(trimmedNewName);
@@ -262,7 +262,7 @@ void VxAudioProcessorEditor::setDefaultFilterPreset()
     if (presetName.isEmpty())
         return;
 
-    if (auto* eqeProcessor = getActiveEqeProcessor(); eqeProcessor != nullptr && eqeProcessor->setDefaultFilterPreset(presetName))
+    if (auto* eqlProcessor = getActiveEqlProcessor(); eqlProcessor != nullptr && eqlProcessor->setDefaultFilterPreset(presetName))
         refreshFilterPresetList(presetName);
 }
 
@@ -271,9 +271,9 @@ void VxAudioProcessorEditor::deleteSelectedFilterPreset()
     if (presetsSection == nullptr)
         return;
 
-    auto* eqeProcessor = getActiveEqeProcessor();
+    auto* eqlProcessor = getActiveEqlProcessor();
 
-    if (eqeProcessor == nullptr || eqeProcessor->getFilterPresetNames().size() <= 1)
+    if (eqlProcessor == nullptr || eqlProcessor->getFilterPresetNames().size() <= 1)
         return;
 
     const auto presetName = presetsSection->getSelectedPresetName();
@@ -281,6 +281,6 @@ void VxAudioProcessorEditor::deleteSelectedFilterPreset()
     if (presetName.isEmpty())
         return;
 
-    if (eqeProcessor->deleteFilterPreset(presetName))
+    if (eqlProcessor->deleteFilterPreset(presetName))
         refreshFilterPresetList();
 }

@@ -1,11 +1,11 @@
 #include "shell.EditorFilterSection.h"
 #include "shell.ShellState.h"
 #include "shell.SetupSupport.h"
-#include "../modules/eqe/module.eqe.ProcessorSupport.h"
-#include "../modules/multiband/mie/module.mie.PluginProcessor.h"
-#include "../modules/multiband/mxe/module.mxe.PluginProcessor.h"
-#include "../modules/spe/module.spe.SpeProcessor.h"
-#include "../modules/multiband/tse/module.tse.TseProcessor.h"
+#include "../modules/eql/module.eql.ProcessorSupport.h"
+#include "../modules/multiband/tls/module.tls.PluginProcessor.h"
+#include "../modules/multiband/dyn/module.dyn.PluginProcessor.h"
+#include "../modules/fft/module.fft.FftProcessor.h"
+#include "../modules/multiband/trs/module.trs.TrsProcessor.h"
 
 juce::RangedAudioParameter* VxAudioProcessorEditor::findHostAssignableParameter(const juce::String& parameterId) const noexcept
 {
@@ -27,11 +27,11 @@ juce::RangedAudioParameter* VxAudioProcessorEditor::findHostAssignableParameter(
 
     switch (audioProcessor.getActiveModule())
     {
-        case VxAudioProcessor::ActiveModule::eqe: return findInModule(audioProcessor.getEqeModuleProcessor());
-        case VxAudioProcessor::ActiveModule::spe: return findInModule(audioProcessor.getSpeModuleProcessor());
-        case VxAudioProcessor::ActiveModule::mie: return findInModule(audioProcessor.getMieModuleProcessor());
-        case VxAudioProcessor::ActiveModule::mxe: return findInModule(audioProcessor.getMxeModuleProcessor());
-        case VxAudioProcessor::ActiveModule::tse: return findInModule(audioProcessor.getTseModuleProcessor());
+        case VxAudioProcessor::ActiveModule::eql: return findInModule(audioProcessor.getEqlModuleProcessor());
+        case VxAudioProcessor::ActiveModule::fft: return findInModule(audioProcessor.getFftModuleProcessor());
+        case VxAudioProcessor::ActiveModule::tls: return findInModule(audioProcessor.getTlsModuleProcessor());
+        case VxAudioProcessor::ActiveModule::dyn: return findInModule(audioProcessor.getDynModuleProcessor());
+        case VxAudioProcessor::ActiveModule::trs: return findInModule(audioProcessor.getTrsModuleProcessor());
         case VxAudioProcessor::ActiveModule::none: break;
     }
 
@@ -56,6 +56,23 @@ void VxAudioProcessorEditor::syncHostSlotAssignmentValue(const int slotIndex, co
 
 void VxAudioProcessorEditor::parameterChanged(const juce::String& parameterID, float newValue)
 {
+    if (parameterID == FftModuleProcessor::paramDynamicModeId)
+    {
+        juce::Component::SafePointer<VxAudioProcessorEditor> safeEditor(this);
+        juce::MessageManager::callAsync([safeEditor]
+        {
+            if (safeEditor == nullptr)
+                return;
+
+            if (auto* processor = safeEditor->audioProcessor.getFftModuleProcessor())
+                safeEditor->refreshFftAnalyserControls(*processor);
+
+            safeEditor->updateSectionStates();
+            safeEditor->resized();
+            safeEditor->repaint();
+        });
+    }
+
     if (! suppressHostSlotAutomationSync)
     {
         juce::ScopedValueSetter<bool> scopedSyncGuard(suppressHostSlotAutomationSync, true);
@@ -193,24 +210,24 @@ void VxAudioProcessorEditor::refreshModuleStateListeners()
 
     switch (audioProcessor.getActiveModule())
     {
-        case VxAudioProcessor::ActiveModule::eqe:
-            observeModule(audioProcessor.getEqeModuleProcessor());
+        case VxAudioProcessor::ActiveModule::eql:
+            observeModule(audioProcessor.getEqlModuleProcessor());
             break;
 
-        case VxAudioProcessor::ActiveModule::spe:
-            observeModule(audioProcessor.getSpeModuleProcessor());
+        case VxAudioProcessor::ActiveModule::fft:
+            observeModule(audioProcessor.getFftModuleProcessor());
             break;
 
-        case VxAudioProcessor::ActiveModule::mie:
-            observeModule(audioProcessor.getMieModuleProcessor());
+        case VxAudioProcessor::ActiveModule::tls:
+            observeModule(audioProcessor.getTlsModuleProcessor());
             break;
 
-        case VxAudioProcessor::ActiveModule::mxe:
-            observeModule(audioProcessor.getMxeModuleProcessor());
+        case VxAudioProcessor::ActiveModule::dyn:
+            observeModule(audioProcessor.getDynModuleProcessor());
             break;
 
-        case VxAudioProcessor::ActiveModule::tse:
-            observeModule(audioProcessor.getTseModuleProcessor());
+        case VxAudioProcessor::ActiveModule::trs:
+            observeModule(audioProcessor.getTrsModuleProcessor());
             break;
 
         case VxAudioProcessor::ActiveModule::none:
@@ -252,58 +269,32 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
         if (section != nullptr)
             section->detach();
 
-    speDeltaAttachment.reset();
-    speDualMonoLinkAttachment.reset();
-    for (auto& attachment : spePhaseBypassAttachments)
-        attachment.reset();
-    for (auto& attachment : speAmplitudeBypassAttachments)
-        attachment.reset();
+    fftDeltaAttachment.reset();
+    fftDualMonoLinkAttachment.reset();
+    fftDynamicBypassAttachment.reset();
+    fftDynamicModeAttachment.reset();
 
-    if (speAttackControl != nullptr) speAttackControl->detach();
-    if (speReleaseControl != nullptr) speReleaseControl->detach();
-    if (speKneeControl != nullptr) speKneeControl->detach();
-    if (speRatioControl != nullptr) speRatioControl->detach();
-    if (speDspFftSizeControl != nullptr) speDspFftSizeControl->detach();
-    if (speDspHopDivisorControl != nullptr) speDspHopDivisorControl->detach();
-    if (speDspSlopeControl != nullptr) speDspSlopeControl->detach();
-    if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->detach();
-    if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->detach();
-    if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->detach();
-    if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->detach();
-    if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->detach();
-    if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->detach();
-    for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
-    {
-        if (spePhaseTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
-            spePhaseTypeControls[static_cast<size_t>(filterIndex)]->detach();
-        if (spePhasePlaceControls[static_cast<size_t>(filterIndex)] != nullptr)
-            spePhasePlaceControls[static_cast<size_t>(filterIndex)]->detach();
-        if (spePhaseSlopeControls[static_cast<size_t>(filterIndex)] != nullptr)
-            spePhaseSlopeControls[static_cast<size_t>(filterIndex)]->detach();
-        if (spePhaseFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr)
-            spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->detach();
-        if (spePhaseBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr)
-            spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->detach();
-        if (spePhaseImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
-            spePhaseImpactControls[static_cast<size_t>(filterIndex)]->detach();
-        if (speAmplitudeTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
-            speAmplitudeTypeControls[static_cast<size_t>(filterIndex)]->detach();
-        if (speAmplitudePlaceControls[static_cast<size_t>(filterIndex)] != nullptr)
-            speAmplitudePlaceControls[static_cast<size_t>(filterIndex)]->detach();
-        if (speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)] != nullptr)
-            speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]->detach();
-        if (speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr)
-            speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->detach();
-        if (speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr)
-            speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]->detach();
-        if (speAmplitudeImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
-            speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]->detach();
-    }
-
-    shell_setup_support::removeOwnedChild(speAnalyserContent, speAnalyserComponent);
-    shell_setup_support::removeOwnedChild(*this, mieModuleEditor);
-    shell_setup_support::removeOwnedChild(*this, mxeModuleEditor);
-    shell_setup_support::removeOwnedChild(*this, tseModuleEditor);
+    if (fftAttackControl != nullptr) fftAttackControl->detach();
+    if (fftReleaseControl != nullptr) fftReleaseControl->detach();
+    if (fftKneeControl != nullptr) fftKneeControl->detach();
+    if (fftRatioControl != nullptr) fftRatioControl->detach();
+    if (fftFloorControl != nullptr) fftFloorControl->detach();
+    if (fftDspFftSizeControl != nullptr) fftDspFftSizeControl->detach();
+    if (fftDspHopDivisorControl != nullptr) fftDspHopDivisorControl->detach();
+    if (fftDspSlopeControl != nullptr) fftDspSlopeControl->detach();
+    if (fftPhaseImpactControl != nullptr) fftPhaseImpactControl->detach();
+    if (fftDualMonoLeftThresholdControl != nullptr) fftDualMonoLeftThresholdControl->detach();
+    if (fftDualMonoLeftAdaptiveControl != nullptr) fftDualMonoLeftAdaptiveControl->detach();
+    if (fftDualMonoRightThresholdControl != nullptr) fftDualMonoRightThresholdControl->detach();
+    if (fftDualMonoRightAdaptiveControl != nullptr) fftDualMonoRightAdaptiveControl->detach();
+    if (fftAdaptiveOffsetControl != nullptr) fftAdaptiveOffsetControl->detach();
+    if (fftAdaptiveAttackControl != nullptr) fftAdaptiveAttackControl->detach();
+    if (fftAdaptiveHoldControl != nullptr) fftAdaptiveHoldControl->detach();
+    if (fftAdaptiveReleaseControl != nullptr) fftAdaptiveReleaseControl->detach();
+    shell_setup_support::removeOwnedChild(fftAnalyserContent, fftAnalyserComponent);
+    shell_setup_support::removeOwnedChild(*this, tlsModuleEditor);
+    shell_setup_support::removeOwnedChild(*this, dynModuleEditor);
+    shell_setup_support::removeOwnedChild(*this, trsModuleEditor);
 }
 
 void VxAudioProcessorEditor::scheduleHistorySnapshot()
@@ -395,8 +386,8 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
 
     restoreEditorStateFromValueTree();
     refreshModuleTabButton();
-    if (auto* eqeProcessor = getActiveEqeProcessor())
-        refreshFilterPresetList(eqeProcessor->getLastFilterPresetName());
+    if (auto* eqlProcessor = getActiveEqlProcessor())
+        refreshFilterPresetList(eqlProcessor->getLastFilterPresetName());
     else
         refreshFilterPresetList({});
     reloadFilterPresetFromProcessor();
@@ -415,7 +406,7 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
     updateUndoRedoButtons();
 }
 
-void VxAudioProcessorEditor::refreshEqeFilterSectionsFromProcessor()
+void VxAudioProcessorEditor::refreshEqlFilterSectionsFromProcessor()
 {
     for (auto& sectionPtr : filterSections)
     {
@@ -427,7 +418,7 @@ void VxAudioProcessorEditor::refreshEqeFilterSectionsFromProcessor()
         const auto loadedType = section->getFilterType();
         section->lastFilterType = loadedType;
         section->slopeControl->setChoices(getBellSlopeDisplayChoicesForType(loadedType));
-        section->slopeControl->setChoiceEnabled(0, loadedType != EqeModuleProcessor::FilterType::bell);
+        section->slopeControl->setChoiceEnabled(0, loadedType != EqlModuleProcessor::FilterType::bell);
         section->updatePlaceChoicesForType(true);
         section->captureCurrentValuesForCurrentType(true);
     }
@@ -485,10 +476,10 @@ void VxAudioProcessorEditor::restoreABStateSnapshot(const juce::MemoryBlock& sna
     restoreEditorStateFromValueTree();
     refreshModuleTabButton();
 
-    if (auto* eqeProcessor = getActiveEqeProcessor())
+    if (auto* eqlProcessor = getActiveEqlProcessor())
     {
-        refreshFilterPresetList(eqeProcessor->getLastFilterPresetName());
-        refreshEqeFilterSectionsFromProcessor();
+        refreshFilterPresetList(eqlProcessor->getLastFilterPresetName());
+        refreshEqlFilterSectionsFromProcessor();
     }
     else
     {

@@ -1,12 +1,12 @@
 #include "shell.EditorFilterSection.h"
 #include "shell.MultibandComponent.h"
 #include "shell.SetupSupport.h"
-#include "../modules/multiband/mie/module.mie.ParameterIds.h"
-#include "../modules/multiband/mie/module.mie.PluginProcessor.h"
-#include "../modules/multiband/mxe/module.mxe.ParameterIds.h"
-#include "../modules/multiband/mxe/module.mxe.PluginProcessor.h"
-#include "../modules/spe/module.spe.SpeProcessor.h"
-#include "../modules/multiband/tse/module.tse.TseProcessor.h"
+#include "../modules/multiband/tls/module.tls.ParameterIds.h"
+#include "../modules/multiband/tls/module.tls.PluginProcessor.h"
+#include "../modules/multiband/dyn/module.dyn.ParameterIds.h"
+#include "../modules/multiband/dyn/module.dyn.PluginProcessor.h"
+#include "../modules/fft/module.fft.FftProcessor.h"
+#include "../modules/multiband/trs/module.trs.TrsProcessor.h"
 
 namespace
 {
@@ -38,12 +38,31 @@ BandControlSpec parameterControl(const char* suffix,
     return spec;
 }
 
+BandControlSpec parameterToggleControl(const char* suffix,
+                                       const char* label,
+                                       const int decimals,
+                                       const char* toggleSuffix,
+                                       const char* toggleLabel,
+                                       const char* reorderGroup = "",
+                                       const char* orderSuffix = "",
+                                       const bool fixedOrder = false)
+{
+    auto spec = parameterControl(suffix, label, decimals);
+    spec.auxiliaryToggleSuffix = toggleSuffix;
+    spec.auxiliaryToggleLabel = toggleLabel;
+    spec.reorderGroup = reorderGroup;
+    spec.orderSuffix = orderSuffix;
+    spec.fixedOrder = fixedOrder;
+    return spec;
+}
+
 BandControlSpec toggleControl(const char* suffix,
                               const char* label,
                               const char* enabledLabel = "",
                               const char* disabledLabel = "",
                               const char* exclusiveGroup = "",
-                              const int topGapMultiplier = 1)
+                              const int topGapMultiplier = 1,
+                              const int controlsInRow = 1)
 {
     BandControlSpec spec;
     spec.kind = ControlKind::toggle;
@@ -53,6 +72,15 @@ BandControlSpec toggleControl(const char* suffix,
     spec.disabledLabel = disabledLabel;
     spec.exclusiveGroup = exclusiveGroup;
     spec.topGapMultiplier = topGapMultiplier;
+    spec.controlsInRow = controlsInRow;
+    return spec;
+}
+
+BandControlSpec inactiveControl(const char* label)
+{
+    BandControlSpec spec;
+    spec.kind = ControlKind::inactive;
+    spec.label = label;
     return spec;
 }
 
@@ -85,102 +113,108 @@ BandControlSpec timeControl(const char* suffix,
     return spec;
 }
 
-MultibandModuleComponent::Config makeMieMultibandConfig(MieAudioProcessor& processor)
+MultibandModuleComponent::Config makeTlsMultibandConfig(TlsAudioProcessor& processor)
 {
     MultibandModuleComponent::Config config;
     config.processorIdentity = &processor;
-    config.moduleKey = "mie";
+    config.moduleKey = "tls";
     config.valueTreeState = &processor.getValueTreeState();
     config.undoManager = &processor.getUndoManager();
     config.markParametersDirty = [&processor] { processor.markParametersDirty(); };
     config.makeBandParameterId = [] (const size_t bandIndex, const char* suffix)
     {
-        return mie::parameters::makeBandParameterId(bandIndex, suffix);
+        return tls::parameters::makeBandParameterId(bandIndex, suffix);
     };
     config.makeFullbandParameterId = [] (const char* suffix)
     {
-        return mie::parameters::makeFullbandParameterId(suffix);
+        return tls::parameters::makeFullbandParameterId(suffix);
     };
     config.makeSoloParameterId = [] (const size_t bandIndex)
     {
-        return mie::parameters::makeSoloParameterId(bandIndex);
+        return tls::parameters::makeSoloParameterId(bandIndex);
     };
     config.makeActiveSplitCountParameterId = []
     {
-        return mie::parameters::makeActiveSplitCountParameterId();
+        return tls::parameters::makeActiveSplitCountParameterId();
     };
+    config.crossoverDecimals = 2;
     config.bandControls = {
-        headingControl("GAIN", 2),
-        parameterControl("gainMid", "MID", 1),
-        parameterControl("gainSide", "SIDE", 1),
-        parameterControl("gainL", "LEFT", 1),
-        parameterControl("gainR", "RIGHT", 1),
-        parameterControl("gainLr", "STEREO", 1),
+        headingControl("LISTEN", 2),
+        toggleControl("listenLc", "LC", "", "", "listen", 1, 4),
+        toggleControl("listenRc", "RC", "", "", "listen"),
+        toggleControl("listenMc", "MC", "", "", "listen"),
+        toggleControl("listenSc", "SC", "", "", "listen"),
+        toggleControl("listenLl", "LL", "", "", "listen", 1, 4),
+        toggleControl("listenRr", "RR", "", "", "listen"),
+        inactiveControl("MM"),
+        toggleControl("listenSs", "SS", "", "", "listen"),
 
-        headingControl("RECTIFICATION", 2),
-        toggleControl("halfPositive", "HALF POSITIVE", "", "", "rectification"),
-        toggleControl("halfNegative", "HALF NEGATIVE", "", "", "rectification"),
-        toggleControl("fullPositive", "FULL POSITIVE", "", "", "rectification"),
-        toggleControl("fullNegative", "FULL NEGATIVE", "", "", "rectification"),
+        headingControl("GAIN", 2),
+        parameterToggleControl("gainLr", "STEREO", 2, "gainLrMute", "MUTE", "gain", "", true),
+        parameterToggleControl("gainL", "LEFT", 2, "gainLMute", "MUTE", "gain", "gainLOrder"),
+        parameterToggleControl("gainR", "RIGHT", 2, "gainRMute", "MUTE", "gain", "gainROrder"),
+        parameterToggleControl("gainMid", "MID", 2, "gainMidMute", "MUTE", "gain", "gainMidOrder"),
+        parameterToggleControl("gainSide", "SIDE", 2, "gainSideMute", "MUTE", "gain", "gainSideOrder"),
+
+        headingControl("DELAY", 2),
+        parameterControl("depStereo", "STEREO", 2),
+        parameterControl("depLeft", "LEFT", 2),
+        parameterControl("depRight", "RIGHT", 2),
+
+        headingControl("PHASE", 2),
+        parameterControl("depPhaseL", "PHASE L", 2),
+        parameterControl("depPhaseR", "PHASE R", 2),
 
         headingControl("PANORAMA", 2),
-        parameterControl("left", "LEFT", 1),
-        parameterControl("right", "RIGHT", 1),
+        parameterControl("left", "LEFT", 2),
+        parameterControl("right", "RIGHT", 2),
         parameterControl("law", "LAW", 2),
 
         headingControl("SHEAR", 2),
-        parameterControl("impact", "IMPACT", 1),
+        parameterControl("impact", "IMPACT", 2),
         toggleControl("impactDirection", "TO LEFT CHANNEL", "TO LEFT CHANNEL", "TO RIGHT CHANNEL"),
 
         headingControl("MS BALANCE", 2),
-        parameterControl("mid", "MID", 1),
-        parameterControl("side", "SIDE", 1),
+        parameterControl("mid", "MID", 2),
+        parameterControl("side", "SIDE", 2),
 
         headingControl("ORTHOGONAL", 2),
-        parameterControl("degree", "DEGREE", 1),
+        parameterControl("degree", "DEGREE", 2),
         toggleControl("flipRight", "FLIP RIGHT"),
         readoutControl("degree", "POSITION", "flipRight"),
 
-        headingControl("LISTEN", 2),
-        toggleControl("listenL", "LEFT", "", "", "listen"),
-        toggleControl("listenR", "RIGHT", "", "", "listen"),
-        toggleControl("listenM", "MID", "", "", "listen"),
-        toggleControl("listenS", "SIDE", "", "", "listen"),
-        toggleControl("listenInPlace", "IN PLACE"),
-
-        headingControl("DELAY & PHASE", 2),
-        parameterControl("depStereo", "DELAY ST", 2),
-        parameterControl("depRight", "DELAY R", 2),
-        parameterControl("depBuffer", "BUFFER", 2),
-        parameterControl("depPhaseL", "PHASE L", 1),
-        parameterControl("depPhaseR", "PHASE R", 1),
+        headingControl("RECTIFICATION", 2),
+        toggleControl("halfPositive", "HPOS", "", "", "rectification", 1, 4),
+        toggleControl("halfNegative", "HNEG", "", "", "rectification"),
+        toggleControl("fullPositive", "FPOS", "", "", "rectification"),
+        toggleControl("fullNegative", "FNEG", "", "", "rectification"),
     };
     return config;
 }
 
-MultibandModuleComponent::Config makeMxeMultibandConfig(MxeAudioProcessor& processor)
+MultibandModuleComponent::Config makeDynMultibandConfig(DynAudioProcessor& processor)
 {
     MultibandModuleComponent::Config config;
     config.processorIdentity = &processor;
-    config.moduleKey = "mxe";
+    config.moduleKey = "dyn";
     config.valueTreeState = &processor.getValueTreeState();
     config.undoManager = &processor.getUndoManager();
     config.markParametersDirty = [&processor] { processor.markParametersDirty(); };
     config.makeBandParameterId = [] (const size_t bandIndex, const char* suffix)
     {
-        return mxe::parameters::makeBandParameterId(bandIndex, suffix);
+        return dyn::parameters::makeBandParameterId(bandIndex, suffix);
     };
     config.makeFullbandParameterId = [] (const char* suffix)
     {
-        return mxe::parameters::makeFullbandParameterId(suffix);
+        return dyn::parameters::makeFullbandParameterId(suffix);
     };
     config.makeSoloParameterId = [] (const size_t bandIndex)
     {
-        return mxe::parameters::makeSoloParameterId(bandIndex);
+        return dyn::parameters::makeSoloParameterId(bandIndex);
     };
     config.makeActiveSplitCountParameterId = []
     {
-        return mxe::parameters::makeActiveSplitCountParameterId();
+        return dyn::parameters::makeActiveSplitCountParameterId();
     };
     config.bandControls = {
         parameterControl("morph", "MORPH", 1, 0),
@@ -213,56 +247,56 @@ MultibandModuleComponent::Config makeMxeMultibandConfig(MxeAudioProcessor& proce
     return config;
 }
 
-MultibandModuleComponent::Config makeTseMultibandConfig(TseModuleProcessor& processor,
+MultibandModuleComponent::Config makeTrsMultibandConfig(TrsModuleProcessor& processor,
                                                         VxAudioProcessorEditor& editor,
                                                         std::unique_ptr<juce::Component>& editorHolder)
 {
     MultibandModuleComponent::Config config;
     config.processorIdentity = &processor;
-    config.moduleKey = "tse";
+    config.moduleKey = "trs";
     config.valueTreeState = &processor.getValueTreeState();
     config.makeBandParameterId = [] (const size_t bandIndex, const char* suffix)
     {
-        return TseModuleProcessor::makeBandParameterId(bandIndex, suffix);
+        return TrsModuleProcessor::makeBandParameterId(bandIndex, suffix);
     };
     config.makeFullbandParameterId = [] (const char* suffix)
     {
-        return TseModuleProcessor::makeFullbandParameterId(suffix);
+        return TrsModuleProcessor::makeFullbandParameterId(suffix);
     };
     config.makeSoloParameterId = [] (const size_t bandIndex)
     {
-        return TseModuleProcessor::makeSoloParameterId(bandIndex);
+        return TrsModuleProcessor::makeSoloParameterId(bandIndex);
     };
     config.makeActiveSplitCountParameterId = []
     {
-        return TseModuleProcessor::makeActiveSplitCountParameterId();
+        return TrsModuleProcessor::makeActiveSplitCountParameterId();
     };
     config.bandControls = {
-        toggleControl(TseModuleProcessor::paramTransOnId, "TRANS.ON", "TRANS.ON", "TRANS.OFF"),
-        toggleControl(TseModuleProcessor::paramSusOnId, "SUS.ON", "SUS.ON", "SUS.OFF"),
-        parameterControl(TseModuleProcessor::paramTransGainId, "TRANS.GAIN", 1),
-        parameterControl(TseModuleProcessor::paramSusGainId, "SUS.GAIN", 1),
-        timeControl(TseModuleProcessor::paramTimeHoldId,
+        toggleControl(TrsModuleProcessor::paramTransOnId, "TRANS.ON", "TRANS.ON", "TRANS.OFF"),
+        toggleControl(TrsModuleProcessor::paramSusOnId, "SUS.ON", "SUS.ON", "SUS.OFF"),
+        parameterControl(TrsModuleProcessor::paramTransGainId, "TRANS.GAIN", 1),
+        parameterControl(TrsModuleProcessor::paramSusGainId, "SUS.GAIN", 1),
+        timeControl(TrsModuleProcessor::paramTimeHoldId,
                     "HOLD",
-                    TseModuleProcessor::paramTimeHoldModeId,
-                    TseModuleProcessor::paramTimeHoldSyncId),
-        timeControl(TseModuleProcessor::paramTimeReleaseId,
+                    TrsModuleProcessor::paramTimeHoldModeId,
+                    TrsModuleProcessor::paramTimeHoldSyncId),
+        timeControl(TrsModuleProcessor::paramTimeReleaseId,
                     "RELEASE",
-                    TseModuleProcessor::paramTimeReleaseModeId,
-                    TseModuleProcessor::paramTimeReleaseSyncId),
-        parameterControl(TseModuleProcessor::paramTimeReleaseCurveId, "REL-CURVE", 0),
-        parameterControl(TseModuleProcessor::paramSensLevelId, "SENS.LVL", 1),
-        parameterControl(TseModuleProcessor::paramSensKneeId, "SENS.KNEE", 1),
-        parameterControl(TseModuleProcessor::paramSensRetriggerId, "SENS.RETR", 0),
-        parameterControl(TseModuleProcessor::paramLookaheadId, "LOOKAHEAD", 2),
+                    TrsModuleProcessor::paramTimeReleaseModeId,
+                    TrsModuleProcessor::paramTimeReleaseSyncId),
+        parameterControl(TrsModuleProcessor::paramTimeReleaseCurveId, "REL-CURVE", 0),
+        parameterControl(TrsModuleProcessor::paramSensLevelId, "SENS.LVL", 1),
+        parameterControl(TrsModuleProcessor::paramSensKneeId, "SENS.KNEE", 1),
+        parameterControl(TrsModuleProcessor::paramSensRetriggerId, "SENS.RETR", 0),
+        parameterControl(TrsModuleProcessor::paramLookaheadId, "LOOKAHEAD", 2),
     };
     config.getHostSyncChoices = []
     {
-        return TseModuleProcessor::getHostSyncChoices();
+        return TrsModuleProcessor::getHostSyncChoices();
     };
     config.getDefaultHostSyncChoiceIndex = []
     {
-        return TseModuleProcessor::getDefaultHostSyncChoiceIndex();
+        return TrsModuleProcessor::getDefaultHostSyncChoiceIndex();
     };
     config.showChoicePrompt = [&editor, &editorHolder] (const juce::Rectangle<int>& anchorBounds,
                                                         const juce::StringArray& choices,
@@ -292,122 +326,94 @@ MultibandModuleComponent::Config makeTseMultibandConfig(TseModuleProcessor& proc
 
 void VxAudioProcessorEditor::rebindActiveModuleEditors()
 {
-    auto rebindSpeControls = [this] (juce::AudioProcessorValueTreeState& speState,
-                                     SpeModuleProcessor& speProcessor)
+    auto rebindFftControls = [this] (juce::AudioProcessorValueTreeState& fftState,
+                                     FftModuleProcessor& fftProcessor)
     {
-        if (speAttackControl != nullptr) speAttackControl->rebind(speState);
-        if (speReleaseControl != nullptr) speReleaseControl->rebind(speState);
-        if (speKneeControl != nullptr) speKneeControl->rebind(speState);
-        if (speRatioControl != nullptr) speRatioControl->rebind(speState);
-        if (speDspFftSizeControl != nullptr) speDspFftSizeControl->rebind(speState);
-        if (speDspHopDivisorControl != nullptr) speDspHopDivisorControl->rebind(speState);
-        if (speDspSlopeControl != nullptr) speDspSlopeControl->rebind(speState);
-        if (speDualMonoLeftThresholdControl != nullptr) speDualMonoLeftThresholdControl->rebind(speState);
-        if (speDualMonoLeftAdaptiveControl != nullptr) speDualMonoLeftAdaptiveControl->rebind(speState);
-        if (speDualMonoLeftAdaptiveOffsetControl != nullptr) speDualMonoLeftAdaptiveOffsetControl->rebind(speState);
-        if (speDualMonoRightThresholdControl != nullptr) speDualMonoRightThresholdControl->rebind(speState);
-        if (speDualMonoRightAdaptiveControl != nullptr) speDualMonoRightAdaptiveControl->rebind(speState);
-        if (speDualMonoRightAdaptiveOffsetControl != nullptr) speDualMonoRightAdaptiveOffsetControl->rebind(speState);
-        for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
-        {
-            if (spePhaseTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhaseTypeControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (spePhasePlaceControls[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhasePlaceControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (spePhaseSlopeControls[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhaseSlopeControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (spePhaseFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhaseFrequencyControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (spePhaseBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhaseBandwidthControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (spePhaseImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhaseImpactControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (speAmplitudeTypeControls[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudeTypeControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (speAmplitudePlaceControls[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudePlaceControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudeSlopeControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudeFrequencyControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudeBandwidthControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-            if (speAmplitudeImpactControls[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudeImpactControls[static_cast<size_t>(filterIndex)]->rebind(speState);
-        }
-        refreshSpeAnalyserControls(speProcessor);
+        if (fftAttackControl != nullptr) fftAttackControl->rebind(fftState);
+        if (fftReleaseControl != nullptr) fftReleaseControl->rebind(fftState);
+        if (fftKneeControl != nullptr) fftKneeControl->rebind(fftState);
+        if (fftRatioControl != nullptr) fftRatioControl->rebind(fftState);
+        if (fftFloorControl != nullptr) fftFloorControl->rebind(fftState);
+        if (fftDspFftSizeControl != nullptr) fftDspFftSizeControl->rebind(fftState);
+        if (fftDspHopDivisorControl != nullptr) fftDspHopDivisorControl->rebind(fftState);
+        if (fftDspSlopeControl != nullptr) fftDspSlopeControl->rebind(fftState);
+        if (fftPhaseImpactControl != nullptr) fftPhaseImpactControl->rebind(fftState);
+        if (fftDualMonoLeftThresholdControl != nullptr) fftDualMonoLeftThresholdControl->rebind(fftState, FftModuleProcessor::paramDualMonoLeftThresholdId);
+        if (fftDualMonoLeftAdaptiveControl != nullptr) fftDualMonoLeftAdaptiveControl->rebind(fftState);
+        if (fftDualMonoRightThresholdControl != nullptr) fftDualMonoRightThresholdControl->rebind(fftState, FftModuleProcessor::paramDualMonoRightThresholdId);
+        if (fftDualMonoRightAdaptiveControl != nullptr) fftDualMonoRightAdaptiveControl->rebind(fftState);
+        if (fftAdaptiveOffsetControl != nullptr) fftAdaptiveOffsetControl->rebind(fftState, FftModuleProcessor::paramSpectralAdaptiveOffsetId);
+        if (fftAdaptiveAttackControl != nullptr) fftAdaptiveAttackControl->rebind(fftState, FftModuleProcessor::paramSpectralAdaptiveAttackId);
+        if (fftAdaptiveHoldControl != nullptr) fftAdaptiveHoldControl->rebind(fftState, FftModuleProcessor::paramSpectralAdaptiveHoldId);
+        if (fftAdaptiveReleaseControl != nullptr) fftAdaptiveReleaseControl->rebind(fftState, FftModuleProcessor::paramSpectralAdaptiveReleaseId);
+        rebindFftModeControls(fftProcessor);
+        refreshFftAnalyserControls(fftProcessor);
     };
 
-    auto rebindSpeAttachments = [this] (juce::AudioProcessorValueTreeState& speState)
+    auto rebindFftAttachments = [this] (juce::AudioProcessorValueTreeState& fftState)
     {
-        if (speDeltaButton != nullptr)
-            speDeltaAttachment = std::make_unique<ButtonAttachment>(speState,
-                                                                    SpeModuleProcessor::paramDeltaId,
-                                                                    *speDeltaButton);
-        if (speDualMonoLinkButton != nullptr)
-            speDualMonoLinkAttachment = std::make_unique<ButtonAttachment>(speState,
-                                                                           SpeModuleProcessor::paramDualMonoLinkId,
-                                                                           *speDualMonoLinkButton);
-        for (auto filterIndex = 0; filterIndex < speFilterControlCount; ++filterIndex)
-        {
-            if (spePhaseBypassButtons[static_cast<size_t>(filterIndex)] != nullptr)
-                spePhaseBypassAttachments[static_cast<size_t>(filterIndex)] = std::make_unique<ButtonAttachment>(
-                    speState,
-                    SpeModuleProcessor::getPhaseFilterBypassParamId(filterIndex),
-                    *spePhaseBypassButtons[static_cast<size_t>(filterIndex)]);
-
-            if (speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)] != nullptr)
-                speAmplitudeBypassAttachments[static_cast<size_t>(filterIndex)] = std::make_unique<ButtonAttachment>(
-                    speState,
-                    SpeModuleProcessor::getAmplitudeFilterBypassParamId(filterIndex),
-                    *speAmplitudeBypassButtons[static_cast<size_t>(filterIndex)]);
-        }
+        if (fftDeltaButton != nullptr)
+            fftDeltaAttachment = std::make_unique<ButtonAttachment>(fftState,
+                                                                    FftModuleProcessor::paramDeltaId,
+                                                                    *fftDeltaButton);
+        if (fftDualMonoLinkButton != nullptr)
+            fftDualMonoLinkAttachment = std::make_unique<ButtonAttachment>(fftState,
+                                                                           FftModuleProcessor::paramDualMonoLinkId,
+                                                                           *fftDualMonoLinkButton);
+        if (fftDynamicBypassButton != nullptr)
+            fftDynamicBypassAttachment = std::make_unique<ButtonAttachment>(fftState,
+                                                                            FftModuleProcessor::paramDynamicBypassId,
+                                                                            *fftDynamicBypassButton);
+        if (fftDynamicModeButton != nullptr)
+            fftDynamicModeAttachment = std::make_unique<ButtonAttachment>(fftState,
+                                                                          FftModuleProcessor::paramDynamicModeId,
+                                                                          *fftDynamicModeButton);
     };
 
-    auto rebuildSpeAnalyser = [this] (SpeModuleProcessor& speProcessor)
+    auto rebuildFftAnalyser = [this] (FftModuleProcessor& fftProcessor)
     {
-        shell_setup_support::removeOwnedChild(speAnalyserContent, speAnalyserComponent);
-        speAnalyserComponent = shell_setup_support::createSpeAnalyserComponent(speProcessor);
-        speAnalyserContent.addAndMakeVisible(*speAnalyserComponent);
-        speAnalyserComponent->setVisible(speModuleLoaded);
+        shell_setup_support::removeOwnedChild(fftAnalyserContent, fftAnalyserComponent);
+        fftAnalyserComponent = shell_setup_support::createFftAnalyserComponent(fftProcessor);
+        fftAnalyserContent.addAndMakeVisible(*fftAnalyserComponent);
+        fftAnalyserComponent->setVisible(fftModuleLoaded);
     };
 
-    auto rebindEqeEditorSections = [this]
+    auto rebindEqlEditorSections = [this]
     {
-        if (auto* eqeProcessor = getActiveEqeProcessor())
+        if (auto* eqlProcessor = getActiveEqlProcessor())
         {
-            auto& eqeState = eqeProcessor->getValueTreeState();
+            auto& eqlState = eqlProcessor->getValueTreeState();
 
             if (filterSections.front() == nullptr || addFilterButton == nullptr)
             {
-                setupEqeControls(eqeState);
+                setupEqlControls(eqlState);
             }
             else
             {
                 for (auto& section : filterSections)
                     if (section != nullptr)
-                        section->rebind(eqeState);
+                        section->rebind(eqlState);
             }
 
-            refreshFilterPresetList(eqeProcessor->getLastFilterPresetName());
+            refreshFilterPresetList(eqlProcessor->getLastFilterPresetName());
         }
     };
 
-    auto rebindSpeEditorSections = [this, &rebindSpeControls, &rebindSpeAttachments, &rebuildSpeAnalyser]
+    auto rebindFftEditorSections = [this, &rebindFftControls, &rebindFftAttachments, &rebuildFftAnalyser]
     {
-        if (auto* speProcessor = audioProcessor.getSpeModuleProcessor())
+        if (auto* fftProcessor = audioProcessor.getFftModuleProcessor())
         {
-            auto& speState = speProcessor->getValueTreeState();
+            auto& fftState = fftProcessor->getValueTreeState();
 
-            if (speAttackControl == nullptr)
-                setupSpeControls(speState, *speProcessor);
+            if (fftAttackControl == nullptr)
+                setupFftControls(fftState, *fftProcessor);
             else
             {
-                rebindSpeControls(speState, *speProcessor);
-                rebindSpeAttachments(speState);
+                rebindFftControls(fftState, *fftProcessor);
+                rebindFftAttachments(fftState);
             }
 
-            rebuildSpeAnalyser(*speProcessor);
+            rebuildFftAnalyser(*fftProcessor);
         }
     };
 
@@ -450,18 +456,18 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
 
     refreshModuleStateListeners();
 
-    rebindEqeEditorSections();
-    rebindSpeEditorSections();
-    rebindMultibandEditor(mieModuleLoaded,
-                          audioProcessor.getMieModuleProcessor(),
-                          mieModuleEditor,
-                          [] (auto& processor) { return makeMieMultibandConfig(processor); });
-    rebindMultibandEditor(mxeModuleLoaded,
-                          audioProcessor.getMxeModuleProcessor(),
-                          mxeModuleEditor,
-                          [] (auto& processor) { return makeMxeMultibandConfig(processor); });
-    rebindMultibandEditor(tseModuleLoaded,
-                          audioProcessor.getTseModuleProcessor(),
-                          tseModuleEditor,
-                          [this] (auto& processor) { return makeTseMultibandConfig(processor, *this, tseModuleEditor); });
+    rebindEqlEditorSections();
+    rebindFftEditorSections();
+    rebindMultibandEditor(tlsModuleLoaded,
+                          audioProcessor.getTlsModuleProcessor(),
+                          tlsModuleEditor,
+                          [] (auto& processor) { return makeTlsMultibandConfig(processor); });
+    rebindMultibandEditor(dynModuleLoaded,
+                          audioProcessor.getDynModuleProcessor(),
+                          dynModuleEditor,
+                          [] (auto& processor) { return makeDynMultibandConfig(processor); });
+    rebindMultibandEditor(trsModuleLoaded,
+                          audioProcessor.getTrsModuleProcessor(),
+                          trsModuleEditor,
+                          [this] (auto& processor) { return makeTrsMultibandConfig(processor, *this, trsModuleEditor); });
 }
