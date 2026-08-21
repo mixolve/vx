@@ -59,7 +59,7 @@ public:
 class AvaIosHostApplication final : public juce::JUCEApplication
 {
 public:
-    const juce::String getApplicationName() override { return "ava"; }
+    const juce::String getApplicationName() override { return "AVA"; }
     const juce::String getApplicationVersion() override { return "0.1.2"; }
     bool moreThanOneInstanceAllowed() override { return true; }
 
