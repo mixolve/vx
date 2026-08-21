@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace vx::multiband
+namespace ava::multiband
 {
 namespace
 {
@@ -194,4 +194,4 @@ Crossover::BandArray Crossover::processSample(const double leftInput, const doub
 
     return bands;
 }
-} // namespace vx::multiband
+} // namespace ava::multiband

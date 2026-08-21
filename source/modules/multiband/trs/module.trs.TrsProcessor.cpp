@@ -118,7 +118,7 @@ void TrsModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    vx::multiband::detail::clearOutputOnlyChannels(ownerProcessor, buffer);
+    ava::multiband::detail::clearOutputOnlyChannels(ownerProcessor, buffer);
 
     if (buffer.getNumSamples() <= 0 || buffer.getNumChannels() <= 0)
         return;
@@ -261,7 +261,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrsModuleProcessor::createPa
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
     {
         soloGroup->addChild(boolParam(makeSoloParameterId(bandIndex),
-                                      "TRS / SOLO / BAND " + juce::String(static_cast<int>(bandIndex + 1)),
+                                      "TRS / BAND " + juce::String(static_cast<int>(bandIndex + 1)) + " / SOLO",
                                       false,
                                       true));
     }
@@ -318,8 +318,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrsModuleProcessor::createPa
         {
             const auto key = juce::String(entry.key);
             const auto id = makeBandParameterId(bandIndex, entry.key);
-            const auto name = "TRS / TRANSIENT PROCESSOR / BAND "
-                + juce::String(static_cast<int>(bandIndex + 1)) + " " + juce::String(entry.label);
+            const auto name = "TRS / BAND " + juce::String(static_cast<int>(bandIndex + 1))
+                + " / TRANSIENT PROCESSOR / " + juce::String(entry.label);
 
             if (key == paramTransOnId || key == paramSusOnId)
             {
@@ -331,7 +331,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrsModuleProcessor::createPa
             {
                 bandGroup->addChild(floatParam(id,
                                                name,
-                                               juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.1f },
+                                               juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.01f },
                                                0.0f,
                                                [] (float value, int) { return formatDecibelValue(value); }));
                 continue;
@@ -383,7 +383,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrsModuleProcessor::createPa
             {
                 bandGroup->addChild(floatParam(id,
                                                name,
-                                               juce::NormalisableRange<float> { -48.0f, 0.0f, 0.1f },
+                                               juce::NormalisableRange<float> { -48.0f, 0.0f, 0.01f },
                                                -48.0f,
                                                [] (float value, int) { return formatDecibelValue(value); }));
                 continue;
@@ -393,7 +393,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrsModuleProcessor::createPa
             {
                 bandGroup->addChild(floatParam(id,
                                                name,
-                                               juce::NormalisableRange<float> { 0.0f, 24.0f, 0.1f },
+                                               juce::NormalisableRange<float> { 0.0f, 24.0f, 0.01f },
                                                0.0f,
                                                [] (float value, int) { return formatDecibelValue(value); }));
                 continue;

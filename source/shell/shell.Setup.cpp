@@ -26,13 +26,29 @@ BandControlSpec parameterControl(const char* suffix,
                                  const char* label,
                                  const int decimals,
                                  const int sourceBandIndex = -1,
-                                 const int topGapMultiplier = 1)
+                                 const int topGapMultiplier = 1,
+                                 const char* enabledWhenSuffix = "")
 {
     BandControlSpec spec;
     spec.kind = ControlKind::parameter;
     spec.suffix = suffix;
     spec.label = label;
     spec.decimals = decimals;
+    spec.sourceBandIndex = sourceBandIndex;
+    spec.topGapMultiplier = topGapMultiplier;
+    spec.enabledWhenSuffix = enabledWhenSuffix;
+    return spec;
+}
+
+BandControlSpec choiceControl(const char* suffix,
+                              const char* label,
+                              const int sourceBandIndex = -1,
+                              const int topGapMultiplier = 1)
+{
+    BandControlSpec spec;
+    spec.kind = ControlKind::choice;
+    spec.suffix = suffix;
+    spec.label = label;
     spec.sourceBandIndex = sourceBandIndex;
     spec.topGapMultiplier = topGapMultiplier;
     return spec;
@@ -45,7 +61,8 @@ BandControlSpec parameterToggleControl(const char* suffix,
                                        const char* toggleLabel,
                                        const char* reorderGroup = "",
                                        const char* orderSuffix = "",
-                                       const bool fixedOrder = false)
+                                       const bool fixedOrder = false,
+                                       const bool toggleInverted = false)
 {
     auto spec = parameterControl(suffix, label, decimals);
     spec.auxiliaryToggleSuffix = toggleSuffix;
@@ -53,6 +70,7 @@ BandControlSpec parameterToggleControl(const char* suffix,
     spec.reorderGroup = reorderGroup;
     spec.orderSuffix = orderSuffix;
     spec.fixedOrder = fixedOrder;
+    spec.auxiliaryToggleInverted = toggleInverted;
     return spec;
 }
 
@@ -62,7 +80,8 @@ BandControlSpec toggleControl(const char* suffix,
                               const char* disabledLabel = "",
                               const char* exclusiveGroup = "",
                               const int topGapMultiplier = 1,
-                              const int controlsInRow = 1)
+                              const int controlsInRow = 1,
+                              const bool toggleAccentVisible = true)
 {
     BandControlSpec spec;
     spec.kind = ControlKind::toggle;
@@ -73,6 +92,7 @@ BandControlSpec toggleControl(const char* suffix,
     spec.exclusiveGroup = exclusiveGroup;
     spec.topGapMultiplier = topGapMultiplier;
     spec.controlsInRow = controlsInRow;
+    spec.toggleAccentVisible = toggleAccentVisible;
     return spec;
 }
 
@@ -101,7 +121,8 @@ BandControlSpec readoutControl(const char* suffix,
 BandControlSpec timeControl(const char* suffix,
                             const char* label,
                             const char* modeSuffix,
-                            const char* syncSuffix)
+                            const char* syncSuffix,
+                            const int topGapMultiplier = 1)
 {
     BandControlSpec spec;
     spec.kind = ControlKind::time;
@@ -110,6 +131,7 @@ BandControlSpec timeControl(const char* suffix,
     spec.decimals = 0;
     spec.modeSuffix = modeSuffix;
     spec.syncSuffix = syncSuffix;
+    spec.topGapMultiplier = topGapMultiplier;
     return spec;
 }
 
@@ -172,7 +194,7 @@ MultibandModuleComponent::Config makeTlsMultibandConfig(TlsAudioProcessor& proce
 
         headingControl("SHEAR", 2),
         parameterControl("impact", "IMPACT", 2),
-        toggleControl("impactDirection", "TO LEFT CHANNEL", "TO LEFT CHANNEL", "TO RIGHT CHANNEL"),
+        choiceControl("impactDirection", "DIRECTION"),
 
         headingControl("MS BALANCE", 2),
         parameterControl("mid", "MID", 2),
@@ -217,29 +239,34 @@ MultibandModuleComponent::Config makeDynMultibandConfig(DynAudioProcessor& proce
         return dyn::parameters::makeActiveSplitCountParameterId();
     };
     config.bandControls = {
-        parameterControl("morph", "MORPH", 1, 0),
-        parameterControl("peak_hold_frequency", "PEAK-HOLD", 1, 0),
-        parameterControl("tension_floor", "TEN-FLOOR", 1, 0),
-        parameterControl("tension_hysteresis", "TEN-HYST", 1, 0),
-        toggleControl("linkUpDn", "LINK-UPDN (DUAL-MONO)"),
-        toggleControl("linkLr", "LINK-LR (STEREO)"),
-        toggleControl("linkOpp", "LINK-OPP"),
-        parameterControl("thLU", "L.UP.THR", 1),
-        parameterControl("tensLU", "L.UP.TENS", 1),
-        parameterControl("relLU", "L.UP.REL", 1),
-        parameterControl("outLU", "L.UP.OUT", 1),
-        parameterControl("thLD", "L.DN.THR", 1),
-        parameterControl("tensLD", "L.DN.TENS", 1),
-        parameterControl("relLD", "L.DN.REL", 1),
-        parameterControl("outLD", "L.DN.OUT", 1),
-        parameterControl("thRU", "R.UP.THR", 1),
-        parameterControl("tensRU", "R.UP.TENS", 1),
-        parameterControl("relRU", "R.UP.REL", 1),
-        parameterControl("outRU", "R.UP.OUT", 1),
-        parameterControl("thRD", "R.DN.THR", 1),
-        parameterControl("tensRD", "R.DN.TENS", 1),
-        parameterControl("relRD", "R.DN.REL", 1),
-        parameterControl("outRD", "R.DN.OUT", 1),
+        headingControl("GENERAL", 2),
+        parameterControl("morph", "MORPH", 2, 0),
+        parameterControl("peak_hold", "PEAK-HOLD", 2, 0),
+        parameterControl("lookahead", "LOOKAHEAD", 2, 0),
+        parameterControl("tension_floor", "TEN-FLOOR", 2, 0),
+        parameterControl("tension_hysteresis", "TEN-HYST", 2, 0),
+        choiceControl("release_form", "REL-FORM", 0),
+        parameterControl("release_curve", "REL-CURVE", 2, 0, 1, "release_form"),
+        headingControl("LINKING", 2),
+        toggleControl("linkUpDn", "UPDN (DUAL-MONO)"),
+        toggleControl("linkLr", "LR (STEREO)"),
+        toggleControl("linkOpp", "OPP"),
+        parameterControl("thLU", "L.UP.THR", 2, -1, 2),
+        parameterControl("tensLU", "L.UP.TENS", 2),
+        parameterControl("relLU", "L.UP.REL", 2),
+        parameterControl("outLU", "L.UP.OUT", 2),
+        parameterControl("thLD", "L.DN.THR", 2),
+        parameterControl("tensLD", "L.DN.TENS", 2),
+        parameterControl("relLD", "L.DN.REL", 2),
+        parameterControl("outLD", "L.DN.OUT", 2),
+        parameterControl("thRU", "R.UP.THR", 2),
+        parameterControl("tensRU", "R.UP.TENS", 2),
+        parameterControl("relRU", "R.UP.REL", 2),
+        parameterControl("outRU", "R.UP.OUT", 2),
+        parameterControl("thRD", "R.DN.THR", 2),
+        parameterControl("tensRD", "R.DN.TENS", 2),
+        parameterControl("relRD", "R.DN.REL", 2),
+        parameterControl("outRD", "R.DN.OUT", 2),
     };
     config.bandTailControls = {
         toggleControl("delta", "DELTA"),
@@ -248,7 +275,7 @@ MultibandModuleComponent::Config makeDynMultibandConfig(DynAudioProcessor& proce
 }
 
 MultibandModuleComponent::Config makeTrsMultibandConfig(TrsModuleProcessor& processor,
-                                                        VxAudioProcessorEditor& editor,
+                                                        AvaAudioProcessorEditor& editor,
                                                         std::unique_ptr<juce::Component>& editorHolder)
 {
     MultibandModuleComponent::Config config;
@@ -272,23 +299,41 @@ MultibandModuleComponent::Config makeTrsMultibandConfig(TrsModuleProcessor& proc
         return TrsModuleProcessor::makeActiveSplitCountParameterId();
     };
     config.bandControls = {
-        toggleControl(TrsModuleProcessor::paramTransOnId, "TRANS.ON", "TRANS.ON", "TRANS.OFF"),
-        toggleControl(TrsModuleProcessor::paramSusOnId, "SUS.ON", "SUS.ON", "SUS.OFF"),
-        parameterControl(TrsModuleProcessor::paramTransGainId, "TRANS.GAIN", 1),
-        parameterControl(TrsModuleProcessor::paramSusGainId, "SUS.GAIN", 1),
+        headingControl("TRANSIENT", 2),
+        parameterToggleControl(TrsModuleProcessor::paramTransGainId,
+                               "GAIN",
+                               1,
+                               TrsModuleProcessor::paramTransOnId,
+                               "MUTE",
+                               "",
+                               "",
+                               false,
+                               true),
+        headingControl("SUSTAIN", 2),
+        parameterToggleControl(TrsModuleProcessor::paramSusGainId,
+                               "GAIN",
+                               1,
+                               TrsModuleProcessor::paramSusOnId,
+                               "MUTE",
+                               "",
+                               "",
+                               false,
+                               true),
         timeControl(TrsModuleProcessor::paramTimeHoldId,
                     "HOLD",
                     TrsModuleProcessor::paramTimeHoldModeId,
-                    TrsModuleProcessor::paramTimeHoldSyncId),
+                    TrsModuleProcessor::paramTimeHoldSyncId,
+                    2),
         timeControl(TrsModuleProcessor::paramTimeReleaseId,
                     "RELEASE",
                     TrsModuleProcessor::paramTimeReleaseModeId,
                     TrsModuleProcessor::paramTimeReleaseSyncId),
         parameterControl(TrsModuleProcessor::paramTimeReleaseCurveId, "REL-CURVE", 0),
-        parameterControl(TrsModuleProcessor::paramSensLevelId, "SENS.LVL", 1),
-        parameterControl(TrsModuleProcessor::paramSensKneeId, "SENS.KNEE", 1),
-        parameterControl(TrsModuleProcessor::paramSensRetriggerId, "SENS.RETR", 0),
         parameterControl(TrsModuleProcessor::paramLookaheadId, "LOOKAHEAD", 2),
+        headingControl("SENSITIVITY", 2),
+        parameterControl(TrsModuleProcessor::paramSensLevelId, "LVL", 2),
+        parameterControl(TrsModuleProcessor::paramSensKneeId, "KNEE", 2),
+        parameterControl(TrsModuleProcessor::paramSensRetriggerId, "RETR", 0),
     };
     config.getHostSyncChoices = []
     {
@@ -324,7 +369,7 @@ MultibandModuleComponent::Config makeTrsMultibandConfig(TrsModuleProcessor& proc
 }
 } // namespace
 
-void VxAudioProcessorEditor::rebindActiveModuleEditors()
+void AvaAudioProcessorEditor::rebindActiveModuleEditors()
 {
     auto rebindFftControls = [this] (juce::AudioProcessorValueTreeState& fftState,
                                      FftModuleProcessor& fftProcessor)
@@ -334,8 +379,9 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
         if (fftKneeControl != nullptr) fftKneeControl->rebind(fftState);
         if (fftRatioControl != nullptr) fftRatioControl->rebind(fftState);
         if (fftFloorControl != nullptr) fftFloorControl->rebind(fftState);
+        if (fftDynamicModeControl != nullptr) fftDynamicModeControl->rebind(fftState);
         if (fftDspFftSizeControl != nullptr) fftDspFftSizeControl->rebind(fftState);
-        if (fftDspHopDivisorControl != nullptr) fftDspHopDivisorControl->rebind(fftState);
+        if (fftDspOverlapControl != nullptr) fftDspOverlapControl->rebind(fftState);
         if (fftDspSlopeControl != nullptr) fftDspSlopeControl->rebind(fftState);
         if (fftPhaseImpactControl != nullptr) fftPhaseImpactControl->rebind(fftState);
         if (fftDualMonoLeftThresholdControl != nullptr) fftDualMonoLeftThresholdControl->rebind(fftState, FftModuleProcessor::paramDualMonoLeftThresholdId);
@@ -364,17 +410,13 @@ void VxAudioProcessorEditor::rebindActiveModuleEditors()
             fftDynamicBypassAttachment = std::make_unique<ButtonAttachment>(fftState,
                                                                             FftModuleProcessor::paramDynamicBypassId,
                                                                             *fftDynamicBypassButton);
-        if (fftDynamicModeButton != nullptr)
-            fftDynamicModeAttachment = std::make_unique<ButtonAttachment>(fftState,
-                                                                          FftModuleProcessor::paramDynamicModeId,
-                                                                          *fftDynamicModeButton);
     };
 
     auto rebuildFftAnalyser = [this] (FftModuleProcessor& fftProcessor)
     {
-        shell_setup_support::removeOwnedChild(fftAnalyserContent, fftAnalyserComponent);
+        shell_setup_support::removeOwnedChild(*this, fftAnalyserComponent);
         fftAnalyserComponent = shell_setup_support::createFftAnalyserComponent(fftProcessor);
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserComponent);
+        addAndMakeVisible(*fftAnalyserComponent);
         fftAnalyserComponent->setVisible(fftModuleLoaded);
     };
 

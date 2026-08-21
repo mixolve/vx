@@ -1,6 +1,6 @@
 #include "shell.EditorPresetSections.h"
 
-void VxAudioProcessorEditor::setupPresetControls()
+void AvaAudioProcessorEditor::setupPresetControls()
 {
     presetsSection = std::make_unique<PresetsSection>();
     presetsSection->onPresetSelected = [this]

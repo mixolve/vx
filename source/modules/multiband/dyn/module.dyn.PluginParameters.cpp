@@ -29,9 +29,12 @@ inline constexpr auto dynCrossoverFullbandOrder = std::to_array<ParameterOrderEn
 
 inline constexpr auto dynBandOrder = std::to_array<ParameterOrderEntry>({
     { "morph", "Morph" },
-    { "peak_hold_frequency", "Peak Hold" },
+    { "peak_hold", "Peak Hold" },
+    { "lookahead", "Lookahead" },
     { "tension_floor", "Tension Floor" },
     { "tension_hysteresis", "Tension Hysteresis" },
+    { "release_form", "Release Form" },
+    { "release_curve", "Release Curve" },
     { "linkUpDn", "Link UP/DN (Dual-Mono)" },
     { "linkLr", "Link L/R (Stereo)" },
     { "linkOpp", "Link Opp" },
@@ -63,13 +66,13 @@ juce::String makeFullbandHostName(const juce::String& sectionName, const juce::S
 
 juce::String makeBandHostName(const size_t bandIndex, const juce::String& moduleName, const juce::String& parameterName)
 {
-    return moduleName + " / DYNAMIC PROCESSOR / BAND "
-        + juce::String(static_cast<int>(bandIndex + 1)) + " " + parameterName;
+    return moduleName + " / BAND " + juce::String(static_cast<int>(bandIndex + 1))
+        + " / DYNAMIC PROCESSOR / " + parameterName;
 }
 
 double roundToDisplayStep(const double value) noexcept
 {
-    auto rounded = std::floor((value * 10.0) + 0.5) * 0.1;
+    auto rounded = std::floor((value * 100.0) + 0.5) * 0.01;
 
     if (std::abs(rounded) < 0.05)
         rounded = 0.0;
@@ -79,7 +82,7 @@ double roundToDisplayStep(const double value) noexcept
 
 juce::String formatParameterValue(const float value)
 {
-    return juce::String::formatted("%.1f", roundToDisplayStep(value));
+    return juce::String::formatted("%.2f", roundToDisplayStep(value));
 }
 
 constexpr bool isHostEditableParameter = false;
@@ -128,12 +131,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         return std::make_unique<juce::AudioParameterBool>(juce::ParameterID { id, 1 }, name, defaultValue, attributes);
     };
 
+    auto choiceParam = [] (const juce::String& id,
+                           const juce::String& name,
+                           const int defaultValue,
+                           const bool isAutomatable,
+                           const bool isMeta = false) -> Parameter
+    {
+        auto attributes = juce::AudioParameterChoiceAttributes()
+                              .withAutomatable(isAutomatable)
+                              .withMeta(isMeta);
+        return std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { id, 1 },
+                                                            name,
+                                                            juce::StringArray { "LIN", "LOG" },
+                                                            defaultValue,
+                                                            attributes);
+    };
+
     Layout layout;
     auto soloGroup = std::make_unique<juce::AudioProcessorParameterGroup>("monitor", "Monitor", " | ");
 
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
         soloGroup->addChild(boolParam(makeSoloParameterId(bandIndex),
-                                      "DYN / SOLO / BAND " + juce::String(static_cast<int>(bandIndex + 1)),
+                                      "DYN / BAND " + juce::String(static_cast<int>(bandIndex + 1)) + " / SOLO",
                                       false,
                                       isHostEditableParameter));
 
@@ -209,6 +228,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
 
             if (it->type == ParameterType::boolean)
                 group->addChild(boolParam(parameterId, parameterName, it->defaultValue >= 0.5f, false));
+            else if (it->type == ParameterType::choice)
+                group->addChild(choiceParam(parameterId,
+                                            parameterName,
+                                            juce::roundToInt(it->defaultValue),
+                                            false));
             else
                 group->addChild(floatParam(parameterId,
                                            parameterName,

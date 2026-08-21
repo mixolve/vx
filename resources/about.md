@@ -2,4 +2,4 @@
 
 VIBECODED. V:08
 
-[MANUAL](vx-manual://open)
+[MANUAL](ava-manual://open)

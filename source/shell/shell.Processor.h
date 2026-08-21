@@ -11,7 +11,7 @@ class TlsAudioProcessor;
 class DynAudioProcessor;
 class TrsModuleProcessor;
 
-class VxAudioProcessor final : public juce::AudioProcessor,
+class AvaAudioProcessor final : public juce::AudioProcessor,
                                private juce::AudioProcessorValueTreeState::Listener,
                                private juce::ValueTree::Listener
 {
@@ -20,22 +20,22 @@ public:
 
     inline static constexpr auto paramGlobalBypassId = "global_bypass";
     inline static constexpr auto paramHostSlotPrefix = "host_slot_";
-    inline static constexpr auto activeModuleStateKey = "vx.active_module";
-    inline static constexpr auto eqlModuleStateKey = "vx.eql_state";
-    inline static constexpr auto fftModuleStateKey = "vx.fft_state";
-    inline static constexpr auto tlsModuleStateKey = "vx.tls_state";
-    inline static constexpr auto dynModuleStateKey = "vx.dyn_state";
-    inline static constexpr auto trsModuleStateKey = "vx.trs_state";
-    inline static constexpr auto abCompareSnapshotAStateKey = "vx.ab_compare.a";
-    inline static constexpr auto abCompareSnapshotBStateKey = "vx.ab_compare.b";
-    inline static constexpr auto abCompareActiveSlotStateKey = "vx.ab_compare.active";
+    inline static constexpr auto activeModuleStateKey = "ava.active_module";
+    inline static constexpr auto eqlModuleStateKey = "ava.eql_state";
+    inline static constexpr auto fftModuleStateKey = "ava.fft_state";
+    inline static constexpr auto tlsModuleStateKey = "ava.tls_state";
+    inline static constexpr auto dynModuleStateKey = "ava.dyn_state";
+    inline static constexpr auto trsModuleStateKey = "ava.trs_state";
+    inline static constexpr auto abCompareSnapshotAStateKey = "ava.ab_compare.a";
+    inline static constexpr auto abCompareSnapshotBStateKey = "ava.ab_compare.b";
+    inline static constexpr auto abCompareActiveSlotStateKey = "ava.ab_compare.active";
     inline static constexpr auto eqlModuleId = "eql";
     inline static constexpr auto fftModuleId = "fft";
     inline static constexpr auto tlsModuleId = "tls";
     inline static constexpr auto dynModuleId = "dyn";
     inline static constexpr auto trsModuleId = "trs";
-    inline static constexpr auto editorWidthStateKey = "vx.editor.width";
-    inline static constexpr auto editorHeightStateKey = "vx.editor.height";
+    inline static constexpr auto editorWidthStateKey = "ava.editor.width";
+    inline static constexpr auto editorHeightStateKey = "ava.editor.height";
     static constexpr int maxEqlFilterCount = EqlModuleProcessor::maxFilterCount;
     static constexpr int hostAutomationSlotCount = 64;
 
@@ -59,8 +59,8 @@ public:
         FilterType::volume
     };
 
-    explicit VxAudioProcessor();
-    ~VxAudioProcessor() override;
+    explicit AvaAudioProcessor();
+    ~AvaAudioProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -130,7 +130,7 @@ private:
     class ScopedProcessingSuspend
     {
     public:
-        explicit ScopedProcessingSuspend(VxAudioProcessor& processorIn) noexcept
+        explicit ScopedProcessingSuspend(AvaAudioProcessor& processorIn) noexcept
             : processor(processorIn)
         {
             processor.suspendProcessing(true);
@@ -142,12 +142,29 @@ private:
         }
 
     private:
-        VxAudioProcessor& processor;
+        AvaAudioProcessor& processor;
     };
 
     static constexpr size_t maxSupportedChannels = 2;
+    inline static constexpr size_t tlsDirectHostBandCount = 6;
+    inline static constexpr size_t tlsWidebandListenHostIndex = tlsDirectHostBandCount;
+    inline static constexpr std::array<const char*, 7> tlsWidebandListenParameterSuffixes {
+        "listenLc", "listenRc", "listenMc", "listenSc", "listenLl", "listenRr", "listenSs"
+    };
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    static juce::String getTlsDirectHostParameterId(size_t bandIndex, const char* suffix);
+    static juce::String getTlsDirectHostParameterName(size_t bandIndex, const char* suffix);
+    static bool decodeTlsDirectHostParameterId(const juce::String& parameterId,
+                                               size_t& bandIndex,
+                                               juce::String& suffix) noexcept;
+    static juce::String getTlsModuleParameterId(size_t bandIndex, const juce::String& suffix);
+    void registerTlsDirectHostParameterListeners();
+    void unregisterTlsDirectHostParameterListeners();
+    void syncTlsDirectHostParametersToModule();
+    void syncTlsModuleParametersToHost();
+    bool syncTlsDirectHostParameterToModule(const juce::String& parameterId, float value);
+    bool syncTlsModuleParameterToHost(const juce::String& parameterId, float value);
     bool createModuleInstance(ActiveModule module);
     void resetModuleProcessors() noexcept;
     static ActiveModule moduleFromStateId(const juce::String& moduleId);
@@ -168,6 +185,7 @@ private:
     juce::ValueTree observedModuleState;
     std::atomic<float>* globalBypassParam = nullptr;
     std::atomic<float> globalClipIndicator { 0.0f };
+    bool synchronisingTlsDirectHostParameters = false;
     std::unique_ptr<EqlModuleProcessor> eqlModuleProcessor;
     std::unique_ptr<FftModuleProcessor> fftModuleProcessor;
     std::unique_ptr<TlsAudioProcessor> tlsModuleProcessor;
@@ -188,5 +206,5 @@ private:
     int lastProcessedBlockSize = 0;
     double currentSampleRate = 0.0;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VxAudioProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AvaAudioProcessor)
 };

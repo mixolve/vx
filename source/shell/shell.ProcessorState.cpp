@@ -8,16 +8,16 @@
 
 namespace
 {
-bool hasRestoredModuleProcessor(VxAudioProcessor& processor, const VxAudioProcessor::ActiveModule module) noexcept
+bool hasRestoredModuleProcessor(AvaAudioProcessor& processor, const AvaAudioProcessor::ActiveModule module) noexcept
 {
     switch (module)
     {
-        case VxAudioProcessor::ActiveModule::eql: return processor.getEqlModuleProcessor() != nullptr;
-        case VxAudioProcessor::ActiveModule::fft: return processor.getFftModuleProcessor() != nullptr;
-        case VxAudioProcessor::ActiveModule::tls: return processor.getTlsModuleProcessor() != nullptr;
-        case VxAudioProcessor::ActiveModule::dyn: return processor.getDynModuleProcessor() != nullptr;
-        case VxAudioProcessor::ActiveModule::trs: return processor.getTrsModuleProcessor() != nullptr;
-        case VxAudioProcessor::ActiveModule::none: break;
+        case AvaAudioProcessor::ActiveModule::eql: return processor.getEqlModuleProcessor() != nullptr;
+        case AvaAudioProcessor::ActiveModule::fft: return processor.getFftModuleProcessor() != nullptr;
+        case AvaAudioProcessor::ActiveModule::tls: return processor.getTlsModuleProcessor() != nullptr;
+        case AvaAudioProcessor::ActiveModule::dyn: return processor.getDynModuleProcessor() != nullptr;
+        case AvaAudioProcessor::ActiveModule::trs: return processor.getTrsModuleProcessor() != nullptr;
+        case AvaAudioProcessor::ActiveModule::none: break;
     }
 
     return false;
@@ -54,11 +54,11 @@ void copyStateProperties(juce::ValueTree& target, const juce::ValueTree& source)
 struct RestoredModuleStateProperties
 {
     explicit RestoredModuleStateProperties(const juce::ValueTree& state)
-        : eqlBase64(state.getProperty(VxAudioProcessor::eqlModuleStateKey).toString()),
-          fftXml(state.getProperty(VxAudioProcessor::fftModuleStateKey).toString()),
-          tlsBase64(state.getProperty(VxAudioProcessor::tlsModuleStateKey).toString()),
-          dynBase64(state.getProperty(VxAudioProcessor::dynModuleStateKey).toString()),
-          trsXml(state.getProperty(VxAudioProcessor::trsModuleStateKey).toString())
+        : eqlBase64(state.getProperty(AvaAudioProcessor::eqlModuleStateKey).toString()),
+          fftXml(state.getProperty(AvaAudioProcessor::fftModuleStateKey).toString()),
+          tlsBase64(state.getProperty(AvaAudioProcessor::tlsModuleStateKey).toString()),
+          dynBase64(state.getProperty(AvaAudioProcessor::dynModuleStateKey).toString()),
+          trsXml(state.getProperty(AvaAudioProcessor::trsModuleStateKey).toString())
     {
     }
 
@@ -72,10 +72,10 @@ struct RestoredModuleStateProperties
 struct RestoredABCompareState
 {
     explicit RestoredABCompareState(const juce::ValueTree& state)
-        : shouldRestore(state.hasProperty(VxAudioProcessor::abCompareSnapshotAStateKey)
-                        || state.hasProperty(VxAudioProcessor::abCompareSnapshotBStateKey)
-                        || state.hasProperty(VxAudioProcessor::abCompareActiveSlotStateKey)),
-          snapshotA(state.getProperty(VxAudioProcessor::abCompareSnapshotAStateKey).toString())
+        : shouldRestore(state.hasProperty(AvaAudioProcessor::abCompareSnapshotAStateKey)
+                        || state.hasProperty(AvaAudioProcessor::abCompareSnapshotBStateKey)
+                        || state.hasProperty(AvaAudioProcessor::abCompareActiveSlotStateKey)),
+          snapshotA(state.getProperty(AvaAudioProcessor::abCompareSnapshotAStateKey).toString())
     {
     }
 
@@ -85,12 +85,12 @@ struct RestoredABCompareState
 
 void removeABCompareStateProperties(juce::ValueTree& state)
 {
-    state.removeProperty(VxAudioProcessor::abCompareSnapshotAStateKey, nullptr);
-    state.removeProperty(VxAudioProcessor::abCompareSnapshotBStateKey, nullptr);
-    state.removeProperty(VxAudioProcessor::abCompareActiveSlotStateKey, nullptr);
+    state.removeProperty(AvaAudioProcessor::abCompareSnapshotAStateKey, nullptr);
+    state.removeProperty(AvaAudioProcessor::abCompareSnapshotBStateKey, nullptr);
+    state.removeProperty(AvaAudioProcessor::abCompareActiveSlotStateKey, nullptr);
 }
 
-void restoreABCompareState(VxAudioProcessor& processor, const RestoredABCompareState& restoredState)
+void restoreABCompareState(AvaAudioProcessor& processor, const RestoredABCompareState& restoredState)
 {
     if (! restoredState.shouldRestore)
         return;
@@ -110,7 +110,7 @@ void restoreABCompareState(VxAudioProcessor& processor, const RestoredABCompareS
     processor.setABCompareActiveSlot(0);
 }
 
-void storeABCompareState(juce::ValueTree& state, const VxAudioProcessor& processor)
+void storeABCompareState(juce::ValueTree& state, const AvaAudioProcessor& processor)
 {
     const auto storeSnapshot = [&state, &processor] (const int slot, const juce::Identifier& property)
     {
@@ -122,9 +122,9 @@ void storeABCompareState(juce::ValueTree& state, const VxAudioProcessor& process
             state.setProperty(property, snapshot.toBase64Encoding(), nullptr);
     };
 
-    storeSnapshot(0, VxAudioProcessor::abCompareSnapshotAStateKey);
-    storeSnapshot(1, VxAudioProcessor::abCompareSnapshotBStateKey);
-    state.setProperty(VxAudioProcessor::abCompareActiveSlotStateKey,
+    storeSnapshot(0, AvaAudioProcessor::abCompareSnapshotAStateKey);
+    storeSnapshot(1, AvaAudioProcessor::abCompareSnapshotBStateKey);
+    state.setProperty(AvaAudioProcessor::abCompareActiveSlotStateKey,
                       processor.getABCompareActiveSlot(),
                       nullptr);
 }
@@ -154,7 +154,7 @@ bool restoreXmlModuleState(Processor* processor, const juce::String& stateXml)
     return true;
 }
 
-bool restoreEqlModuleState(VxAudioProcessor& processor,
+bool restoreEqlModuleState(AvaAudioProcessor& processor,
                            const juce::String& stateBase64,
                            const bool useABCompareRestore)
 {
@@ -175,29 +175,29 @@ bool restoreEqlModuleState(VxAudioProcessor& processor,
     return true;
 }
 
-bool restoreActiveModuleState(VxAudioProcessor& processor,
-                              const VxAudioProcessor::ActiveModule module,
+bool restoreActiveModuleState(AvaAudioProcessor& processor,
+                              const AvaAudioProcessor::ActiveModule module,
                               const RestoredModuleStateProperties& moduleStates,
                               const bool useABCompareRestore)
 {
     switch (module)
     {
-        case VxAudioProcessor::ActiveModule::eql:
+        case AvaAudioProcessor::ActiveModule::eql:
             return restoreEqlModuleState(processor, moduleStates.eqlBase64, useABCompareRestore);
 
-        case VxAudioProcessor::ActiveModule::fft:
+        case AvaAudioProcessor::ActiveModule::fft:
             return restoreXmlModuleState(processor.getFftModuleProcessor(), moduleStates.fftXml);
 
-        case VxAudioProcessor::ActiveModule::tls:
+        case AvaAudioProcessor::ActiveModule::tls:
             return restoreBinaryModuleState(processor.getTlsModuleProcessor(), moduleStates.tlsBase64);
 
-        case VxAudioProcessor::ActiveModule::dyn:
+        case AvaAudioProcessor::ActiveModule::dyn:
             return restoreBinaryModuleState(processor.getDynModuleProcessor(), moduleStates.dynBase64);
 
-        case VxAudioProcessor::ActiveModule::trs:
+        case AvaAudioProcessor::ActiveModule::trs:
             return restoreXmlModuleState(processor.getTrsModuleProcessor(), moduleStates.trsXml);
 
-        case VxAudioProcessor::ActiveModule::none:
+        case AvaAudioProcessor::ActiveModule::none:
             return true;
     }
 
@@ -245,7 +245,7 @@ void storeXmlModuleState(juce::ValueTree& state,
 
 }
 
-void VxAudioProcessor::removeModuleStateProperties(juce::ValueTree& state)
+void AvaAudioProcessor::removeModuleStateProperties(juce::ValueTree& state)
 {
     state.removeProperty(activeModuleStateKey, nullptr);
     state.removeProperty(eqlModuleStateKey, nullptr);
@@ -255,17 +255,17 @@ void VxAudioProcessor::removeModuleStateProperties(juce::ValueTree& state)
     state.removeProperty(trsModuleStateKey, nullptr);
 }
 
-void VxAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
+void AvaAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     writeStateInformation(destData, true);
 }
 
-void VxAudioProcessor::getStateInformationForABCompareSnapshot(juce::MemoryBlock& destData)
+void AvaAudioProcessor::getStateInformationForABCompareSnapshot(juce::MemoryBlock& destData)
 {
     writeStateInformation(destData, false);
 }
 
-void VxAudioProcessor::writeStateInformation(juce::MemoryBlock& destData, const bool includeABCompareState)
+void AvaAudioProcessor::writeStateInformation(juce::MemoryBlock& destData, const bool includeABCompareState)
 {
     const auto editorWidth = lastEditorWidth.load(std::memory_order_relaxed);
     const auto editorHeight = lastEditorHeight.load(std::memory_order_relaxed);
@@ -302,7 +302,7 @@ void VxAudioProcessor::writeStateInformation(juce::MemoryBlock& destData, const 
         copyXmlToBinary(*stateXml, destData);
 }
 
-void VxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
+void AvaAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
     if (setStateInformationPreservingLoadedModule(data, sizeInBytes))
         return;
@@ -336,6 +336,7 @@ void VxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 
             setActiveModule(hasRestoredModuleProcessor(*this, restoredActiveModule) ? restoredActiveModule : ActiveModule::none);
             registerActiveModuleStateListeners();
+            syncTlsModuleParametersToHost();
             restoreABCompareState(*this, restoredABCompareState);
 
             updateShellLatency();
@@ -350,7 +351,7 @@ void VxAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
     }
 }
 
-bool VxAudioProcessor::setStateInformationPreservingLoadedModule(const void* data,
+bool AvaAudioProcessor::setStateInformationPreservingLoadedModule(const void* data,
                                                                  const int sizeInBytes,
                                                                  const bool suspendProcessingForRestore)
 {
@@ -393,6 +394,8 @@ bool VxAudioProcessor::setStateInformationPreservingLoadedModule(const void* dat
     if (restoredActiveModule != ActiveModule::none)
         registerActiveModuleStateListeners();
 
+    syncTlsModuleParametersToHost();
+
     restoreABCompareState(*this, restoredABCompareState);
 
     updateShellLatency();
@@ -406,7 +409,7 @@ bool VxAudioProcessor::setStateInformationPreservingLoadedModule(const void* dat
     return true;
 }
 
-bool VxAudioProcessor::applyStateInformationForABCompare(const void* data, const int sizeInBytes)
+bool AvaAudioProcessor::applyStateInformationForABCompare(const void* data, const int sizeInBytes)
 {
     auto stateXml = getXmlFromBinary(data, sizeInBytes);
 
@@ -446,6 +449,7 @@ bool VxAudioProcessor::applyStateInformationForABCompare(const void* data, const
         {
             setActiveModule(restoredActiveModule);
             registerActiveModuleStateListeners();
+            syncTlsModuleParametersToHost();
         }
     }
 
@@ -457,17 +461,17 @@ bool VxAudioProcessor::applyStateInformationForABCompare(const void* data, const
     return restoredModuleState;
 }
 
-int VxAudioProcessor::getABCompareActiveSlot() const noexcept
+int AvaAudioProcessor::getABCompareActiveSlot() const noexcept
 {
     return juce::jlimit(0, 1, abCompareActiveSlot.load(std::memory_order_acquire));
 }
 
-void VxAudioProcessor::setABCompareActiveSlot(const int slot) noexcept
+void AvaAudioProcessor::setABCompareActiveSlot(const int slot) noexcept
 {
     abCompareActiveSlot.store(juce::jlimit(0, 1, slot), std::memory_order_release);
 }
 
-bool VxAudioProcessor::isABCompareSnapshotValid(const int slot) const noexcept
+bool AvaAudioProcessor::isABCompareSnapshotValid(const int slot) const noexcept
 {
     if (! juce::isPositiveAndBelow(slot, static_cast<int>(abCompareSnapshotValid.size())))
         return false;
@@ -477,7 +481,7 @@ bool VxAudioProcessor::isABCompareSnapshotValid(const int slot) const noexcept
         && ! abCompareSnapshots[static_cast<size_t>(slot)].isEmpty();
 }
 
-juce::MemoryBlock VxAudioProcessor::getABCompareSnapshot(const int slot) const
+juce::MemoryBlock AvaAudioProcessor::getABCompareSnapshot(const int slot) const
 {
     if (! juce::isPositiveAndBelow(slot, static_cast<int>(abCompareSnapshots.size())))
         return {};
@@ -486,7 +490,7 @@ juce::MemoryBlock VxAudioProcessor::getABCompareSnapshot(const int slot) const
     return abCompareSnapshots[static_cast<size_t>(slot)];
 }
 
-void VxAudioProcessor::setABCompareSnapshot(const int slot, const juce::MemoryBlock& snapshot)
+void AvaAudioProcessor::setABCompareSnapshot(const int slot, const juce::MemoryBlock& snapshot)
 {
     if (! juce::isPositiveAndBelow(slot, static_cast<int>(abCompareSnapshots.size())))
         return;
@@ -496,19 +500,19 @@ void VxAudioProcessor::setABCompareSnapshot(const int slot, const juce::MemoryBl
     abCompareSnapshotValid[static_cast<size_t>(slot)] = ! snapshot.isEmpty();
 }
 
-juce::Point<int> VxAudioProcessor::getLastEditorSize() const noexcept
+juce::Point<int> AvaAudioProcessor::getLastEditorSize() const noexcept
 {
     return { lastEditorWidth.load(std::memory_order_relaxed),
              lastEditorHeight.load(std::memory_order_relaxed) };
 }
 
-void VxAudioProcessor::setLastEditorSize(const int width, const int height) noexcept
+void AvaAudioProcessor::setLastEditorSize(const int width, const int height) noexcept
 {
     lastEditorWidth.store(juce::jmax(0, width), std::memory_order_relaxed);
     lastEditorHeight.store(juce::jmax(0, height), std::memory_order_relaxed);
 }
 
-void VxAudioProcessor::notifyHostOfStateChange()
+void AvaAudioProcessor::notifyHostOfStateChange()
 {
     if (suppressHostStateNotifications.load(std::memory_order_relaxed))
         return;

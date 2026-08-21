@@ -1,11 +1,11 @@
 #include "shell.Editor.h"
 
-bool VxAudioProcessor::hasEditor() const
+bool AvaAudioProcessor::hasEditor() const
 {
     return true;
 }
 
-juce::AudioProcessorEditor* VxAudioProcessor::createEditor()
+juce::AudioProcessorEditor* AvaAudioProcessor::createEditor()
 {
-    return new VxAudioProcessorEditor(*this);
+    return new AvaAudioProcessorEditor(*this);
 }

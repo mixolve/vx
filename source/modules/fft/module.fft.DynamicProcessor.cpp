@@ -38,12 +38,6 @@ void FftModuleProcessor::DynamicProcessor::copyReductionScope(std::array<float, 
     rightDestination = reductionScopeBuffers[static_cast<size_t>(activeIndex)][1];
 }
 
-float FftModuleProcessor::DynamicProcessor::getPublishedThreshold(const int channel) const noexcept
-{
-    const auto channelIndex = juce::jlimit(0, maxChannels - 1, channel);
-    return publishedThresholdValues[static_cast<size_t>(channelIndex)].load(std::memory_order_acquire);
-}
-
 void FftModuleProcessor::DynamicProcessor::processBuffer(juce::AudioBuffer<float>& buffer,
                                                            int numInputChannels,
                                                            const CompressorSettings& settings)
@@ -380,8 +374,6 @@ void FftModuleProcessor::DynamicProcessor::processFrame(int channelsToUse,
             phaseAdaptiveHoldRemainingMs[1] = phaseAdaptiveHoldRemainingMs[0];
         }
 
-        publishedThresholdValues[static_cast<size_t>(channel)].store(publishedThreshold[static_cast<size_t>(channel)],
-                                                                     std::memory_order_release);
     }
 
     for (auto channel = 0; channel < channelsToUse; ++channel)
@@ -399,6 +391,9 @@ void FftModuleProcessor::DynamicProcessor::processFrame(int channelsToUse,
     }
 
     const auto currentSampleRate = juce::jmax(1.0, sampleRate);
+    const auto displayCoefficient = calculateTimeCoefficient(
+        settings.reductionDisplayTimeMs,
+        static_cast<float>(hopSize) / static_cast<float>(currentSampleRate));
     const auto sourceMaximumHz = juce::jlimit(analyserMinFrequency + 1.0f,
                                               analyserMaxFrequency,
                                               static_cast<float>(currentSampleRate * 0.5));
@@ -423,11 +418,15 @@ void FftModuleProcessor::DynamicProcessor::processFrame(int channelsToUse,
             const auto& source = settings.phaseMode
                 ? phaseCorrelationReductions[static_cast<size_t>(channel)]
                 : dualMonoSmoothedReductionDb[static_cast<size_t>(channel)];
-            reductionScope[static_cast<size_t>(channel)][i] = settings.dynamicBypassed
+            const auto rawReduction = settings.dynamicBypassed
                 ? 0.0f
                 : juce::jmap(interpolation,
                              source[static_cast<size_t>(lowerBin)],
                              source[static_cast<size_t>(upperBin)]);
+            auto& smoothedReduction = smoothedReductionScopes[static_cast<size_t>(channel)][i];
+            smoothedReduction = (displayCoefficient * smoothedReduction)
+                              + ((1.0f - displayCoefficient) * rawReduction);
+            reductionScope[static_cast<size_t>(channel)][i] = smoothedReduction;
         }
     }
 
@@ -478,12 +477,11 @@ void FftModuleProcessor::DynamicProcessor::reconfigure(int channelsToUse, int ff
     for (auto& channelReduction : phaseCorrelationReductions)
         std::fill(channelReduction.begin(), channelReduction.end(), 0.0f);
     activeReductionScopeBuffer.store(0, std::memory_order_relaxed);
-    for (auto& publishedThreshold : publishedThresholdValues)
-        publishedThreshold.store(0.0f, std::memory_order_relaxed);
-
     for (auto& reductionScope : reductionScopeBuffers)
         for (auto& channelReductionScope : reductionScope)
             std::fill(channelReductionScope.begin(), channelReductionScope.end(), 0.0f);
+    for (auto& channelReductionScope : smoothedReductionScopes)
+        std::fill(channelReductionScope.begin(), channelReductionScope.end(), 0.0f);
 
     for (auto channel = 0; channel < maxChannels; ++channel)
     {

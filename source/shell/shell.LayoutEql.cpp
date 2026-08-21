@@ -4,7 +4,7 @@
 
 #include <array>
 
-void VxAudioProcessorEditor::layoutEqlModuleSections(juce::Rectangle<int>& bounds, const int editorInsetX)
+void AvaAudioProcessorEditor::layoutEqlModuleSections(juce::Rectangle<int>& bounds, const int editorInsetX)
 {
     if (! bounds.isEmpty())
         bounds.removeFromBottom(viewportToPotentiometerGap);

@@ -20,8 +20,6 @@ constexpr std::array<const char*, 4> dualMonoLinkedParameterIds {
     FftModuleProcessor::paramDualMonoRightAdaptiveId
 };
 
-constexpr auto phaseRangeLowProperty = "fft_phase_range_low";
-constexpr auto phaseRangeHighProperty = "fft_phase_range_high";
 }
 
 FftModuleProcessor::FftModuleProcessor(juce::AudioProcessor& owner)
@@ -55,7 +53,7 @@ FftModuleProcessor::FftModuleProcessor(juce::AudioProcessor& owner)
     ratioParam = parameters.getRawParameterValue(paramRatioId);
     deltaParam = parameters.getRawParameterValue(paramDeltaId);
     dspFftSizeParam = parameters.getRawParameterValue(paramDspFftSizeId);
-    dspHopDivisorParam = parameters.getRawParameterValue(paramDspHopDivisorId);
+    dspOverlapParam = parameters.getRawParameterValue(paramDspOverlapId);
     dspSlopeParam = parameters.getRawParameterValue(paramDspSlopeId);
     for (const auto* parameterId : dualMonoLinkedParameterIds)
         parameters.addParameterListener(parameterId, this);
@@ -73,7 +71,6 @@ void FftModuleProcessor::prepareToPlay(double sampleRate, int)
     dynamicProcessor.prepare(sampleRate, ownerProcessor.getTotalNumInputChannels());
     refreshLatencyState();
     resetDeltaDelay();
-    outputAnalyser.prepare(sampleRate);
     deltaDryBuffer.setSize(ownerProcessor.getTotalNumInputChannels(), preparedBlockSize);
 }
 
@@ -86,7 +83,6 @@ void FftModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    const auto analysisSettings = getAnalysisSettings();
     auto compressorSettings = getCompressorSettings();
     const auto deltaEnabled = isDeltaEnabled();
     const auto channelsToUse = juce::jmin(ownerProcessor.getTotalNumInputChannels(), buffer.getNumChannels());
@@ -119,27 +115,6 @@ void FftModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
         }
     }
 
-    if (compressorSettings.phaseMode)
-    {
-        std::array<float, analyserScopeSize> leftReduction {};
-        std::array<float, analyserScopeSize> rightReduction {};
-        dynamicProcessor.copyReductionScope(leftReduction, rightReduction);
-        outputAnalyser.pushPhaseBuffer(buffer,
-                                       channelsToUse,
-                                       analysisSettings.fftSize,
-                                       analysisSettings.overlapFactor,
-                                       analysisSettings.averagingTimeMs,
-                                       leftReduction,
-                                       rightReduction);
-    }
-    else
-    {
-        outputAnalyser.pushBuffer(buffer,
-                                  channelsToUse,
-                                  analysisSettings.fftSize,
-                                  analysisSettings.overlapFactor,
-                                  analysisSettings.averagingTimeMs);
-    }
 }
 
 void FftModuleProcessor::parameterChanged(const juce::String& parameterID, float)
@@ -256,26 +231,23 @@ bool FftModuleProcessor::refreshLatencyState() noexcept
     return changed;
 }
 
-void FftModuleProcessor::copyAnalyserData(std::array<float, analyserScopeSize>& destination,
-                                          double& currentSampleRate) const
-{
-    outputAnalyser.copyScope(destination, currentSampleRate);
-}
-
 void FftModuleProcessor::copyGainReductionData(std::array<float, analyserScopeSize>& leftDestination,
                                                std::array<float, analyserScopeSize>& rightDestination) const
 {
     dynamicProcessor.copyReductionScope(leftDestination, rightDestination);
 }
 
-void FftModuleProcessor::copyPhaseAnalysisData(
-    std::array<float, analyserScopeSize>& detectorDestination,
-    std::array<float, analyserScopeSize>& leftReductionDestination,
-    std::array<float, analyserScopeSize>& rightReductionDestination) const
+bool FftModuleProcessor::isPhaseCorrMode() const noexcept
 {
-    outputAnalyser.copyPhaseAnalysisScopes(detectorDestination,
-                                           leftReductionDestination,
-                                           rightReductionDestination);
+    return dynamicModeParam != nullptr
+        && dynamicModeParam->load(std::memory_order_relaxed) >= 0.5f;
+}
+
+float FftModuleProcessor::getReductionDisplayFloor() const noexcept
+{
+    return isPhaseCorrMode()
+        ? -2.0f * phaseReductionRangeValue.load(std::memory_order_relaxed) * 0.01f
+        : spectralReductionRangeValue.load(std::memory_order_relaxed);
 }
 
 void FftModuleProcessor::resetDeltaDelay() noexcept
@@ -350,168 +322,49 @@ const juce::AudioProcessorValueTreeState& FftModuleProcessor::getValueTreeState(
 juce::ValueTree FftModuleProcessor::createAnalyserStateSnapshot() const
 {
     auto state = juce::ValueTree(analyserState.getType());
-    state.setProperty(paramFftSizeId, analyserFftSizeValue.load(std::memory_order_relaxed), nullptr);
-    state.setProperty(paramOverlapId, analyserOverlapValue.load(std::memory_order_relaxed), nullptr);
-    state.setProperty(paramLeftId, analyserLeftValue.load(std::memory_order_relaxed), nullptr);
-    state.setProperty(paramRightId, analyserRightValue.load(std::memory_order_relaxed), nullptr);
-    state.setProperty(paramRangeLowId, analyserRangeLowValue.load(std::memory_order_relaxed), nullptr);
-    state.setProperty(paramRangeHighId, analyserRangeHighValue.load(std::memory_order_relaxed), nullptr);
-    state.setProperty(phaseRangeLowProperty, analyserPhaseRangeLowValue.load(std::memory_order_relaxed), nullptr);
-    state.setProperty(phaseRangeHighProperty, analyserPhaseRangeHighValue.load(std::memory_order_relaxed), nullptr);
-    state.setProperty(paramSlopeId, analyserSlopeValue.load(std::memory_order_relaxed), nullptr);
     state.setProperty(paramTimeId, analyserTimeValue.load(std::memory_order_relaxed), nullptr);
+    state.setProperty(paramSpectralReductionRangeId, spectralReductionRangeValue.load(std::memory_order_relaxed), nullptr);
+    state.setProperty(paramPhaseReductionRangeId, phaseReductionRangeValue.load(std::memory_order_relaxed), nullptr);
     return state;
 }
 
 float FftModuleProcessor::getAnalyserParameterValue(const juce::String& parameterId) const noexcept
 {
-    if (parameterId == paramFftSizeId)
-        return analyserFftSizeValue.load(std::memory_order_relaxed);
-
-    if (parameterId == paramOverlapId)
-        return analyserOverlapValue.load(std::memory_order_relaxed);
-
-    if (parameterId == paramLeftId)
-        return analyserLeftValue.load(std::memory_order_relaxed);
-
-    if (parameterId == paramRightId)
-        return analyserRightValue.load(std::memory_order_relaxed);
-
-    if (parameterId == paramRangeLowId)
-        return dynamicModeParam != nullptr && dynamicModeParam->load(std::memory_order_relaxed) >= 0.5f
-            ? analyserPhaseRangeLowValue.load(std::memory_order_relaxed)
-            : analyserRangeLowValue.load(std::memory_order_relaxed);
-
-    if (parameterId == paramRangeHighId)
-        return dynamicModeParam != nullptr && dynamicModeParam->load(std::memory_order_relaxed) >= 0.5f
-            ? analyserPhaseRangeHighValue.load(std::memory_order_relaxed)
-            : analyserRangeHighValue.load(std::memory_order_relaxed);
-
-    if (parameterId == paramSlopeId)
-        return analyserSlopeValue.load(std::memory_order_relaxed);
-
     if (parameterId == paramTimeId)
         return analyserTimeValue.load(std::memory_order_relaxed);
+
+    if (parameterId == paramSpectralReductionRangeId)
+        return spectralReductionRangeValue.load(std::memory_order_relaxed);
+
+    if (parameterId == paramPhaseReductionRangeId)
+        return phaseReductionRangeValue.load(std::memory_order_relaxed);
 
     return 0.0f;
 }
 
 void FftModuleProcessor::setAnalyserParameterValue(const juce::String& parameterId, float value)
 {
-    if (parameterId == paramFftSizeId)
-    {
-        const auto clamped = static_cast<float>(juce::jlimit(0, 4, juce::roundToInt(value)));
-        analyserFftSizeValue.store(clamped, std::memory_order_relaxed);
-        return;
-    }
-
-    if (parameterId == paramOverlapId)
-    {
-        const auto clamped = static_cast<float>(juce::jlimit(0, 4, juce::roundToInt(value)));
-        analyserOverlapValue.store(clamped, std::memory_order_relaxed);
-        return;
-    }
-
-    if (parameterId == paramLeftId || parameterId == paramRightId)
-    {
-        auto left = analyserLeftValue.load(std::memory_order_relaxed);
-        auto right = analyserRightValue.load(std::memory_order_relaxed);
-
-        if (parameterId == paramLeftId)
-            left = juce::jlimit(0.0f, 1000.0f, value);
-        else
-            right = juce::jlimit(1000.0f, analyserMaxFrequency, value);
-
-        if (right <= left)
-        {
-            if (parameterId == paramLeftId)
-                right = juce::jmin(analyserMaxFrequency, left + 1.0f);
-            else
-                left = juce::jmax(0.0f, juce::jmin(1000.0f, right - 1.0f));
-        }
-
-        analyserLeftValue.store(left, std::memory_order_relaxed);
-        analyserRightValue.store(right, std::memory_order_relaxed);
-        return;
-    }
-
-    if (parameterId == paramRangeLowId || parameterId == paramRangeHighId)
-    {
-        const auto phaseMode = dynamicModeParam != nullptr
-            && dynamicModeParam->load(std::memory_order_relaxed) >= 0.5f;
-
-        if (phaseMode)
-        {
-            auto low = analyserPhaseRangeLowValue.load(std::memory_order_relaxed);
-            auto high = analyserPhaseRangeHighValue.load(std::memory_order_relaxed);
-
-            if (parameterId == paramRangeLowId)
-            {
-                low = juce::jlimit(-1.0f, 1.0f, value);
-
-                if (low > high)
-                    high = low;
-            }
-            else
-            {
-                high = juce::jlimit(-1.0f, 1.0f, value);
-
-                if (high < low)
-                    low = high;
-            }
-
-            analyserPhaseRangeLowValue.store(low, std::memory_order_relaxed);
-            analyserPhaseRangeHighValue.store(high, std::memory_order_relaxed);
-            return;
-        }
-
-        auto low = analyserRangeLowValue.load(std::memory_order_relaxed);
-        auto high = analyserRangeHighValue.load(std::memory_order_relaxed);
-
-        if (parameterId == paramRangeLowId)
-            low = juce::jlimit(analyserMinDecibels, analyserMaxDecibels - 6.0f, value);
-        else
-            high = juce::jlimit(analyserMinDecibels + 6.0f, analyserMaxDecibels, value);
-
-        if (high < low + 6.0f)
-        {
-            if (parameterId == paramRangeLowId)
-                high = juce::jmin(analyserMaxDecibels, low + 6.0f);
-            else
-                low = juce::jmax(analyserMinDecibels, high - 6.0f);
-        }
-
-        analyserRangeLowValue.store(low, std::memory_order_relaxed);
-        analyserRangeHighValue.store(high, std::memory_order_relaxed);
-        return;
-    }
-
-    if (parameterId == paramSlopeId)
-    {
-        const auto clamped = juce::jlimit(0.0f, 6.0f, value);
-        analyserSlopeValue.store(clamped, std::memory_order_relaxed);
-        return;
-    }
-
     if (parameterId == paramTimeId)
     {
         const auto clamped = juce::jlimit(0.0f, 1000.0f, value);
         analyserTimeValue.store(clamped, std::memory_order_relaxed);
     }
+
+    if (parameterId == paramSpectralReductionRangeId)
+    {
+        spectralReductionRangeValue.store(juce::jlimit(-99.0f, 0.0f, value), std::memory_order_relaxed);
+        return;
+    }
+
+    if (parameterId == paramPhaseReductionRangeId)
+        phaseReductionRangeValue.store(juce::jlimit(0.0f, 100.0f, value), std::memory_order_relaxed);
 }
 
 void FftModuleProcessor::resetAnalyserState()
 {
-    setAnalyserParameterValue(paramFftSizeId, 2.0f);
-    setAnalyserParameterValue(paramOverlapId, 4.0f);
-    setAnalyserParameterValue(paramLeftId, 21.0f);
-    setAnalyserParameterValue(paramRightId, 20000.0f);
-    analyserRangeLowValue.store(-60.0f, std::memory_order_relaxed);
-    analyserRangeHighValue.store(10.0f, std::memory_order_relaxed);
-    analyserPhaseRangeLowValue.store(-1.0f, std::memory_order_relaxed);
-    analyserPhaseRangeHighValue.store(1.0f, std::memory_order_relaxed);
-    setAnalyserParameterValue(paramSlopeId, 4.5f);
     setAnalyserParameterValue(paramTimeId, 50.0f);
+    setAnalyserParameterValue(paramSpectralReductionRangeId, -36.0f);
+    setAnalyserParameterValue(paramPhaseReductionRangeId, 50.0f);
 }
 
 void FftModuleProcessor::applyAnalyserState(juce::ValueTree state)
@@ -522,30 +375,9 @@ void FftModuleProcessor::applyAnalyserState(juce::ValueTree state)
         return;
     }
 
-    setAnalyserParameterValue(paramFftSizeId, static_cast<float>(state.getProperty(paramFftSizeId, 2.0f)));
-    setAnalyserParameterValue(paramOverlapId, static_cast<float>(state.getProperty(paramOverlapId, 4.0f)));
-    setAnalyserParameterValue(paramLeftId, static_cast<float>(state.getProperty(paramLeftId, 21.0f)));
-    setAnalyserParameterValue(paramRightId, static_cast<float>(state.getProperty(paramRightId, 20000.0f)));
-    analyserRangeLowValue.store(juce::jlimit(analyserMinDecibels,
-                                             analyserMaxDecibels - 6.0f,
-                                             static_cast<float>(state.getProperty(paramRangeLowId, -60.0f))),
-                                std::memory_order_relaxed);
-    analyserRangeHighValue.store(juce::jlimit(analyserMinDecibels + 6.0f,
-                                              analyserMaxDecibels,
-                                              static_cast<float>(state.getProperty(paramRangeHighId, 10.0f))),
-                                 std::memory_order_relaxed);
-    auto phaseLow = juce::jlimit(-1.0f,
-                                 1.0f,
-                                 static_cast<float>(state.getProperty(phaseRangeLowProperty, -1.0f)));
-    auto phaseHigh = juce::jlimit(-1.0f,
-                                  1.0f,
-                                  static_cast<float>(state.getProperty(phaseRangeHighProperty, 1.0f)));
-
-    if (phaseHigh < phaseLow)
-        std::swap(phaseLow, phaseHigh);
-
-    analyserPhaseRangeLowValue.store(phaseLow, std::memory_order_relaxed);
-    analyserPhaseRangeHighValue.store(phaseHigh, std::memory_order_relaxed);
-    setAnalyserParameterValue(paramSlopeId, static_cast<float>(state.getProperty(paramSlopeId, 4.5f)));
     setAnalyserParameterValue(paramTimeId, static_cast<float>(state.getProperty(paramTimeId, 50.0f)));
+    setAnalyserParameterValue(paramSpectralReductionRangeId,
+                              static_cast<float>(state.getProperty(paramSpectralReductionRangeId, -36.0f)));
+    setAnalyserParameterValue(paramPhaseReductionRangeId,
+                              static_cast<float>(state.getProperty(paramPhaseReductionRangeId, 50.0f)));
 }

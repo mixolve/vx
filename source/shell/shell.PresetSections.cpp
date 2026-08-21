@@ -26,7 +26,7 @@ std::unique_ptr<BoxTextButton> makeSectionButton(const juce::String& text, const
 }
 }
 
-VxAudioProcessorEditor::PresetsSection::PresetsSection()
+AvaAudioProcessorEditor::PresetsSection::PresetsSection()
 {
     configurePresetCombo(presetCombo);
 
@@ -63,7 +63,7 @@ VxAudioProcessorEditor::PresetsSection::PresetsSection()
     presetCombo.onReselectedCurrentItem = handlePresetSelection;
 }
 
-void VxAudioProcessorEditor::PresetsSection::beginRename()
+void AvaAudioProcessorEditor::PresetsSection::beginRename()
 {
     if (selectedPresetName.isEmpty() || onRenameRequested == nullptr)
         return;
@@ -71,22 +71,22 @@ void VxAudioProcessorEditor::PresetsSection::beginRename()
     onRenameRequested(selectedPresetName);
 }
 
-int VxAudioProcessorEditor::PresetsSection::getPresetRowPreferredHeight() const noexcept
+int AvaAudioProcessorEditor::PresetsSection::getPresetRowPreferredHeight() const noexcept
 {
     return (rowHeight * 2) + verticalGap;
 }
 
-juce::String VxAudioProcessorEditor::PresetsSection::getSelectedPresetName() const
+juce::String AvaAudioProcessorEditor::PresetsSection::getSelectedPresetName() const
 {
     return selectedPresetName;
 }
 
-juce::String VxAudioProcessorEditor::PresetsSection::getEnteredPresetName() const
+juce::String AvaAudioProcessorEditor::PresetsSection::getEnteredPresetName() const
 {
     return presetCombo.getText().trim();
 }
 
-void VxAudioProcessorEditor::PresetsSection::setPresetNames(const juce::StringArray& presetNames,
+void AvaAudioProcessorEditor::PresetsSection::setPresetNames(const juce::StringArray& presetNames,
                                                              const juce::String& preferredSelection)
 {
     const juce::ScopedValueSetter<bool> scopedIgnore(ignorePresetCallbacks, true);

@@ -5,7 +5,6 @@ namespace
 {
 constexpr auto editorFilterDisplayOrderStateKey = "editor_filter_display_order";
 constexpr auto editorHostParametersExpandedStateKey = "editor_host_parameters_expanded";
-constexpr auto editorFftAdaptiveSettingsExpandedStateKey = "editor_fft_adaptive_settings_expanded";
 
 juce::Point<int> clampEditorSize(const int width, const int height) noexcept
 {
@@ -34,7 +33,7 @@ std::vector<int> decodeFilterDisplayOrder(const juce::String& text, const int ac
     std::vector<int> order;
     order.reserve(static_cast<size_t>(juce::jmax(0, activeCount)));
 
-    std::array<bool, VxAudioProcessor::maxEqlFilterCount> used {};
+    std::array<bool, AvaAudioProcessor::maxEqlFilterCount> used {};
     const auto tokens = juce::StringArray::fromTokens(text, ",", "");
 
     for (const auto& token : tokens)
@@ -81,24 +80,24 @@ juce::String makeHostSlotNameStateKey(const int slotIndex)
 }
 
 
-EqlModuleProcessor* VxAudioProcessorEditor::getActiveEqlProcessor() noexcept
+EqlModuleProcessor* AvaAudioProcessorEditor::getActiveEqlProcessor() noexcept
 {
-    if (audioProcessor.getActiveModule() != VxAudioProcessor::ActiveModule::eql)
+    if (audioProcessor.getActiveModule() != AvaAudioProcessor::ActiveModule::eql)
         return nullptr;
 
     return audioProcessor.getEqlModuleProcessor();
 }
 
-const EqlModuleProcessor* VxAudioProcessorEditor::getActiveEqlProcessor() const noexcept
+const EqlModuleProcessor* AvaAudioProcessorEditor::getActiveEqlProcessor() const noexcept
 {
-    if (audioProcessor.getActiveModule() != VxAudioProcessor::ActiveModule::eql)
+    if (audioProcessor.getActiveModule() != AvaAudioProcessor::ActiveModule::eql)
         return nullptr;
 
     return audioProcessor.getEqlModuleProcessor();
 }
 
 
-void VxAudioProcessorEditor::clearAllFilters()
+void AvaAudioProcessorEditor::clearAllFilters()
 {
     auto* eqlProcessor = getActiveEqlProcessor();
 
@@ -106,9 +105,9 @@ void VxAudioProcessorEditor::clearAllFilters()
         return;
 
     filterDisplayOrder.clear();
-    filterDisplayOrder.reserve(VxAudioProcessor::maxEqlFilterCount);
+    filterDisplayOrder.reserve(AvaAudioProcessor::maxEqlFilterCount);
 
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
+    for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
     {
         filterDisplayOrder.push_back(filterIndex);
         resetFilterSectionStoredValues(filterIndex);
@@ -120,7 +119,7 @@ void VxAudioProcessorEditor::clearAllFilters()
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::performUndo()
+void AvaAudioProcessorEditor::performUndo()
 {
     commitPendingHistorySnapshot(true);
 
@@ -133,7 +132,7 @@ void VxAudioProcessorEditor::performUndo()
     applyHistorySnapshot(snapshot);
 }
 
-void VxAudioProcessorEditor::performRedo()
+void AvaAudioProcessorEditor::performRedo()
 {
     commitPendingHistorySnapshot(true);
 
@@ -146,7 +145,7 @@ void VxAudioProcessorEditor::performRedo()
     applyHistorySnapshot(snapshot);
 }
 
-void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
+void AvaAudioProcessorEditor::restoreEditorStateFromValueTree()
 {
     const auto activeCount = getActiveFilterCount();
     auto& state = valueTreeState.state;
@@ -154,7 +153,6 @@ void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
     setLoadedModuleFlags(audioProcessor.getActiveModule());
 
     hostParametersExpanded = static_cast<bool>(state.getProperty(editorHostParametersExpandedStateKey, false));
-    fftAdaptiveSettingsExpanded = static_cast<bool>(state.getProperty(editorFftAdaptiveSettingsExpandedStateKey, false));
 
     const auto savedOrder = state.getProperty(editorFilterDisplayOrderStateKey).toString().trim();
 
@@ -163,22 +161,22 @@ void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
     else
     {
         filterDisplayOrder.clear();
-        filterDisplayOrder.reserve(VxAudioProcessor::maxEqlFilterCount);
+        filterDisplayOrder.reserve(AvaAudioProcessor::maxEqlFilterCount);
 
-        for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
+        for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
             filterDisplayOrder.push_back(filterIndex);
     }
 
-    if (static_cast<int>(filterDisplayOrder.size()) < VxAudioProcessor::maxEqlFilterCount)
+    if (static_cast<int>(filterDisplayOrder.size()) < AvaAudioProcessor::maxEqlFilterCount)
     {
         const auto previousSize = static_cast<int>(filterDisplayOrder.size());
-        filterDisplayOrder.reserve(VxAudioProcessor::maxEqlFilterCount);
+        filterDisplayOrder.reserve(AvaAudioProcessor::maxEqlFilterCount);
 
-        for (int filterIndex = previousSize; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
+        for (int filterIndex = previousSize; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
             filterDisplayOrder.push_back(filterIndex);
     }
 
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
+    for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
     {
         auto* section = filterSections[static_cast<size_t>(filterIndex)].get();
 
@@ -200,27 +198,26 @@ void VxAudioProcessorEditor::restoreEditorStateFromValueTree()
     rebindActiveModuleEditors();
 }
 
-void VxAudioProcessorEditor::setLoadedModuleFlags(const VxAudioProcessor::ActiveModule activeModule) noexcept
+void AvaAudioProcessorEditor::setLoadedModuleFlags(const AvaAudioProcessor::ActiveModule activeModule) noexcept
 {
-    eqlModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::eql;
-    fftModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::fft;
-    tlsModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::tls;
-    dynModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::dyn;
-    trsModuleLoaded = activeModule == VxAudioProcessor::ActiveModule::trs;
+    eqlModuleLoaded = activeModule == AvaAudioProcessor::ActiveModule::eql;
+    fftModuleLoaded = activeModule == AvaAudioProcessor::ActiveModule::fft;
+    tlsModuleLoaded = activeModule == AvaAudioProcessor::ActiveModule::tls;
+    dynModuleLoaded = activeModule == AvaAudioProcessor::ActiveModule::dyn;
+    trsModuleLoaded = activeModule == AvaAudioProcessor::ActiveModule::trs;
 }
 
-void VxAudioProcessorEditor::storeEditorStateToValueTree() noexcept
+void AvaAudioProcessorEditor::storeEditorStateToValueTree() noexcept
 {
     auto& state = valueTreeState.state;
-    const auto activeModuleId = juce::String(VxAudioProcessor::stateIdForModule(audioProcessor.getActiveModule()));
+    const auto activeModuleId = juce::String(AvaAudioProcessor::stateIdForModule(audioProcessor.getActiveModule()));
 
     if (activeModuleId.isNotEmpty())
-        state.setProperty(VxAudioProcessor::activeModuleStateKey, activeModuleId, nullptr);
+        state.setProperty(AvaAudioProcessor::activeModuleStateKey, activeModuleId, nullptr);
     else
-        state.removeProperty(VxAudioProcessor::activeModuleStateKey, nullptr);
+        state.removeProperty(AvaAudioProcessor::activeModuleStateKey, nullptr);
 
     state.setProperty(editorHostParametersExpandedStateKey, hostParametersExpanded, nullptr);
-    state.setProperty(editorFftAdaptiveSettingsExpandedStateKey, fftAdaptiveSettingsExpanded, nullptr);
     state.setProperty(editorFilterDisplayOrderStateKey,
                       encodeFilterDisplayOrder(filterDisplayOrder, getActiveFilterCount()),
                       nullptr);
@@ -244,20 +241,20 @@ void VxAudioProcessorEditor::storeEditorStateToValueTree() noexcept
     {
         const auto size = clampEditorSize(getWidth(), getHeight());
         audioProcessor.setLastEditorSize(size.x, size.y);
-        state.setProperty(VxAudioProcessor::editorWidthStateKey, size.x, nullptr);
-        state.setProperty(VxAudioProcessor::editorHeightStateKey, size.y, nullptr);
+        state.setProperty(AvaAudioProcessor::editorWidthStateKey, size.x, nullptr);
+        state.setProperty(AvaAudioProcessor::editorHeightStateKey, size.y, nullptr);
     }
 }
 
-juce::Point<int> VxAudioProcessorEditor::getRestoredEditorSize() const noexcept
+juce::Point<int> AvaAudioProcessorEditor::getRestoredEditorSize() const noexcept
 {
     const auto& state = valueTreeState.state;
 
-    if (state.hasProperty(VxAudioProcessor::editorWidthStateKey)
-        && state.hasProperty(VxAudioProcessor::editorHeightStateKey))
+    if (state.hasProperty(AvaAudioProcessor::editorWidthStateKey)
+        && state.hasProperty(AvaAudioProcessor::editorHeightStateKey))
     {
-        return clampEditorSize(static_cast<int>(state.getProperty(VxAudioProcessor::editorWidthStateKey, initialEditorWidth)),
-                               static_cast<int>(state.getProperty(VxAudioProcessor::editorHeightStateKey, initialEditorHeight)));
+        return clampEditorSize(static_cast<int>(state.getProperty(AvaAudioProcessor::editorWidthStateKey, initialEditorWidth)),
+                               static_cast<int>(state.getProperty(AvaAudioProcessor::editorHeightStateKey, initialEditorHeight)));
     }
 
     const auto lastSize = audioProcessor.getLastEditorSize();
@@ -268,7 +265,7 @@ juce::Point<int> VxAudioProcessorEditor::getRestoredEditorSize() const noexcept
     return { initialEditorWidth, initialEditorHeight };
 }
 
-int VxAudioProcessorEditor::getActiveFilterCount() const noexcept
+int AvaAudioProcessorEditor::getActiveFilterCount() const noexcept
 {
     if (const auto* eqlProcessor = getActiveEqlProcessor())
         return eqlProcessor->getActiveFilterCount();
@@ -276,7 +273,7 @@ int VxAudioProcessorEditor::getActiveFilterCount() const noexcept
     return 0;
 }
 
-void VxAudioProcessorEditor::syncEditorWidthToBounds()
+void AvaAudioProcessorEditor::syncEditorWidthToBounds()
 {
     const auto restoredWidth = juce::jmax(minimumEditorWidth, getWidth());
     setResizeLimits(minimumEditorWidth,

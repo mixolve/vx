@@ -2,7 +2,7 @@
 
 #include "shell.EditorParameterControls.h"
 
-struct VxAudioProcessorEditor::PresetsSection
+struct AvaAudioProcessorEditor::PresetsSection
 {
     PresetsSection();
 

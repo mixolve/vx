@@ -92,7 +92,7 @@ FilterParameterValues makeDefaultFilterParameterValues(const EqlModuleProcessor:
     return {
         static_cast<float>(EqlModuleProcessor::choiceIndexFromFilterType(type)),
         0.0f,
-        defaultFilterFrequencyForType(type),
+        defaultFilterFrequency(),
         defaultFilterBandwidth(),
         static_cast<float>(EqlModuleProcessor::getBellSlopeChoiceIndexForValue(defaultFilterSlope())),
         0.0f,
@@ -489,13 +489,13 @@ void EqlModuleProcessor::appendEqlParameters(std::vector<std::unique_ptr<juce::R
             if (key == "freq")
             {
                 auto filterFrequencyRange = juce::NormalisableRange<float> { minimumVisibleFilterFrequency, maximumVisibleFilterFrequency, 0.01f };
-                filterFrequencyRange.setSkewForCentre(defaultTiltFrequency);
+                filterFrequencyRange.setSkewForCentre(defaultFilterFrequencyHz);
 
                 parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
                     juce::ParameterID { getFilterFrequencyParamId(filterIndex), 1 },
                     name,
                     filterFrequencyRange,
-                    defaultTiltFrequency,
+                    defaultFilterFrequencyHz,
                     juce::AudioParameterFloatAttributes().withStringFromValueFunction(
                         [] (float value, int)
                         {

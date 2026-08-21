@@ -8,6 +8,7 @@
 #include <vector>
 
 class BoxTextButton;
+class ChoiceControl;
 class ParameterControl;
 
 class MultibandModuleComponent final : public juce::Component
@@ -17,6 +18,7 @@ public:
     {
         heading,
         parameter,
+        choice,
         toggle,
         inactive,
         readout,
@@ -28,7 +30,7 @@ public:
         ControlKind kind = ControlKind::parameter;
         const char* suffix = "";
         const char* label = "";
-        int decimals = 1;
+        int decimals = 2;
         const char* enabledLabel = "";
         const char* disabledLabel = "";
         const char* modeSuffix = "";
@@ -36,9 +38,12 @@ public:
         const char* exclusiveGroup = "";
         const char* auxiliaryToggleSuffix = "";
         const char* auxiliaryToggleLabel = "";
+        const char* enabledWhenSuffix = "";
         const char* reorderGroup = "";
         const char* orderSuffix = "";
         bool fixedOrder = false;
+        bool toggleAccentVisible = true;
+        bool auxiliaryToggleInverted = false;
         int topGapMultiplier = 1;
         int sourceBandIndex = -1;
         int controlsInRow = 1;
@@ -138,7 +143,7 @@ private:
     int restoredPageScrollY = 0;
     juce::String uiStateSignature;
     std::array<bool, numBands> manualSoloMask {};
-    bool allBandsActive = true;
+    bool allBandsActive = false;
     bool autoSoloEnabled = false;
     bool manualSoloInclusive = false;
 

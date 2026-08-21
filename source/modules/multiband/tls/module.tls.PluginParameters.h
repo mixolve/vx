@@ -11,6 +11,7 @@ enum class ParameterType
 {
     floating,
     boolean,
+    choice,
 };
 
 enum class ParameterSlot : size_t
@@ -107,7 +108,7 @@ inline constexpr auto parameterSpecs = std::to_array<ParameterSpec>({
     { "right", "RIGHT", ParameterType::floating, -100.0f, 100.0f, 0.01f, 100.0f, "%" },
     { "law", "LAW", ParameterType::floating, 0.0f, 6.0f, 0.01f, 0.0f, "dB", 2 },
     { "impact", "IMPACT", ParameterType::floating, -100.0f, 100.0f, 0.01f, 0.0f, "%" },
-    { "impactDirection", "TO LEFT CHANNEL/TO RIGHT CHANNEL", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "impactDirection", "DIRECTION", ParameterType::choice, 0.0f, 1.0f, 1.0f, 0.0f, "" },
     { "mid", "MID", ParameterType::floating, -100.0f, 100.0f, 0.01f, 0.0f, "%" },
     { "side", "SIDE", ParameterType::floating, -100.0f, 100.0f, 0.01f, 0.0f, "%" },
     { "degree", "DEGREE", ParameterType::floating, 0.0f, 359.99f, 0.01f, 0.0f, "deg" },
@@ -132,6 +133,16 @@ inline constexpr auto crossoverSpecs = std::to_array<ParameterSpec>({
     { "xover3", "Crossover 3", ParameterType::floating, 20.0f, 20000.0f, 0.01f, 2093.0f, "Hz" },
     { "xover4", "Crossover 4", ParameterType::floating, 20.0f, 20000.0f, 0.01f, 5000.0f, "Hz" },
     { "xover5", "Crossover 5", ParameterType::floating, 20.0f, 20000.0f, 0.01f, 10000.0f, "Hz" },
+});
+
+inline constexpr auto widebandListenSpecs = std::to_array<ParameterSpec>({
+    { "listenLc", "LC", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenRc", "RC", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenMc", "MC", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenSc", "SC", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenLl", "LL", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenRr", "RR", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
+    { "listenSs", "SS", ParameterType::boolean, 0.0f, 1.0f, 1.0f, 0.0f, "" },
 });
 
 static_assert(parameterSpecs.size() == numParameterSlots);

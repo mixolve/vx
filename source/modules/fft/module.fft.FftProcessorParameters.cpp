@@ -25,8 +25,8 @@ inline constexpr auto fftMainOrder = std::to_array<ParameterOrderEntry>({
     { "knee", "KNEE" },
     { "ratio", "RATIO" },
     { "floor", "FLOOR" },
-    { "window_size", "WINDOW-SIZE" },
-    { "hop_divisor", "HOP-DIV" },
+    { "window_size", "WIN-SIZE" },
+    { "overlap", "OVERLAP" },
     { "slope", "SLOPE" },
     { "l_threshold", "L.THRESHOLD" },
     { "l_adaptive", "L.ADAPTIVE" },
@@ -43,7 +43,9 @@ juce::String formatDecibelValue(const float value)
 
 juce::String formatFloorValue(const float value)
 {
-    return value <= -100.0f ? "FULL" : formatDecibelValue(value);
+    return value <= -99.995f
+        ? "FULL"
+        : juce::String::formatted("%.2f dB", static_cast<double>(value));
 }
 
 juce::String formatSlopeValue(const float value)
@@ -89,79 +91,12 @@ float FftModuleProcessor::phaseThresholdToCorrelation(const float threshold) noe
                       1.0f);
 }
 
-FftModuleProcessor::DisplaySettings FftModuleProcessor::getDisplaySettings() const noexcept
-{
-    const auto phaseMode = dynamicModeParam != nullptr
-        && dynamicModeParam->load(std::memory_order_relaxed) >= 0.5f;
-    auto left = analyserLeftValue.load(std::memory_order_relaxed);
-    auto right = analyserRightValue.load(std::memory_order_relaxed);
-    auto low = phaseMode
-        ? analyserPhaseRangeLowValue.load(std::memory_order_relaxed)
-        : analyserRangeLowValue.load(std::memory_order_relaxed);
-    auto high = phaseMode
-        ? analyserPhaseRangeHighValue.load(std::memory_order_relaxed)
-        : analyserRangeHighValue.load(std::memory_order_relaxed);
-
-    left = juce::jlimit(0.0f, 1000.0f, left);
-    right = juce::jlimit(1000.0f, analyserMaxFrequency, right);
-
-    if (right <= left)
-        right = juce::jmin(analyserMaxFrequency, left + 1.0f);
-
-    if (high < low)
-        std::swap(low, high);
-
-    const auto minimumRange = phaseMode ? 0.0f : 6.0f;
-
-    if ((high - low) < minimumRange)
-    {
-        const auto centre = 0.5f * (low + high);
-        low = centre - (minimumRange * 0.5f);
-        high = centre + (minimumRange * 0.5f);
-    }
-
-    const auto phaseThreshold = phaseThresholdToCorrelation(
-        phaseThresholdParam != nullptr ? phaseThresholdParam->load(std::memory_order_relaxed) : 0.0f);
-    const auto displayedPhaseThreshold = phaseAdaptiveParam != nullptr
-                                          && phaseAdaptiveParam->load(std::memory_order_relaxed) > 0.0f
-        ? dynamicProcessor.getPublishedThreshold(0)
-        : phaseThreshold;
-    return {
-        left,
-        right,
-        phaseMode ? juce::jlimit(-1.0f, 1.0f, low)
-                  : juce::jlimit(analyserMinDecibels, analyserMaxDecibels - 6.0f, low),
-        phaseMode ? juce::jlimit(-1.0f, 1.0f, high)
-                  : juce::jlimit(analyserMinDecibels + 6.0f, analyserMaxDecibels, high),
-        phaseMode
-            ? juce::jlimit(-1.0f, 1.0f, displayedPhaseThreshold)
-            : juce::jlimit(analyserMinDecibels,
-                           analyserMaxDecibels,
-                           (dualMonoLeftAdaptiveParam != nullptr && dualMonoLeftAdaptiveParam->load(std::memory_order_relaxed) > 0.0f)
-                               ? dynamicProcessor.getPublishedThreshold(0)
-                               : (dualMonoLeftThresholdParam != nullptr ? dualMonoLeftThresholdParam->load(std::memory_order_relaxed) : 0.0f)),
-        phaseMode
-            ? juce::jlimit(-1.0f, 1.0f, displayedPhaseThreshold)
-            : juce::jlimit(analyserMinDecibels,
-                           analyserMaxDecibels,
-                           (dualMonoRightAdaptiveParam != nullptr && dualMonoRightAdaptiveParam->load(std::memory_order_relaxed) > 0.0f)
-                               ? dynamicProcessor.getPublishedThreshold(1)
-                               : (dualMonoRightThresholdParam != nullptr ? dualMonoRightThresholdParam->load(std::memory_order_relaxed) : 0.0f)),
-        juce::jlimit(0.0f, 6.0f, analyserSlopeValue.load(std::memory_order_relaxed)),
-        phaseMode
-    };
-}
-
-FftModuleProcessor::AnalysisSettings FftModuleProcessor::getAnalysisSettings() const noexcept
-{
-    return { getSelectedAnalyserFftSize(), getSelectedOverlapFactor(), getSelectedAveragingTimeMs() };
-}
-
 FftModuleProcessor::CompressorSettings FftModuleProcessor::getCompressorSettings() const noexcept
 {
     CompressorSettings settings;
     settings.fftSize = getSelectedDspFftSize();
-    settings.overlapFactor = getSelectedDspHopDivisor();
+    settings.overlapFactor = getSelectedDspOverlapFactor();
+    settings.reductionDisplayTimeMs = getSelectedAveragingTimeMs();
     settings.phaseMode = dynamicModeParam != nullptr
         && dynamicModeParam->load(std::memory_order_relaxed) >= 0.5f;
     const auto floorValue = juce::jlimit(-100.0f,
@@ -263,16 +198,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
     for (const auto& entry : fftMainOrder)
     {
         const auto key = juce::String(entry.key);
-        const auto isFftParameter = key == "window_size" || key == "hop_divisor" || key == "slope";
+        const auto isFftParameter = key == "window_size" || key == "overlap" || key == "slope";
         const auto name = makeFftName(isFftParameter ? "GENERAL PROCESSOR" : "DYNAMIC PROCESSOR", entry.label);
 
         if (key == "dynamic_mode")
         {
-            parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
+            parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
                 juce::ParameterID { paramDynamicModeId, 1 },
                 name,
-                false,
-                juce::AudioParameterBoolAttributes()));
+                juce::StringArray { "SPECTRAL", "PHASE CORR" },
+                0,
+                juce::AudioParameterChoiceAttributes()));
             continue;
         }
 
@@ -311,7 +247,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
             parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
                 juce::ParameterID { paramKneeId, 1 },
                 name,
-                juce::NormalisableRange<float> { 0.0f, 24.0f, 0.1f },
+                juce::NormalisableRange<float> { 0.0f, 24.0f, 0.01f },
                 0.0f,
                 juce::AudioParameterFloatAttributes().withStringFromValueFunction(
                     [] (float value, int)
@@ -326,7 +262,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
             parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
                 juce::ParameterID { paramRatioId, 1 },
                 name,
-                juce::NormalisableRange<float> { 1.0f, 100.0f, 0.1f },
+                juce::NormalisableRange<float> { 1.0f, 100.0f, 0.01f },
                 100.0f,
                 juce::AudioParameterFloatAttributes().withStringFromValueFunction(
                     [] (float value, int)
@@ -341,7 +277,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
             parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
                 juce::ParameterID { paramFloorId, 1 },
                 name,
-                juce::NormalisableRange<float> { -100.0f, 0.0f, 0.1f },
+                juce::NormalisableRange<float> { -100.0f, 0.0f, 0.01f },
                 -60.0f,
                 juce::AudioParameterFloatAttributes().withStringFromValueFunction(
                     [] (float value, int)
@@ -362,10 +298,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
             continue;
         }
 
-        if (key == "hop_divisor")
+        if (key == "overlap")
         {
             parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
-                juce::ParameterID { paramDspHopDivisorId, 1 },
+                juce::ParameterID { paramDspOverlapId, 1 },
                 name,
                 juce::StringArray { "2", "4", "8", "16", "32" },
                 4,
@@ -393,7 +329,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
             parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
                 juce::ParameterID { paramDualMonoLeftThresholdId, 1 },
                 name,
-                juce::NormalisableRange<float> { -99.0f, 0.0f, 0.1f },
+                juce::NormalisableRange<float> { -99.0f, 0.0f, 0.01f },
                 0.0f,
                 juce::AudioParameterFloatAttributes().withStringFromValueFunction(
                     [] (float value, int)
@@ -419,7 +355,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
             parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
                 juce::ParameterID { paramDualMonoRightThresholdId, 1 },
                 name,
-                juce::NormalisableRange<float> { -99.0f, 0.0f, 0.1f },
+                juce::NormalisableRange<float> { -99.0f, 0.0f, 0.01f },
                 0.0f,
                 juce::AudioParameterFloatAttributes().withStringFromValueFunction(
                     [] (float value, int)
@@ -465,7 +401,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
     parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID { paramSpectralAdaptiveOffsetId, 1 },
         makeFftName("ADAP SETTINGS", "OFFSET"),
-        juce::NormalisableRange<float> { 0.0f, 48.0f, 0.1f },
+        juce::NormalisableRange<float> { 0.0f, 48.0f, 0.01f },
         0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction(
             [] (float value, int)
@@ -573,15 +509,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
     return { parameterLayout.begin(), parameterLayout.end() };
 }
 
-int FftModuleProcessor::getSelectedAnalyserFftSize() const noexcept
-{
-    static constexpr std::array<int, 5> fftSizes { 1024, 2048, 4096, 8192, 16384 };
-    const auto choiceIndex = juce::jlimit(0,
-                                          static_cast<int>(fftSizes.size()) - 1,
-                                          juce::roundToInt(analyserFftSizeValue.load(std::memory_order_relaxed)));
-    return fftSizes[static_cast<size_t>(choiceIndex)];
-}
-
 int FftModuleProcessor::getSelectedDspFftSize() const noexcept
 {
     static constexpr std::array<int, 5> fftSizes { 1024, 2048, 4096, 8192, 16384 };
@@ -592,22 +519,13 @@ int FftModuleProcessor::getSelectedDspFftSize() const noexcept
     return fftSizes[static_cast<size_t>(choiceIndex)];
 }
 
-int FftModuleProcessor::getSelectedDspHopDivisor() const noexcept
-{
-    static constexpr std::array<int, 5> hopDivisors { 2, 4, 8, 16, 32 };
-    const auto choiceIndex = dspHopDivisorParam != nullptr
-                           ? juce::jlimit(0, static_cast<int>(hopDivisors.size()) - 1,
-                                          juce::roundToInt(dspHopDivisorParam->load(std::memory_order_relaxed)))
-                           : 4;
-    return hopDivisors[static_cast<size_t>(choiceIndex)];
-}
-
-int FftModuleProcessor::getSelectedOverlapFactor() const noexcept
+int FftModuleProcessor::getSelectedDspOverlapFactor() const noexcept
 {
     static constexpr std::array<int, 5> overlapFactors { 2, 4, 8, 16, 32 };
-    const auto choiceIndex = juce::jlimit(0,
-                                          static_cast<int>(overlapFactors.size()) - 1,
-                                          juce::roundToInt(analyserOverlapValue.load(std::memory_order_relaxed)));
+    const auto choiceIndex = dspOverlapParam != nullptr
+                           ? juce::jlimit(0, static_cast<int>(overlapFactors.size()) - 1,
+                                          juce::roundToInt(dspOverlapParam->load(std::memory_order_relaxed)))
+                           : 4;
     return overlapFactors[static_cast<size_t>(choiceIndex)];
 }
 

@@ -3,15 +3,15 @@
 
 #include <utility>
 
-void VxAudioProcessorEditor::setupEqlControls(juce::AudioProcessorValueTreeState& initialEqlState)
+void AvaAudioProcessorEditor::setupEqlControls(juce::AudioProcessorValueTreeState& initialEqlState)
 {
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
+    for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
     {
         auto section = std::make_unique<FilterSection>(initialEqlState, filterIndex);
-        for (const auto filterType : VxAudioProcessor::filterTypePresetOrder)
+        for (const auto filterType : AvaAudioProcessor::filterTypePresetOrder)
         {
             section->setStoredValues(filterType,
-                                     defaultFilterFrequencyForType(filterType),
+                                     defaultFilterFrequency(),
                                      defaultFilterBandwidth(),
                                      defaultFilterSlope(),
                                      0,
@@ -52,8 +52,7 @@ void VxAudioProcessorEditor::setupEqlControls(juce::AudioProcessorValueTreeState
             if (filterSection == nullptr)
                 return;
 
-            const auto filterType = filterSection->getFilterType();
-            filterSection->frequencyControl->setValue(defaultFilterFrequencyForType(filterType), true);
+            filterSection->frequencyControl->setValue(defaultFilterFrequency(), true);
         };
         section->bandwidthControl->onTitleClick = [this, filterIndex]
         {

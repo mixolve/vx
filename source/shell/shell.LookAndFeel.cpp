@@ -144,18 +144,18 @@ juce::String DelayedTooltipWindow::getTipFor(juce::Component& component)
                                                                           : juce::String {};
 }
 
-VxAudioProcessorEditor::VxLookAndFeel::VxLookAndFeel()
+AvaAudioProcessorEditor::AvaLookAndFeel::AvaLookAndFeel()
 {
     if (auto typeface = getUiRegularTypeface())
         setDefaultSansSerifTypeface(typeface);
 }
 
-void VxAudioProcessorEditor::VxLookAndFeel::setTooltipBoundsConstraint(juce::Rectangle<int> bounds) noexcept
+void AvaAudioProcessorEditor::AvaLookAndFeel::setTooltipBoundsConstraint(juce::Rectangle<int> bounds) noexcept
 {
     tooltipBoundsConstraint = bounds;
 }
 
-void VxAudioProcessorEditor::updateTooltipBoundsConstraint() noexcept
+void AvaAudioProcessorEditor::updateTooltipBoundsConstraint() noexcept
 {
     if (lookAndFeel == nullptr
         || footerTab == nullptr
@@ -175,7 +175,7 @@ void VxAudioProcessorEditor::updateTooltipBoundsConstraint() noexcept
     lookAndFeel->setTooltipBoundsConstraint(tooltipBounds);
 }
 
-juce::Typeface::Ptr VxAudioProcessorEditor::VxLookAndFeel::getTypefaceForFont(const juce::Font& font)
+juce::Typeface::Ptr AvaAudioProcessorEditor::AvaLookAndFeel::getTypefaceForFont(const juce::Font& font)
 {
 #if JUCE_TARGET_HAS_BINARY_DATA
     const auto useBold = font.isBold();
@@ -188,17 +188,17 @@ juce::Typeface::Ptr VxAudioProcessorEditor::VxLookAndFeel::getTypefaceForFont(co
     return LookAndFeel_V4::getTypefaceForFont(font);
 }
 
-juce::Font VxAudioProcessorEditor::VxLookAndFeel::getComboBoxFont(juce::ComboBox&)
+juce::Font AvaAudioProcessorEditor::AvaLookAndFeel::getComboBoxFont(juce::ComboBox&)
 {
     return makeUiFont();
 }
 
-juce::Font VxAudioProcessorEditor::VxLookAndFeel::getPopupMenuFont()
+juce::Font AvaAudioProcessorEditor::AvaLookAndFeel::getPopupMenuFont()
 {
     return makeUiFont();
 }
 
-void VxAudioProcessorEditor::VxLookAndFeel::drawPopupMenuBackgroundWithOptions(juce::Graphics& g,
+void AvaAudioProcessorEditor::AvaLookAndFeel::drawPopupMenuBackgroundWithOptions(juce::Graphics& g,
                                                                                  int width,
                                                                                  int height,
                                                                                  const juce::PopupMenu::Options&)
@@ -210,12 +210,12 @@ void VxAudioProcessorEditor::VxLookAndFeel::drawPopupMenuBackgroundWithOptions(j
     g.drawRect(0, 0, width, height, 1);
 }
 
-int VxAudioProcessorEditor::VxLookAndFeel::getPopupMenuBorderSizeWithOptions(const juce::PopupMenu::Options&)
+int AvaAudioProcessorEditor::AvaLookAndFeel::getPopupMenuBorderSizeWithOptions(const juce::PopupMenu::Options&)
 {
     return 1;
 }
 
-void VxAudioProcessorEditor::VxLookAndFeel::getIdealPopupMenuItemSizeWithOptions(const juce::String& text,
+void AvaAudioProcessorEditor::AvaLookAndFeel::getIdealPopupMenuItemSizeWithOptions(const juce::String& text,
                                                                                    bool isSeparator,
                                                                                    int,
                                                                                    int& idealWidth,
@@ -233,7 +233,7 @@ void VxAudioProcessorEditor::VxLookAndFeel::getIdealPopupMenuItemSizeWithOptions
     idealHeight = 30;
 }
 
-void VxAudioProcessorEditor::VxLookAndFeel::drawCallOutBoxBackground(juce::CallOutBox&, juce::Graphics& g, const juce::Path& path, juce::Image&)
+void AvaAudioProcessorEditor::AvaLookAndFeel::drawCallOutBoxBackground(juce::CallOutBox&, juce::Graphics& g, const juce::Path& path, juce::Image&)
 {
     g.setColour(uiGrey700);
     g.fillPath(path);
@@ -242,17 +242,17 @@ void VxAudioProcessorEditor::VxLookAndFeel::drawCallOutBoxBackground(juce::CallO
     g.strokePath(path, juce::PathStrokeType(1.0f));
 }
 
-int VxAudioProcessorEditor::VxLookAndFeel::getCallOutBoxBorderSize(const juce::CallOutBox&)
+int AvaAudioProcessorEditor::AvaLookAndFeel::getCallOutBoxBorderSize(const juce::CallOutBox&)
 {
     return 1;
 }
 
-float VxAudioProcessorEditor::VxLookAndFeel::getCallOutBoxCornerSize(const juce::CallOutBox&)
+float AvaAudioProcessorEditor::AvaLookAndFeel::getCallOutBoxCornerSize(const juce::CallOutBox&)
 {
     return 0.0f;
 }
 
-juce::Rectangle<int> VxAudioProcessorEditor::VxLookAndFeel::getTooltipBounds(const juce::String& tipText,
+juce::Rectangle<int> AvaAudioProcessorEditor::AvaLookAndFeel::getTooltipBounds(const juce::String& tipText,
                                                                              juce::Point<int> screenPos,
                                                                              juce::Rectangle<int> parentArea)
 {
@@ -299,7 +299,7 @@ juce::Rectangle<int> VxAudioProcessorEditor::VxLookAndFeel::getTooltipBounds(con
     return bounds;
 }
 
-void VxAudioProcessorEditor::VxLookAndFeel::drawTooltip(juce::Graphics& g,
+void AvaAudioProcessorEditor::AvaLookAndFeel::drawTooltip(juce::Graphics& g,
                                                         const juce::String& text,
                                                         const int width,
                                                         const int height)
@@ -333,7 +333,7 @@ void VxAudioProcessorEditor::VxLookAndFeel::drawTooltip(juce::Graphics& g,
     }
 }
 
-void VxAudioProcessorEditor::VxLookAndFeel::drawComboBox(juce::Graphics& g,
+void AvaAudioProcessorEditor::AvaLookAndFeel::drawComboBox(juce::Graphics& g,
                                                            int width,
                                                            int height,
                                                            bool,
@@ -370,7 +370,7 @@ void VxAudioProcessorEditor::VxLookAndFeel::drawComboBox(juce::Graphics& g,
     g.drawRect(0, 0, width, height, 1);
 }
 
-void VxAudioProcessorEditor::VxLookAndFeel::positionComboBoxText(juce::ComboBox& box, juce::Label& label)
+void AvaAudioProcessorEditor::AvaLookAndFeel::positionComboBoxText(juce::ComboBox& box, juce::Label& label)
 {
     if (dynamic_cast<NoTickComboBox*>(&box) == nullptr)
     {
@@ -386,7 +386,7 @@ void VxAudioProcessorEditor::VxLookAndFeel::positionComboBoxText(juce::ComboBox&
     label.setFont(getComboBoxFont(box));
 }
 
-void VxAudioProcessorEditor::VxLookAndFeel::drawPopupMenuItem(juce::Graphics& g,
+void AvaAudioProcessorEditor::AvaLookAndFeel::drawPopupMenuItem(juce::Graphics& g,
                                                                 const juce::Rectangle<int>& area,
                                                                 bool isSeparator,
                                                                 bool isActive,
@@ -412,7 +412,7 @@ void VxAudioProcessorEditor::VxLookAndFeel::drawPopupMenuItem(juce::Graphics& g,
                                             textColour);
 }
 
-void VxAudioProcessorEditor::VxLookAndFeel::drawPopupMenuItemWithOptions(juce::Graphics& g,
+void AvaAudioProcessorEditor::AvaLookAndFeel::drawPopupMenuItemWithOptions(juce::Graphics& g,
                                                                            const juce::Rectangle<int>& area,
                                                                            bool isHighlighted,
                                                                            const juce::PopupMenu::Item& item,

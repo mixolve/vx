@@ -52,6 +52,8 @@ void ValueBoxComponent::setInteractionEnabled(const bool shouldEnable)
 
     if (! interactionEnabled && editor != nullptr)
         hideEditor(true);
+
+    repaint();
 }
 
 void ValueBoxComponent::setOutlineColour(const juce::Colour colour)
@@ -141,7 +143,7 @@ void ValueBoxComponent::paint(juce::Graphics& g)
     g.setColour(borderColour);
     g.drawRect(getLocalBounds(), 1);
 
-    g.setColour(getDisplayTextColour(displayText));
+    g.setColour(interactionEnabled ? getDisplayTextColour(displayText) : uiGrey500);
     g.setFont(makeUiFont());
     g.drawFittedText(displayText,
                      getLocalBounds().reduced(4, 0),
@@ -232,16 +234,13 @@ void ValueBoxComponent::mouseUp(const juce::MouseEvent& event)
     pointerDown = false;
     dragDetected = false;
 
-    if (shouldOpenPrompt && customPromptAction != nullptr && (! interactionEnabled || event.mods.isCtrlDown()))
+    if (shouldOpenPrompt && customPromptAction != nullptr)
     {
         customPromptAction();
     }
-    else if (shouldOpenPrompt && (interactionEnabled || customPromptAction != nullptr))
+    else if (shouldOpenPrompt && interactionEnabled)
     {
-        if (interactionEnabled)
-            showEditor();
-        else if (customPromptAction != nullptr)
-            customPromptAction();
+        showEditor();
     }
 
     pressHighlight = false;
@@ -279,7 +278,7 @@ void ValueBoxComponent::showEditor()
     if (onBeforeShowEditor != nullptr)
         onBeforeShowEditor();
 
-    if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
+    if (auto* owner = findParentComponentOfClass<AvaAudioProcessorEditor>())
     {
         const auto editorText = editorTextProvider != nullptr ? editorTextProvider()
                                                               : slider.getTextFromValue(slider.getValue());

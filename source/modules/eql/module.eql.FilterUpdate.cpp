@@ -59,7 +59,7 @@ void EqlModuleProcessor::updateFilters()
             ? juce::jlimit(minimumVisibleFilterFrequency,
                            maximumVisibleFilterFrequency,
                            filterFrequencyParams[bandArrayIndex]->load(std::memory_order_relaxed))
-            : defaultTiltFrequency;
+            : defaultFilterFrequencyHz;
         const auto designFrequency = computeDesignFrequency(static_cast<double>(frequency), currentSampleRate);
         const auto slope = filterSlopeChoiceParams[bandArrayIndex] != nullptr
             ? static_cast<float>(EqlModuleProcessor::getBellSlopeValueForChoiceIndex(filterSlopeChoiceParams[bandArrayIndex]->getIndex()))

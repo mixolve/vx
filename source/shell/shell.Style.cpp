@@ -191,7 +191,7 @@ void clearKeyboardFocus(juce::Component& component)
     if (auto* topLevel = component.getTopLevelComponent())
         topLevel->unfocusAllComponents();
 
-    if (auto* editor = component.findParentComponentOfClass<VxAudioProcessorEditor>())
+    if (auto* editor = component.findParentComponentOfClass<AvaAudioProcessorEditor>())
         editor->grabKeyboardFocus();
     else
         component.grabKeyboardFocus();

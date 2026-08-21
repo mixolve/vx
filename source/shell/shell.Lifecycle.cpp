@@ -45,7 +45,7 @@ double focusedParameterValueToSliderValue(const juce::Slider& slider, const doub
 }
 }
 
-VxAudioProcessorEditor::~VxAudioProcessorEditor()
+AvaAudioProcessorEditor::~AvaAudioProcessorEditor()
 {
     commitPendingHistorySnapshot(true);
     unregisterParameterListeners();
@@ -55,7 +55,7 @@ VxAudioProcessorEditor::~VxAudioProcessorEditor()
     setLookAndFeel(nullptr);
 }
 
-void VxAudioProcessorEditor::timerCallback()
+void AvaAudioProcessorEditor::timerCallback()
 {
     commitPendingHistorySnapshot();
     syncFocusedParameterControl();
@@ -90,7 +90,7 @@ void VxAudioProcessorEditor::timerCallback()
     refreshFftAnalyserResponse();
 }
 
-double VxAudioProcessorEditor::getFocusedParameterControlValueForTarget() const noexcept
+double AvaAudioProcessorEditor::getFocusedParameterControlValueForTarget() const noexcept
 {
     if (focusedParameterTargetSlider == nullptr)
         return 0.0;
@@ -98,7 +98,7 @@ double VxAudioProcessorEditor::getFocusedParameterControlValueForTarget() const 
     return sliderValueToFocusedParameterValue(*focusedParameterTargetSlider);
 }
 
-double VxAudioProcessorEditor::getFocusedParameterTargetValueForControl() const noexcept
+double AvaAudioProcessorEditor::getFocusedParameterTargetValueForControl() const noexcept
 {
     if (focusedParameterControl == nullptr || focusedParameterTargetSlider == nullptr)
         return 0.0;
@@ -106,7 +106,7 @@ double VxAudioProcessorEditor::getFocusedParameterTargetValueForControl() const 
     return focusedParameterValueToSliderValue(*focusedParameterTargetSlider, focusedParameterControl->getValue());
 }
 
-void VxAudioProcessorEditor::syncFocusedParameterControl()
+void AvaAudioProcessorEditor::syncFocusedParameterControl()
 {
     if (focusedParameterControl == nullptr)
         return;
@@ -118,8 +118,6 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
     if (nextTarget != focusedParameterTargetSlider)
     {
         const auto preservedFilterScrollY = filterViewport.getViewPositionY();
-        const auto preservedFftAnalyserScrollY = fftAnalyserViewport.getViewPositionY();
-
         focusedParameterTargetSlider = nextTarget;
 
         if (focusedParameterTargetSlider != nullptr)
@@ -145,8 +143,6 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
         const auto filterMaxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
         filterViewport.setViewPosition(0, juce::jlimit(0, filterMaxOffset, preservedFilterScrollY));
 
-        const auto analyserMaxOffset = juce::jmax(0, fftAnalyserContent.getHeight() - fftAnalyserViewport.getHeight());
-        fftAnalyserViewport.setViewPosition(0, juce::jlimit(0, analyserMaxOffset, preservedFftAnalyserScrollY));
     }
 
     if (focusedParameterTargetSlider == nullptr || focusedParameterControl->isMouseButtonDown())
@@ -161,23 +157,17 @@ void VxAudioProcessorEditor::syncFocusedParameterControl()
     }
 }
 
-void VxAudioProcessorEditor::mouseDown(const juce::MouseEvent&)
+void AvaAudioProcessorEditor::mouseDown(const juce::MouseEvent&)
 {
     shell_parameter_focus::clearFocus(*this);
     clearKeyboardFocus(*this);
 }
 
-void VxAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
+void AvaAudioProcessorEditor::mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
 {
     if (hostParametersViewport.getBounds().contains(event.getPosition()))
     {
         if (scrollViewportWithWheel(hostParametersViewport, hostParametersContent.getHeight(), wheel, event.mods.isShiftDown()))
-            return;
-    }
-
-    if (fftAnalyserViewport.getBounds().contains(event.getPosition()))
-    {
-        if (scrollViewportWithWheel(fftAnalyserViewport, fftAnalyserContent.getHeight(), wheel, event.mods.isShiftDown()))
             return;
     }
 

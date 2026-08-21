@@ -7,24 +7,28 @@
 #include <memory>
 #include <vector>
 
-VxAudioProcessor::VxAudioProcessor()
+AvaAudioProcessor::AvaAudioProcessor()
     : AudioProcessor(BusesProperties()
                           .withInput("Input", juce::AudioChannelSet::stereo(), true)
                           .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
-    parameters(*this, nullptr, "vx_state", createParameterLayout())
+    parameters(*this, nullptr, "ava_state", createParameterLayout())
 {
     globalBypassParam = parameters.getRawParameterValue(paramGlobalBypassId);
+    registerTlsDirectHostParameterListeners();
 }
 
-VxAudioProcessor::~VxAudioProcessor() = default;
+AvaAudioProcessor::~AvaAudioProcessor()
+{
+    unregisterTlsDirectHostParameterListeners();
+}
 
-juce::String VxAudioProcessor::getHostSlotParameterId(const int slotIndex)
+juce::String AvaAudioProcessor::getHostSlotParameterId(const int slotIndex)
 {
     const auto clampedSlot = juce::jlimit(0, hostAutomationSlotCount - 1, slotIndex);
     return juce::String(paramHostSlotPrefix) + juce::String::formatted("%02d", clampedSlot + 1);
 }
 
-juce::String VxAudioProcessor::getHostSlotLetterLabel(const int slotIndex)
+juce::String AvaAudioProcessor::getHostSlotLetterLabel(const int slotIndex)
 {
     const auto index = juce::jlimit(0, hostAutomationSlotCount - 1, slotIndex);
     const auto first = index / 26;
@@ -34,12 +38,32 @@ juce::String VxAudioProcessor::getHostSlotLetterLabel(const int slotIndex)
         + juce::String::charToString(static_cast<juce_wchar>('A' + second));
 }
 
-juce::AudioProcessorValueTreeState::ParameterLayout VxAudioProcessor::createParameterLayout()
+juce::String AvaAudioProcessor::getTlsDirectHostParameterId(const size_t bandIndex, const char* suffix)
+{
+    if (bandIndex == tlsWidebandListenHostIndex)
+        return "tls_host_" + juce::String(suffix);
+
+    return "tls_host_band" + juce::String(static_cast<int>(bandIndex + 1)) + "_" + juce::String(suffix);
+}
+
+juce::String AvaAudioProcessor::getTlsDirectHostParameterName(const size_t bandIndex, const char* suffix)
+{
+    const auto parameterSuffix = juce::String(suffix);
+
+    if (bandIndex == tlsWidebandListenHostIndex)
+        return "TLS / LISTEN / " + parameterSuffix.fromFirstOccurrenceOf("listen", false, false).toUpperCase();
+
+    const auto bandName = "TLS / BAND " + juce::String(static_cast<int>(bandIndex + 1));
+
+    return bandName + " / SOLO";
+}
+
+juce::AudioProcessorValueTreeState::ParameterLayout AvaAudioProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> parameterLayout;
     parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
         juce::ParameterID { paramGlobalBypassId, 1 },
-        "VX / GLOBAL / BYPASS",
+        "AVA / GLOBAL / BYPASS",
         false,
         juce::AudioParameterBoolAttributes().withAutomatable(false).withMeta(true)));
 
@@ -53,53 +77,69 @@ juce::AudioProcessorValueTreeState::ParameterLayout VxAudioProcessor::createPara
             juce::AudioParameterFloatAttributes().withAutomatable(true)));
     }
 
+    for (size_t bandIndex = 0; bandIndex < tlsDirectHostBandCount; ++bandIndex)
+    {
+        parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
+            juce::ParameterID { getTlsDirectHostParameterId(bandIndex, "solo"), 1 },
+            getTlsDirectHostParameterName(bandIndex, "solo"),
+            false,
+            juce::AudioParameterBoolAttributes().withAutomatable(true)));
+    }
+
+    for (const auto* suffix : tlsWidebandListenParameterSuffixes)
+        parameterLayout.push_back(std::make_unique<juce::AudioParameterBool>(
+            juce::ParameterID { getTlsDirectHostParameterId(tlsWidebandListenHostIndex, suffix), 1 },
+            getTlsDirectHostParameterName(tlsWidebandListenHostIndex, suffix),
+            false,
+            juce::AudioParameterBoolAttributes().withAutomatable(true)));
+
     return { parameterLayout.begin(), parameterLayout.end() };
 }
 
-const juce::String VxAudioProcessor::getName() const
+const juce::String AvaAudioProcessor::getName() const
 {
     return JucePlugin_Name;
 }
 
-bool VxAudioProcessor::acceptsMidi() const
+bool AvaAudioProcessor::acceptsMidi() const
 {
     return false;
 }
 
-bool VxAudioProcessor::producesMidi() const
+bool AvaAudioProcessor::producesMidi() const
 {
     return false;
 }
 
-bool VxAudioProcessor::isMidiEffect() const
+bool AvaAudioProcessor::isMidiEffect() const
 {
     return false;
 }
 
-double VxAudioProcessor::getTailLengthSeconds() const
+double AvaAudioProcessor::getTailLengthSeconds() const
 {
     return 0.0;
 }
 
-int VxAudioProcessor::getNumPrograms()
+int AvaAudioProcessor::getNumPrograms()
 {
     return 1;
 }
 
-int VxAudioProcessor::getCurrentProgram()
+int AvaAudioProcessor::getCurrentProgram()
 {
     return 0;
 }
 
-void VxAudioProcessor::setCurrentProgram(int)
+void AvaAudioProcessor::setCurrentProgram(int)
 {
 }
 
-const juce::String VxAudioProcessor::getProgramName(int)
+const juce::String AvaAudioProcessor::getProgramName(int)
 {
     return {};
 }
 
-void VxAudioProcessor::changeProgramName(int, const juce::String&)
+void AvaAudioProcessor::changeProgramName(int, const juce::String&)
 {
 }

@@ -27,8 +27,8 @@ public:
     inline static constexpr auto paramSensRetriggerId = "sens_retr";
     inline static constexpr auto paramLookaheadId = "lookahead";
 
-    static constexpr size_t numBands = vx::multiband::Crossover::numBands;
-    static constexpr size_t numCrossoverSlots = vx::multiband::Crossover::numSplits;
+    static constexpr size_t numBands = ava::multiband::Crossover::numBands;
+    static constexpr size_t numCrossoverSlots = ava::multiband::Crossover::numSplits;
 
     explicit TrsModuleProcessor(juce::AudioProcessor& ownerProcessor);
     ~TrsModuleProcessor();
@@ -52,7 +52,7 @@ public:
     static juce::String makeActiveSplitCountParameterId();
 
 private:
-    using MultibandProcessor = vx::multiband::Processor<trs::dsp::DspCore>;
+    using MultibandProcessor = ava::multiband::Processor<trs::dsp::DspCore>;
 
     class InternalParameterHost final : public juce::AudioProcessor
     {

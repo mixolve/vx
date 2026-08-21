@@ -129,7 +129,7 @@ juce::String EqlModuleProcessor::getFilterHeaderText(const int filterIndex, cons
         : 0;
     const auto frequency = filterFrequencyParams[bandIndex] != nullptr
         ? filterFrequencyParams[bandIndex]->load(std::memory_order_relaxed)
-        : defaultTiltFrequency;
+        : defaultFilterFrequencyHz;
 
     if (filterType == FilterType::volume)
     {

@@ -1,5 +1,6 @@
 #include "shell.Processor.h"
 #include "../modules/multiband/tls/module.tls.PluginProcessor.h"
+#include "../modules/multiband/tls/module.tls.ParameterIds.h"
 #include "../modules/multiband/dyn/module.dyn.PluginProcessor.h"
 #include "../modules/fft/module.fft.FftProcessor.h"
 #include "../modules/multiband/trs/module.trs.TrsProcessor.h"
@@ -7,7 +8,7 @@
 
 #include <optional>
 
-const char* VxAudioProcessor::stateIdForModule(const ActiveModule module) noexcept
+const char* AvaAudioProcessor::stateIdForModule(const ActiveModule module) noexcept
 {
     switch (module)
     {
@@ -22,7 +23,7 @@ const char* VxAudioProcessor::stateIdForModule(const ActiveModule module) noexce
     return "";
 }
 
-VxAudioProcessor::ActiveModule VxAudioProcessor::moduleFromStateId(const juce::String& moduleId)
+AvaAudioProcessor::ActiveModule AvaAudioProcessor::moduleFromStateId(const juce::String& moduleId)
 {
     const auto trimmed = moduleId.trim();
 
@@ -44,22 +45,22 @@ VxAudioProcessor::ActiveModule VxAudioProcessor::moduleFromStateId(const juce::S
     return ActiveModule::none;
 }
 
-juce::AudioProcessorValueTreeState& VxAudioProcessor::getValueTreeState() noexcept
+juce::AudioProcessorValueTreeState& AvaAudioProcessor::getValueTreeState() noexcept
 {
     return parameters;
 }
 
-const juce::AudioProcessorValueTreeState& VxAudioProcessor::getValueTreeState() const noexcept
+const juce::AudioProcessorValueTreeState& AvaAudioProcessor::getValueTreeState() const noexcept
 {
     return parameters;
 }
 
-VxAudioProcessor::ActiveModule VxAudioProcessor::getActiveModule() const noexcept
+AvaAudioProcessor::ActiveModule AvaAudioProcessor::getActiveModule() const noexcept
 {
     return activeModule.load(std::memory_order_acquire);
 }
 
-void VxAudioProcessor::setActiveModule(const ActiveModule module)
+void AvaAudioProcessor::setActiveModule(const ActiveModule module)
 {
     activeModule.store(module, std::memory_order_release);
 
@@ -71,7 +72,190 @@ void VxAudioProcessor::setActiveModule(const ActiveModule module)
         parameters.state.removeProperty(activeModuleStateKey, nullptr);
 }
 
-bool VxAudioProcessor::loadModule(const ActiveModule module)
+bool AvaAudioProcessor::decodeTlsDirectHostParameterId(const juce::String& parameterId,
+                                                       size_t& bandIndex,
+                                                       juce::String& suffix) noexcept
+{
+    for (size_t candidateBand = 0; candidateBand < tlsDirectHostBandCount; ++candidateBand)
+    {
+        if (parameterId == getTlsDirectHostParameterId(candidateBand, "solo"))
+        {
+            bandIndex = candidateBand;
+            suffix = "solo";
+            return true;
+        }
+    }
+
+    for (const auto* candidateSuffix : tlsWidebandListenParameterSuffixes)
+    {
+        if (parameterId == getTlsDirectHostParameterId(tlsWidebandListenHostIndex, candidateSuffix))
+        {
+            bandIndex = tlsWidebandListenHostIndex;
+            suffix = candidateSuffix;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+juce::String AvaAudioProcessor::getTlsModuleParameterId(const size_t bandIndex, const juce::String& suffix)
+{
+    if (bandIndex == tlsWidebandListenHostIndex)
+        return tls::parameters::makeFullbandParameterId(suffix.toRawUTF8());
+
+    if (suffix == "solo")
+        return tls::parameters::makeSoloParameterId(bandIndex);
+
+    return tls::parameters::makeBandParameterId(bandIndex, suffix.toRawUTF8());
+}
+
+void AvaAudioProcessor::registerTlsDirectHostParameterListeners()
+{
+    for (size_t bandIndex = 0; bandIndex < tlsDirectHostBandCount; ++bandIndex)
+        parameters.addParameterListener(getTlsDirectHostParameterId(bandIndex, "solo"), this);
+
+    for (const auto* suffix : tlsWidebandListenParameterSuffixes)
+        parameters.addParameterListener(getTlsDirectHostParameterId(tlsWidebandListenHostIndex, suffix), this);
+}
+
+void AvaAudioProcessor::unregisterTlsDirectHostParameterListeners()
+{
+    for (size_t bandIndex = 0; bandIndex < tlsDirectHostBandCount; ++bandIndex)
+        parameters.removeParameterListener(getTlsDirectHostParameterId(bandIndex, "solo"), this);
+
+    for (const auto* suffix : tlsWidebandListenParameterSuffixes)
+        parameters.removeParameterListener(getTlsDirectHostParameterId(tlsWidebandListenHostIndex, suffix), this);
+}
+
+void AvaAudioProcessor::syncTlsDirectHostParametersToModule()
+{
+    if (getActiveModule() != ActiveModule::tls || synchronisingTlsDirectHostParameters)
+        return;
+
+    const juce::ScopedValueSetter<bool> syncGuard(synchronisingTlsDirectHostParameters, true);
+
+    const auto syncParameter = [this] (const size_t bandIndex, const char* suffix)
+    {
+        auto* hostParameter = parameters.getParameter(getTlsDirectHostParameterId(bandIndex, suffix));
+        auto* tlsParameter = getTlsModuleProcessor() != nullptr
+            ? getTlsModuleProcessor()->getValueTreeState().getParameter(getTlsModuleParameterId(bandIndex, suffix))
+            : nullptr;
+
+        if (hostParameter == nullptr || tlsParameter == nullptr)
+            return;
+
+        const auto hostValue = hostParameter->getValue() >= 0.5f;
+        const auto tlsValue = tlsParameter->getValue() >= 0.5f;
+
+        if (hostValue != tlsValue)
+            tlsParameter->setValueNotifyingHost(hostValue ? 1.0f : 0.0f);
+    };
+
+    for (size_t bandIndex = 0; bandIndex < tlsDirectHostBandCount; ++bandIndex)
+        syncParameter(bandIndex, "solo");
+
+    for (const auto* suffix : tlsWidebandListenParameterSuffixes)
+        syncParameter(tlsWidebandListenHostIndex, suffix);
+}
+
+void AvaAudioProcessor::syncTlsModuleParametersToHost()
+{
+    if (getActiveModule() != ActiveModule::tls || synchronisingTlsDirectHostParameters)
+        return;
+
+    auto* tlsProcessor = getTlsModuleProcessor();
+
+    if (tlsProcessor == nullptr)
+        return;
+
+    const juce::ScopedValueSetter<bool> syncGuard(synchronisingTlsDirectHostParameters, true);
+
+    const auto syncParameter = [this, tlsProcessor] (const size_t bandIndex, const char* suffix)
+    {
+        auto* hostParameter = parameters.getParameter(getTlsDirectHostParameterId(bandIndex, suffix));
+        auto* tlsParameter = tlsProcessor->getValueTreeState().getParameter(getTlsModuleParameterId(bandIndex, suffix));
+
+        if (hostParameter == nullptr || tlsParameter == nullptr)
+            return;
+
+        const auto hostValue = hostParameter->getValue() >= 0.5f;
+        const auto tlsValue = tlsParameter->getValue() >= 0.5f;
+
+        if (hostValue != tlsValue)
+            hostParameter->setValueNotifyingHost(tlsValue ? 1.0f : 0.0f);
+    };
+
+    for (size_t bandIndex = 0; bandIndex < tlsDirectHostBandCount; ++bandIndex)
+        syncParameter(bandIndex, "solo");
+
+    for (const auto* suffix : tlsWidebandListenParameterSuffixes)
+        syncParameter(tlsWidebandListenHostIndex, suffix);
+}
+
+bool AvaAudioProcessor::syncTlsDirectHostParameterToModule(const juce::String& parameterId, const float value)
+{
+    if (synchronisingTlsDirectHostParameters || getActiveModule() != ActiveModule::tls)
+        return false;
+
+    size_t bandIndex = 0;
+    juce::String suffix;
+
+    if (! decodeTlsDirectHostParameterId(parameterId, bandIndex, suffix))
+        return false;
+
+    auto* tlsProcessor = getTlsModuleProcessor();
+    auto* tlsParameter = tlsProcessor != nullptr
+        ? tlsProcessor->getValueTreeState().getParameter(getTlsModuleParameterId(bandIndex, suffix))
+        : nullptr;
+
+    if (tlsParameter == nullptr)
+        return true;
+
+    const juce::ScopedValueSetter<bool> syncGuard(synchronisingTlsDirectHostParameters, true);
+    const auto isEnabled = value >= 0.5f;
+
+    if ((tlsParameter->getValue() >= 0.5f) != isEnabled)
+        tlsParameter->setValueNotifyingHost(isEnabled ? 1.0f : 0.0f);
+
+    return true;
+}
+
+bool AvaAudioProcessor::syncTlsModuleParameterToHost(const juce::String& parameterId, const float value)
+{
+    if (synchronisingTlsDirectHostParameters || getActiveModule() != ActiveModule::tls)
+        return false;
+
+    const auto syncParameter = [this, &parameterId, value] (const size_t bandIndex, const char* suffix)
+    {
+        if (parameterId != getTlsModuleParameterId(bandIndex, suffix))
+            return false;
+
+        if (auto* hostParameter = parameters.getParameter(getTlsDirectHostParameterId(bandIndex, suffix));
+            hostParameter != nullptr)
+        {
+            const juce::ScopedValueSetter<bool> syncGuard(synchronisingTlsDirectHostParameters, true);
+            const auto isEnabled = value >= 0.5f;
+
+            if ((hostParameter->getValue() >= 0.5f) != isEnabled)
+                hostParameter->setValueNotifyingHost(isEnabled ? 1.0f : 0.0f);
+        }
+
+        return true;
+    };
+
+    for (size_t bandIndex = 0; bandIndex < tlsDirectHostBandCount; ++bandIndex)
+        if (syncParameter(bandIndex, "solo"))
+            return true;
+
+    for (const auto* suffix : tlsWidebandListenParameterSuffixes)
+        if (syncParameter(tlsWidebandListenHostIndex, suffix))
+            return true;
+
+    return false;
+}
+
+bool AvaAudioProcessor::loadModule(const ActiveModule module)
 {
     const juce::ScopedLock lock(processingLock);
 
@@ -98,6 +282,7 @@ bool VxAudioProcessor::loadModule(const ActiveModule module)
             eql->loadInitialFilterPreset();
 
     setActiveModule(module);
+    syncTlsDirectHostParametersToModule();
     registerActiveModuleStateListeners();
     updateShellLatency();
     notifyHostOfStateChange();
@@ -105,7 +290,7 @@ bool VxAudioProcessor::loadModule(const ActiveModule module)
     return true;
 }
 
-bool VxAudioProcessor::clearLoadedModule()
+bool AvaAudioProcessor::clearLoadedModule()
 {
     const juce::ScopedLock lock(processingLock);
 
@@ -121,7 +306,7 @@ bool VxAudioProcessor::clearLoadedModule()
     return true;
 }
 
-void VxAudioProcessor::registerActiveModuleStateListeners()
+void AvaAudioProcessor::registerActiveModuleStateListeners()
 {
     clearActiveModuleStateListeners();
 
@@ -165,7 +350,7 @@ void VxAudioProcessor::registerActiveModuleStateListeners()
         observedModuleState.addListener(this);
 }
 
-void VxAudioProcessor::clearActiveModuleStateListeners()
+void AvaAudioProcessor::clearActiveModuleStateListeners()
 {
     if (observedModuleValueTreeState != nullptr)
     {
@@ -182,57 +367,64 @@ void VxAudioProcessor::clearActiveModuleStateListeners()
     observedModuleState = {};
 }
 
-void VxAudioProcessor::parameterChanged(const juce::String&, float)
+void AvaAudioProcessor::parameterChanged(const juce::String& parameterID, const float newValue)
+{
+    if (syncTlsDirectHostParameterToModule(parameterID, newValue)
+        || syncTlsModuleParameterToHost(parameterID, newValue))
+    {
+        notifyHostOfStateChange();
+        return;
+    }
+
+    notifyHostOfStateChange();
+}
+
+void AvaAudioProcessor::valueTreePropertyChanged(juce::ValueTree&, const juce::Identifier&)
 {
     notifyHostOfStateChange();
 }
 
-void VxAudioProcessor::valueTreePropertyChanged(juce::ValueTree&, const juce::Identifier&)
-{
-    notifyHostOfStateChange();
-}
-
-TlsAudioProcessor* VxAudioProcessor::getTlsModuleProcessor() noexcept
+TlsAudioProcessor* AvaAudioProcessor::getTlsModuleProcessor() noexcept
 {
     return tlsModuleProcessor.get();
 }
 
-const TlsAudioProcessor* VxAudioProcessor::getTlsModuleProcessor() const noexcept
+const TlsAudioProcessor* AvaAudioProcessor::getTlsModuleProcessor() const noexcept
 {
     return tlsModuleProcessor.get();
 }
 
-FftModuleProcessor* VxAudioProcessor::getFftModuleProcessor() noexcept
+FftModuleProcessor* AvaAudioProcessor::getFftModuleProcessor() noexcept
 {
     return fftModuleProcessor.get();
 }
 
-const FftModuleProcessor* VxAudioProcessor::getFftModuleProcessor() const noexcept
+const FftModuleProcessor* AvaAudioProcessor::getFftModuleProcessor() const noexcept
 {
     return fftModuleProcessor.get();
 }
 
-DynAudioProcessor* VxAudioProcessor::getDynModuleProcessor() noexcept
+DynAudioProcessor* AvaAudioProcessor::getDynModuleProcessor() noexcept
 {
     return dynModuleProcessor.get();
 }
 
-const DynAudioProcessor* VxAudioProcessor::getDynModuleProcessor() const noexcept
+const DynAudioProcessor* AvaAudioProcessor::getDynModuleProcessor() const noexcept
 {
     return dynModuleProcessor.get();
 }
 
-TrsModuleProcessor* VxAudioProcessor::getTrsModuleProcessor() noexcept
+TrsModuleProcessor* AvaAudioProcessor::getTrsModuleProcessor() noexcept
 {
     return trsModuleProcessor.get();
 }
 
-const TrsModuleProcessor* VxAudioProcessor::getTrsModuleProcessor() const noexcept
+const TrsModuleProcessor* AvaAudioProcessor::getTrsModuleProcessor() const noexcept
 {
     return trsModuleProcessor.get();
 }
 
-void VxAudioProcessor::resetModuleProcessors() noexcept
+void AvaAudioProcessor::resetModuleProcessors() noexcept
 {
     eqlModuleProcessor.reset();
     fftModuleProcessor.reset();
@@ -241,7 +433,7 @@ void VxAudioProcessor::resetModuleProcessors() noexcept
     trsModuleProcessor.reset();
 }
 
-bool VxAudioProcessor::createModuleInstance(const ActiveModule module)
+bool AvaAudioProcessor::createModuleInstance(const ActiveModule module)
 {
     auto prepareModule = [this] (auto& processor)
     {
@@ -280,17 +472,17 @@ bool VxAudioProcessor::createModuleInstance(const ActiveModule module)
     return false;
 }
 
-EqlModuleProcessor* VxAudioProcessor::getEqlModuleProcessor() noexcept
+EqlModuleProcessor* AvaAudioProcessor::getEqlModuleProcessor() noexcept
 {
     return eqlModuleProcessor.get();
 }
 
-const EqlModuleProcessor* VxAudioProcessor::getEqlModuleProcessor() const noexcept
+const EqlModuleProcessor* AvaAudioProcessor::getEqlModuleProcessor() const noexcept
 {
     return eqlModuleProcessor.get();
 }
 
-void VxAudioProcessor::restoreLoadedModuleFromStateText(const juce::String& text, const bool publishActiveModule)
+void AvaAudioProcessor::restoreLoadedModuleFromStateText(const juce::String& text, const bool publishActiveModule)
 {
     const juce::ScopedLock lock(processingLock);
 

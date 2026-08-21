@@ -83,17 +83,17 @@ bool applyWheelToNormalisedSliderValue(juce::Slider& slider, const juce::MouseWh
 juce::MemoryBlock makeNoModuleSnapshotFrom(const juce::MemoryBlock& sourceSnapshot)
 {
     juce::MemoryBlock noModuleSnapshot;
-    auto stateXml = VxAudioProcessor::getXmlFromBinary(sourceSnapshot.getData(),
+    auto stateXml = AvaAudioProcessor::getXmlFromBinary(sourceSnapshot.getData(),
                                                        static_cast<int>(sourceSnapshot.getSize()));
 
     if (stateXml == nullptr)
         return noModuleSnapshot;
 
     auto state = juce::ValueTree::fromXml(*stateXml);
-    VxAudioProcessor::removeModuleStateProperties(state);
+    AvaAudioProcessor::removeModuleStateProperties(state);
 
     if (auto noModuleXml = state.createXml())
-        VxAudioProcessor::copyXmlToBinary(*noModuleXml, noModuleSnapshot);
+        AvaAudioProcessor::copyXmlToBinary(*noModuleXml, noModuleSnapshot);
 
     return noModuleSnapshot;
 }
@@ -176,7 +176,7 @@ public:
         vertical
     };
 
-    EdgeResizeHandle(VxAudioProcessorEditor& ownerIn, const Axis axisIn)
+    EdgeResizeHandle(AvaAudioProcessorEditor& ownerIn, const Axis axisIn)
         : owner(ownerIn),
           axis(axisIn)
     {
@@ -220,18 +220,18 @@ public:
     }
 
 private:
-    VxAudioProcessorEditor& owner;
+    AvaAudioProcessorEditor& owner;
     Axis axis;
     juce::Point<int> dragStartSize;
 };
 #endif
 }
 
-VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit)
+AvaAudioProcessorEditor::AvaAudioProcessorEditor(AvaAudioProcessor& processorToEdit)
     : AudioProcessorEditor(&processorToEdit),
       audioProcessor(processorToEdit),
       valueTreeState(processorToEdit.getValueTreeState()),
-      lookAndFeel(std::make_unique<VxLookAndFeel>())
+      lookAndFeel(std::make_unique<AvaLookAndFeel>())
 {
     shell_parameter_focus::clearFocus(*this);
 
@@ -250,11 +250,6 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     hostParametersViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
     hostParametersViewport.setWantsKeyboardFocus(false);
     addAndMakeVisible(hostParametersViewport);
-    fftAnalyserViewport.setViewedComponent(&fftAnalyserContent, false);
-    fftAnalyserViewport.setScrollBarsShown(false, false);
-    fftAnalyserViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
-    fftAnalyserViewport.setWantsKeyboardFocus(false);
-    addAndMakeVisible(fftAnalyserViewport);
     filterViewport.setViewedComponent(&filterContent, false);
     filterViewport.setScrollBarsShown(false, false);
     filterViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
@@ -311,6 +306,7 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     clipButton->setTooltip("CLIP INDICATOR");
     clipButton->setTextJustification(juce::Justification::centred);
     clipButton->setClickingTogglesState(false);
+    clipButton->setFillVisible(false);
     clipButton->setInterceptsMouseClicks(false, false);
     addAndMakeVisible(*clipButton);
 
@@ -319,6 +315,7 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     hostButton->setTooltip("CLICK: HOST PARAMETERS -- LONG PRESS: TURN ON/OFF HINTS");
     hostButton->setTextJustification(juce::Justification::centred);
     hostButton->setClickingTogglesState(true);
+    hostButton->setToggleAccentVisible(true);
     hostButton->onClick = [this]
     {
         toggleHostParametersSection();
@@ -345,15 +342,15 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
 
         setupFftControls(fftState, *fftProcessor);
         fftAnalyserComponent = shell_setup_support::createFftAnalyserComponent(*fftProcessor);
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserComponent);
+        addAndMakeVisible(*fftAnalyserComponent);
     }
 
     setupShellControls();
 
     setupPresetControls();
 
-    filterDisplayOrder.reserve(VxAudioProcessor::maxEqlFilterCount);
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
+    filterDisplayOrder.reserve(AvaAudioProcessor::maxEqlFilterCount);
+    for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
         filterDisplayOrder.push_back(filterIndex);
 
     if (auto* initialEqlProcessor = audioProcessor.getEqlModuleProcessor())
@@ -362,7 +359,7 @@ VxAudioProcessorEditor::VxAudioProcessorEditor(VxAudioProcessor& processorToEdit
     restoreEditorStateFromValueTree();
 
     footerTab = std::make_unique<BoxTextButton>(uiGrey500);
-    footerTab->setButtonText("VX by MIXOLVE");
+    footerTab->setButtonText("AVA by MIXOLVE");
     footerTab->setTooltip("ABOUT");
     footerTab->onClick = [this]
     {

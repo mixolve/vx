@@ -95,7 +95,8 @@ public:
     int getPreferredHeight() const noexcept;
     double getValue() const noexcept;
     void setValue(double value, bool sendNotification);
-    void setValueRange(double minimum, double maximum, double interval);
+    void setValueRange(double minimum, double maximum, double interval, bool reversed = false);
+    void setDefaultValue(double value);
     void setTitleText(const juce::String& text);
     void setOverrideText(const juce::String& text);
     void clearOverrideText();
@@ -112,7 +113,7 @@ private:
     juce::String formatDisplayValue(double value) const;
     juce::String formatEditorValue() const;
 
-    const double defaultValue = 0.0;
+    double defaultValue = 0.0;
     const int editorDecimals = 2;
     const bool brickwSupported = false;
     const bool supportsNoteText = false;
@@ -122,4 +123,5 @@ private:
     juce::String overrideText;
     std::function<void()> valueClickAction;
     bool interactionEnabled = true;
+    bool valueRangeReversed = false;
 };

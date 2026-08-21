@@ -34,6 +34,13 @@ void TlsAudioProcessor::cacheParameterPointers()
         jassert(rawCrossoverParameters[parameterIndex] != nullptr);
     }
 
+    for (size_t parameterIndex = 0; parameterIndex < numWidebandListenSlots; ++parameterIndex)
+    {
+        rawWidebandListenParameters[parameterIndex] = valueTreeState.getRawParameterValue(
+            makeFullbandParameterId(tls::parameters::widebandListenSpecs[parameterIndex].suffix));
+        jassert(rawWidebandListenParameters[parameterIndex] != nullptr);
+    }
+
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
     {
         for (size_t parameterIndex = 0; parameterIndex < numParameterSlots; ++parameterIndex)
@@ -144,6 +151,24 @@ tls::dsp::MultibandProcessor::SoloMask TlsAudioProcessor::readSoloMask() const
     return soloMask;
 }
 
+TlsAudioProcessor::WidebandListenMode TlsAudioProcessor::readWidebandListenMode() const noexcept
+{
+    const auto isEnabled = [this] (const size_t index)
+    {
+        const auto* parameter = rawWidebandListenParameters[index];
+        return parameter != nullptr && parameter->load(std::memory_order_relaxed) >= 0.5f;
+    };
+
+    if (isEnabled(0)) return WidebandListenMode::leftCenter;
+    if (isEnabled(1)) return WidebandListenMode::rightCenter;
+    if (isEnabled(2)) return WidebandListenMode::midCenter;
+    if (isEnabled(3)) return WidebandListenMode::sideCenter;
+    if (isEnabled(4)) return WidebandListenMode::leftLeft;
+    if (isEnabled(5)) return WidebandListenMode::rightRight;
+    if (isEnabled(6)) return WidebandListenMode::sideStereo;
+    return WidebandListenMode::neutral;
+}
+
 bool TlsAudioProcessor::syncParameters(const bool force)
 {
     if (! force && ! parametersDirty.exchange(false, std::memory_order_acq_rel))
@@ -158,6 +183,7 @@ bool TlsAudioProcessor::syncParameters(const bool force)
     currentCrossoverFrequencies = readCrossoverFrequencies();
     currentActiveSplitCount = readActiveSplitCount();
     currentSoloMask = readSoloMask();
+    currentWidebandListenMode = readWidebandListenMode();
     multibandProcessor.setBandParameters(currentBandParameters);
     multibandProcessor.setActiveSplitCount(currentActiveSplitCount);
     multibandProcessor.setCrossoverFrequencies(currentCrossoverFrequencies);

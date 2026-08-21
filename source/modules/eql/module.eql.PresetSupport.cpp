@@ -37,7 +37,7 @@ static juce::File getAppGroupPresetStorageDirectory()
     return directory;
 }
 
-#if ! VX_APP_EXTENSION
+#if ! AVA_APP_EXTENSION
 static bool shouldCopyPresetFile(const juce::File& sourceFile, const juce::File& targetFile)
 {
     return ! targetFile.existsAsFile() || ! sourceFile.hasIdenticalContentTo(targetFile);
@@ -98,14 +98,14 @@ static void mirrorDocumentsPresetsToAppGroup(const juce::File& documentsDirector
 
 void syncEqlPresetStorageWithSharedContainer()
 {
-#if JUCE_IOS && ! VX_APP_EXTENSION
+#if JUCE_IOS && ! AVA_APP_EXTENSION
     mirrorDocumentsPresetsToAppGroup(getDocumentsPresetStorageDirectory());
 #endif
 }
 
 static juce::File getPresetStorageRootDirectory()
 {
-#if JUCE_IOS && VX_APP_EXTENSION
+#if JUCE_IOS && AVA_APP_EXTENSION
     auto appGroupDirectory = getAppGroupPresetStorageDirectory();
 
     if (appGroupDirectory.isDirectory())
@@ -121,7 +121,7 @@ static juce::File getFilterPresetsDirectory()
 
     directory.createDirectory();
 
-#if JUCE_IOS && ! VX_APP_EXTENSION
+#if JUCE_IOS && ! AVA_APP_EXTENSION
     mirrorDocumentsPresetsToAppGroup(directory);
 #endif
 
@@ -479,7 +479,7 @@ bool writeFilterPresetsXml(const juce::XmlElement& rootElement)
     if (! writePresetCollectionToDirectory(filterPresetsDirectory, rootElement, presetTag))
         return false;
 
-#if JUCE_IOS && ! VX_APP_EXTENSION
+#if JUCE_IOS && ! AVA_APP_EXTENSION
     mirrorDocumentsPresetsToAppGroup(filterPresetsDirectory);
 #endif
 

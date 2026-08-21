@@ -22,6 +22,14 @@ inline constexpr std::array<const char*, multibandCrossoverSlotCount> crossoverL
     "XOVER-1", "XOVER-2", "XOVER-3", "XOVER-4", "XOVER-5"
 };
 
+inline constexpr std::array<const char*, 7> widebandListenSuffixes {
+    "listenLc", "listenRc", "listenMc", "listenSc", "listenLl", "listenRr", "listenSs"
+};
+
+inline constexpr std::array<const char*, 7> widebandListenLabels {
+    "LC", "RC", "MC", "SC", "LL", "RR", "SS"
+};
+
 inline constexpr float minCrossoverFrequencyGapHz = 1.0f;
 
 std::unique_ptr<BoxTextButton> makeTextButton(const juce::String& text, const juce::Colour accent = uiAccent)
@@ -168,6 +176,7 @@ public:
         addAndMakeVisible(soloButton);
 
         addControlSpecs(owner.config.bandControls);
+        tailRowStart = rows.size();
         addControlSpecs(owner.config.bandTailControls);
         refreshSoloButtonState();
         updateTimeModeControls();
@@ -219,12 +228,54 @@ public:
         auto bounds = getLocalBounds();
         soloButton.setBounds(bounds.removeFromTop(rowHeight));
 
-        for (size_t index = 0; index < rows.size();)
+        const auto layoutRows = [this] (const size_t firstRow,
+                                        const size_t lastRow,
+                                        juce::Rectangle<int> rowBounds)
         {
-            auto& row = rows[index];
+            for (size_t index = firstRow; index < lastRow;)
+            {
+                auto& row = rows[index];
+                const auto controlsInRow = juce::jlimit<size_t>(1,
+                                                                lastRow - index,
+                                                                static_cast<size_t>(juce::jmax(1, row->controlsInRow)));
+                auto topGap = 0;
+                auto preferredHeight = 0;
+
+                for (size_t offset = 0; offset < controlsInRow; ++offset)
+                {
+                    topGap = juce::jmax(topGap, rows[index + offset]->getTopGap());
+                    preferredHeight = juce::jmax(preferredHeight, rows[index + offset]->getPreferredHeight());
+                }
+
+                if (! rowBounds.isEmpty())
+                    rowBounds.removeFromTop(juce::jmin(topGap, rowBounds.getHeight()));
+
+                auto controlBounds = rowBounds.removeFromTop(preferredHeight);
+                const auto availableWidth = juce::jmax(0,
+                                                       controlBounds.getWidth()
+                                                           - (parameterGap * static_cast<int>(controlsInRow - 1)));
+                const auto controlWidth = availableWidth / static_cast<int>(controlsInRow);
+
+                for (size_t offset = 0; offset < controlsInRow; ++offset)
+                {
+                    const auto isLast = offset + 1 == controlsInRow;
+                    rows[index + offset]->setBounds(controlBounds.removeFromLeft(isLast ? controlBounds.getWidth()
+                                                                                        : controlWidth));
+
+                    if (! isLast)
+                        controlBounds.removeFromLeft(juce::jmin(parameterGap, controlBounds.getWidth()));
+                }
+
+                index += controlsInRow;
+            }
+        };
+
+        auto tailHeight = 0;
+        for (size_t index = tailRowStart; index < rows.size();)
+        {
             const auto controlsInRow = juce::jlimit<size_t>(1,
                                                             rows.size() - index,
-                                                            static_cast<size_t>(juce::jmax(1, row->controlsInRow)));
+                                                            static_cast<size_t>(juce::jmax(1, rows[index]->controlsInRow)));
             auto topGap = 0;
             auto preferredHeight = 0;
 
@@ -234,27 +285,15 @@ public:
                 preferredHeight = juce::jmax(preferredHeight, rows[index + offset]->getPreferredHeight());
             }
 
-            if (! bounds.isEmpty())
-                bounds.removeFromTop(juce::jmin(topGap, bounds.getHeight()));
-
-            auto rowBounds = bounds.removeFromTop(preferredHeight);
-            const auto availableWidth = juce::jmax(0,
-                                                   rowBounds.getWidth()
-                                                       - (parameterGap * static_cast<int>(controlsInRow - 1)));
-            const auto controlWidth = availableWidth / static_cast<int>(controlsInRow);
-
-            for (size_t offset = 0; offset < controlsInRow; ++offset)
-            {
-                const auto isLast = offset + 1 == controlsInRow;
-                rows[index + offset]->setBounds(rowBounds.removeFromLeft(isLast ? rowBounds.getWidth()
-                                                                                : controlWidth));
-
-                if (! isLast)
-                    rowBounds.removeFromLeft(juce::jmin(parameterGap, rowBounds.getWidth()));
-            }
-
+            tailHeight += topGap + preferredHeight;
             index += controlsInRow;
         }
+
+        const auto bodyPreferredHeight = getPreferredHeight() - rowHeight - moduleContentBottomGap - tailHeight;
+        const auto tailTop = juce::jmax(bounds.getY() + bodyPreferredHeight,
+                                        bounds.getBottom() - tailHeight);
+        layoutRows(0, tailRowStart, bounds.withBottom(tailTop));
+        layoutRows(tailRowStart, rows.size(), bounds.withTop(tailTop));
     }
 
     void mouseDown(const juce::MouseEvent&) override
@@ -287,10 +326,12 @@ private:
                      MultibandModuleComponent& ownerIn,
                      juce::String parameterId,
                      juce::String auxiliaryToggleParameterId,
+                     juce::String enabledWhenParameterId,
                      const BandControlSpec& spec)
             : page(pageIn),
               owner(ownerIn),
-              auxiliaryToggleId(std::move(auxiliaryToggleParameterId))
+              auxiliaryToggleId(std::move(auxiliaryToggleParameterId)),
+              enabledWhenId(std::move(enabledWhenParameterId))
         {
             control = std::make_unique<ParameterControl>(
                 ownerIn.valueTreeState,
@@ -300,11 +341,15 @@ private:
             topGapMultiplier = spec.topGapMultiplier;
             reorderGroup = spec.reorderGroup != nullptr ? spec.reorderGroup : "";
             fixedOrder = spec.fixedOrder;
+            auxiliaryToggleInverted = spec.auxiliaryToggleInverted;
 
             if (spec.orderSuffix != nullptr && juce::String(spec.orderSuffix).isNotEmpty())
                 orderParameterId = owner.config.makeBandParameterId(page.bandIndex, spec.orderSuffix);
 
             addAndMakeVisible(*control);
+
+            if (enabledWhenId.isNotEmpty())
+                control->setInteractionEnabled(readRawParameter(owner.valueTreeState, enabledWhenId, 0.0f) >= 0.5f);
 
             if (reorderGroup.isNotEmpty())
             {
@@ -332,10 +377,15 @@ private:
             if (auxiliaryToggleId.isNotEmpty())
             {
                 auxiliaryToggle = makeTextButton(spec.auxiliaryToggleLabel);
-                auxiliaryToggle->setClickingTogglesState(true);
-                auxiliaryToggleAttachment = std::make_unique<ButtonAttachment>(owner.valueTreeState,
-                                                                                auxiliaryToggleId,
-                                                                                *auxiliaryToggle);
+                auxiliaryToggle->setClickingTogglesState(! auxiliaryToggleInverted);
+
+                if (auxiliaryToggleInverted)
+                    refreshAuxiliaryToggleState();
+                else
+                    auxiliaryToggleAttachment = std::make_unique<ButtonAttachment>(owner.valueTreeState,
+                                                                                    auxiliaryToggleId,
+                                                                                    *auxiliaryToggle);
+
                 auxiliaryToggle->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
                 {
                     return owner.assignButtonHostSlot(auxiliaryToggleId,
@@ -343,7 +393,13 @@ private:
                                                       auxiliaryToggle.get(),
                                                       modifiers);
                 };
-                auxiliaryToggle->onClick = [this] { owner.clearFocus(); };
+                auxiliaryToggle->onClick = [this]
+                {
+                    if (auxiliaryToggleInverted)
+                        toggleAuxiliaryParameter();
+
+                    owner.clearFocus();
+                };
                 addAndMakeVisible(*auxiliaryToggle);
             }
         }
@@ -384,6 +440,11 @@ private:
 
         void refreshExternalState() override
         {
+            refreshAuxiliaryToggleState();
+
+            if (control != nullptr && enabledWhenId.isNotEmpty())
+                control->setInteractionEnabled(readRawParameter(owner.valueTreeState, enabledWhenId, 0.0f) >= 0.5f);
+
             if (moveUpButton == nullptr || moveDownButton == nullptr)
                 return;
 
@@ -393,23 +454,63 @@ private:
             const auto canMoveUp = ! fixedOrder && order > 0;
             const auto canMoveDown = ! fixedOrder && order >= 0 && order < 3;
             moveUpButton->setEnabled(canMoveUp);
-            moveUpButton->setAlpha(canMoveUp ? 1.0f : 0.45f);
+            moveUpButton->setAlpha(1.0f);
             moveUpButton->setPressFillEnabled(canMoveUp);
             moveUpButton->setInterceptsMouseClicks(canMoveUp, canMoveUp);
             moveDownButton->setEnabled(canMoveDown);
-            moveDownButton->setAlpha(canMoveDown ? 1.0f : 0.45f);
+            moveDownButton->setAlpha(1.0f);
             moveDownButton->setPressFillEnabled(canMoveDown);
             moveDownButton->setInterceptsMouseClicks(canMoveDown, canMoveDown);
+        }
+
+        void refreshAuxiliaryToggleState()
+        {
+            if (auxiliaryToggle == nullptr || ! auxiliaryToggleInverted)
+                return;
+
+            const auto parameterEnabled = readRawParameter(owner.valueTreeState, auxiliaryToggleId, 1.0f) >= 0.5f;
+            auxiliaryToggle->setToggleState(! parameterEnabled, juce::dontSendNotification);
+        }
+
+        void toggleAuxiliaryParameter()
+        {
+            const auto parameterEnabled = readRawParameter(owner.valueTreeState, auxiliaryToggleId, 1.0f) >= 0.5f;
+            owner.setParameterPlainValue(auxiliaryToggleId, parameterEnabled ? 0.0f : 1.0f);
+            refreshAuxiliaryToggleState();
         }
 
         BandPageComponent& page;
         MultibandModuleComponent& owner;
         juce::String auxiliaryToggleId;
+        juce::String enabledWhenId;
+        bool auxiliaryToggleInverted = false;
         std::unique_ptr<ParameterControl> control;
         std::unique_ptr<BoxTextButton> auxiliaryToggle;
         std::unique_ptr<ButtonAttachment> auxiliaryToggleAttachment;
         std::unique_ptr<BoxTextButton> moveUpButton;
         std::unique_ptr<BoxTextButton> moveDownButton;
+    };
+
+    struct ChoiceRow final : public RowBase
+    {
+        ChoiceRow(MultibandModuleComponent& ownerIn,
+                  const juce::String& parameterId,
+                  const BandControlSpec& spec)
+        {
+            control = std::make_unique<ChoiceControl>(ownerIn.valueTreeState, parameterId, spec.label);
+            topGapMultiplier = spec.topGapMultiplier;
+            addAndMakeVisible(*control);
+        }
+
+        int getPreferredHeight() const override { return rowHeight; }
+
+        void resized() override
+        {
+            if (control != nullptr)
+                control->setBounds(getLocalBounds());
+        }
+
+        std::unique_ptr<ChoiceControl> control;
     };
 
     struct HeadingRow final : public RowBase
@@ -418,9 +519,9 @@ private:
         {
             heading = makeTextButton(spec.label, uiAccent);
             heading->setClickingTogglesState(false);
-            heading->setBorderVisible(false);
+            heading->setBorderVisible(true);
             heading->setFillVisible(false);
-            heading->setDividerLineVisible(true);
+            heading->setDividerLineVisible(false);
             heading->setPressFillEnabled(false);
             heading->setTextJustification(juce::Justification::centredLeft);
             heading->setInterceptsMouseClicks(false, false);
@@ -479,6 +580,7 @@ private:
             button = makeTextButton(spec.label);
             topGapMultiplier = spec.topGapMultiplier;
             button->setClickingTogglesState(true);
+            button->setToggleAccentVisible(spec.toggleAccentVisible);
             attachment = std::make_unique<ButtonAttachment>(owner.valueTreeState, parameterIdToToggle, *button);
             button->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
             {
@@ -624,26 +726,21 @@ private:
 
         void resized() override
         {
-            auto rowBounds = getLocalBounds();
-            const auto leftWidth = getScaledParameterNameWidth(rowBounds.getWidth());
-            const auto rightWidth = juce::jmax(0, rowBounds.getWidth() - leftWidth - parameterGap);
-            auto titleBounds = rowBounds.removeFromLeft(leftWidth);
-            rowBounds.removeFromLeft(juce::jmin(parameterGap, rowBounds.getWidth()));
-
-            auto rightBounds = rowBounds.withWidth(rightWidth);
-            auto buttonBounds = rightBounds.removeFromRight(rowHeight);
-
-            if (! rightBounds.isEmpty())
-                rightBounds.removeFromRight(juce::jmin(parameterGap, rightBounds.getWidth()));
+            auto bounds = getLocalBounds();
+            const auto labelZoneWidth = getScaledParameterNameWidth(bounds.getWidth());
+            const auto modeButtonWidth = juce::jmin(rowHeight, labelZoneWidth);
+            const auto titleWidth = juce::jmax(0, labelZoneWidth - modeButtonWidth - parameterGap);
+            const auto modeButtonX = bounds.getX() + titleWidth + parameterGap;
 
             if (control != nullptr)
             {
-                control->setTitleWidthOverride(titleBounds.getWidth());
-                control->setBounds(titleBounds.withRight(rightBounds.getRight()));
+                control->setTitleWidthOverride(titleWidth);
+                control->setValueLeadingInset(modeButtonWidth + parameterGap);
+                control->setBounds(bounds);
             }
 
             if (modeButton != nullptr)
-                modeButton->setBounds(buttonBounds);
+                modeButton->setBounds(modeButtonX, bounds.getY(), modeButtonWidth, bounds.getHeight());
         }
 
         bool isHostSyncMode() const noexcept
@@ -716,8 +813,8 @@ private:
             if (hostSync)
             {
                 control->setOverrideText(getSyncChoiceText());
-                control->setInteractionEnabled(false);
                 control->setValueClickAction([this] { showSyncPrompt(); });
+                control->setInteractionEnabled(true);
             }
             else
             {
@@ -759,6 +856,15 @@ private:
             if (spec.kind == ControlKind::toggle)
             {
                 auto row = std::make_unique<ToggleRow>(*this, owner, getBandParameterId(spec), spec);
+                row->controlsInRow = spec.controlsInRow;
+                addAndMakeVisible(*row);
+                rows.push_back(std::move(row));
+                continue;
+            }
+
+            if (spec.kind == ControlKind::choice)
+            {
+                auto row = std::make_unique<ChoiceRow>(owner, getBandParameterId(spec), spec);
                 row->controlsInRow = spec.controlsInRow;
                 addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
@@ -809,12 +915,32 @@ private:
                                                && juce::String(spec.auxiliaryToggleSuffix).isNotEmpty()
                 ? owner.config.makeBandParameterId(bandIndex, spec.auxiliaryToggleSuffix)
                 : juce::String {};
+            const auto sourceBand = spec.sourceBandIndex >= 0
+                ? static_cast<size_t>(juce::jlimit(0, static_cast<int>(numBands - 1), spec.sourceBandIndex))
+                : bandIndex;
+            const auto enabledWhenId = spec.enabledWhenSuffix != nullptr
+                                            && juce::String(spec.enabledWhenSuffix).isNotEmpty()
+                ? owner.config.makeBandParameterId(sourceBand, spec.enabledWhenSuffix)
+                : juce::String {};
             auto row = std::make_unique<ParameterRow>(*this,
                                                       owner,
                                                       getBandParameterId(spec),
                                                       auxiliaryToggleId,
+                                                      enabledWhenId,
                                                       spec);
             row->controlsInRow = spec.controlsInRow;
+
+            if (auxiliaryToggleId.isNotEmpty() && spec.auxiliaryToggleInverted)
+            {
+                listenedParameterIds.push_back(auxiliaryToggleId);
+                owner.valueTreeState.addParameterListener(auxiliaryToggleId, this);
+            }
+
+            if (enabledWhenId.isNotEmpty())
+            {
+                listenedParameterIds.push_back(enabledWhenId);
+                owner.valueTreeState.addParameterListener(enabledWhenId, this);
+            }
 
             if (row->orderParameterId.isNotEmpty())
             {
@@ -921,7 +1047,7 @@ private:
     {
         const auto enabled = ! owner.autoSoloEnabled && owner.getActiveBandCount() > 1;
         soloButton.setEnabled(enabled);
-        soloButton.setAlpha(enabled ? 1.0f : 0.45f);
+        soloButton.setAlpha(1.0f);
         soloButton.setToggleState(enabled && owner.manualSoloMask[bandIndex], juce::dontSendNotification);
     }
 
@@ -953,12 +1079,15 @@ private:
     size_t bandIndex = 0;
     BoxTextButton soloButton;
     std::vector<std::unique_ptr<RowBase>> rows;
+    size_t tailRowStart = 0;
     std::vector<juce::String> listenedParameterIds;
 };
 
 class MultibandModuleComponent::FullbandPageComponent final : public juce::Component
 {
 public:
+    using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
+
     explicit FullbandPageComponent(MultibandModuleComponent& ownerIn)
         : owner(ownerIn)
     {
@@ -988,15 +1117,15 @@ public:
         };
         addAndMakeVisible(*autoSoloButton);
 
-        soloModeButton = makeTextButton("EXCLUSIVE");
-        soloModeButton->setClickingTogglesState(true);
-        soloModeButton->setToggleState(owner.manualSoloInclusive, juce::dontSendNotification);
-        soloModeButton->onClick = [this]
+        soloModeControl = std::make_unique<LocalChoiceControl>("SOLO-MODE",
+                                                                juce::StringArray { "EXCLUSIVE", "INCLUSIVE" },
+                                                                0);
+        soloModeControl->onValueChanged = [this]
         {
-            owner.setManualSoloInclusive(soloModeButton->getToggleState());
+            owner.setManualSoloInclusive(soloModeControl->getSelectedChoiceIndex() == 1);
             owner.clearFocus();
         };
-        addAndMakeVisible(*soloModeButton);
+        addAndMakeVisible(*soloModeControl);
 
         addCrossoverButton = makeTextButton("XOV-ADD");
         addCrossoverButton->onClick = [this]
@@ -1029,6 +1158,49 @@ public:
             crossoverControls[index] = std::move(control);
         }
 
+        widebandListenHeading = makeTextButton("LISTEN", uiAccent);
+        widebandListenHeading->setClickingTogglesState(false);
+        widebandListenHeading->setBorderVisible(true);
+        widebandListenHeading->setFillVisible(false);
+        widebandListenHeading->setDividerLineVisible(false);
+        widebandListenHeading->setPressFillEnabled(false);
+        widebandListenHeading->setTextJustification(juce::Justification::centredLeft);
+        widebandListenHeading->setInterceptsMouseClicks(false, false);
+        addAndMakeVisible(*widebandListenHeading);
+
+        for (size_t index = 0; index < widebandListenButtons.size(); ++index)
+        {
+            auto button = makeTextButton(widebandListenLabels[index]);
+            button->setClickingTogglesState(true);
+            const auto parameterId = owner.config.makeFullbandParameterId(widebandListenSuffixes[index]);
+            widebandListenAttachments[index] = std::make_unique<ButtonAttachment>(owner.valueTreeState,
+                                                                                   parameterId,
+                                                                                   *button);
+            button->onClick = [this, index]
+            {
+                if (widebandListenButtons[index] != nullptr && widebandListenButtons[index]->getToggleState())
+                {
+                    for (size_t otherIndex = 0; otherIndex < widebandListenButtons.size(); ++otherIndex)
+                    {
+                        if (otherIndex != index)
+                            owner.setParameterPlainValue(owner.config.makeFullbandParameterId(widebandListenSuffixes[otherIndex]),
+                                                         0.0f);
+                    }
+                }
+
+                owner.clearFocus();
+            };
+            addAndMakeVisible(*button);
+            widebandListenButtons[index] = std::move(button);
+        }
+
+        widebandListenInactive = makeTextButton("MM");
+        widebandListenInactive->setEnabled(false);
+        widebandListenInactive->setClickingTogglesState(false);
+        widebandListenInactive->setPressFillEnabled(false);
+        widebandListenInactive->setInterceptsMouseClicks(false, false);
+        addAndMakeVisible(*widebandListenInactive);
+
         refreshExternalState();
     }
 
@@ -1048,6 +1220,7 @@ public:
             height += verticalGap + rowHeight;
 
         height += verticalGap + rowHeight;
+        height += verticalGap * 2 + rowHeight * 3;
 
         return height + moduleContentBottomGap;
     }
@@ -1061,13 +1234,13 @@ public:
         if (addCrossoverButton != nullptr)
         {
             addCrossoverButton->setEnabled(canAdd);
-            addCrossoverButton->setAlpha(canAdd ? 1.0f : 0.45f);
+            addCrossoverButton->setAlpha(1.0f);
         }
 
         if (removeCrossoverButton != nullptr)
         {
             removeCrossoverButton->setEnabled(canRemove);
-            removeCrossoverButton->setAlpha(canRemove ? 1.0f : 0.45f);
+            removeCrossoverButton->setAlpha(1.0f);
         }
 
         refreshAutoSoloButtonState();
@@ -1078,8 +1251,8 @@ public:
             if (auto* control = crossoverControls[index].get())
             {
                 const auto enabled = index < activeSplitCount;
-                control->setEnabled(enabled);
-                control->setAlpha(enabled ? 1.0f : 0.45f);
+                control->setEnabled(true);
+                control->setAlpha(1.0f);
                 control->setInteractionEnabled(enabled);
 
                 if (enabled)
@@ -1105,7 +1278,7 @@ public:
                 bounds.removeFromTop(verticalGap);
         };
 
-        auto placeControl = [&bounds] (ParameterControl* control)
+        auto placeControl = [&bounds] (auto* control)
         {
             if (control == nullptr)
                 return;
@@ -1128,7 +1301,36 @@ public:
         else if (autoSoloButton != nullptr)
             autoSoloButton->setBounds({});
 
-        placeButton(soloModeButton.get());
+        placeControl(soloModeControl.get());
+
+        placeButton(widebandListenHeading.get());
+
+        const auto placeListenRow = [&bounds, this] (const size_t startIndex)
+        {
+            auto rowBounds = bounds.removeFromTop(rowHeight);
+            const auto columnWidth = (rowBounds.getWidth() - parameterGap * 3) / 4;
+
+            for (size_t column = 0; column < 4; ++column)
+            {
+                const auto isLast = column == 3;
+                auto cellBounds = rowBounds.removeFromLeft(isLast ? rowBounds.getWidth() : columnWidth);
+                const auto buttonIndex = startIndex + column;
+
+                if (buttonIndex < widebandListenButtons.size())
+                    widebandListenButtons[buttonIndex]->setBounds(cellBounds);
+                else if (widebandListenInactive != nullptr)
+                    widebandListenInactive->setBounds(cellBounds);
+
+                if (! isLast)
+                    rowBounds.removeFromLeft(juce::jmin(parameterGap, rowBounds.getWidth()));
+            }
+
+            if (! bounds.isEmpty())
+                bounds.removeFromTop(verticalGap);
+        };
+
+        placeListenRow(0);
+        placeListenRow(4);
 
         refreshExternalState();
     }
@@ -1154,27 +1356,30 @@ private:
 
         const auto available = owner.config.showAutoSolo && isAutoSoloAvailable();
         autoSoloButton->setEnabled(available);
-        autoSoloButton->setAlpha(available ? 1.0f : 0.45f);
+        autoSoloButton->setAlpha(1.0f);
     }
 
     void refreshSoloModeButtonState()
     {
-        if (soloModeButton == nullptr)
+        if (soloModeControl == nullptr)
             return;
 
-        soloModeButton->setButtonText(owner.manualSoloInclusive ? "INCLUSIVE" : "EXCLUSIVE");
-        soloModeButton->setToggleState(owner.manualSoloInclusive, juce::dontSendNotification);
+        soloModeControl->setSelectedChoiceIndex(owner.manualSoloInclusive ? 1 : 0, false);
         const auto available = ! owner.autoSoloEnabled && owner.getActiveSplitCount() > 0;
-        soloModeButton->setEnabled(available);
-        soloModeButton->setAlpha(available ? 1.0f : 0.45f);
+        soloModeControl->setEnabled(available);
+        soloModeControl->setAlpha(1.0f);
     }
 
     MultibandModuleComponent& owner;
     std::unique_ptr<BoxTextButton> autoSoloButton;
-    std::unique_ptr<BoxTextButton> soloModeButton;
+    std::unique_ptr<LocalChoiceControl> soloModeControl;
     std::unique_ptr<BoxTextButton> addCrossoverButton;
     std::unique_ptr<BoxTextButton> removeCrossoverButton;
     std::array<std::unique_ptr<ParameterControl>, numCrossoverSlots> crossoverControls;
+    std::unique_ptr<BoxTextButton> widebandListenHeading;
+    std::array<std::unique_ptr<BoxTextButton>, widebandListenSuffixes.size()> widebandListenButtons;
+    std::array<std::unique_ptr<ButtonAttachment>, widebandListenSuffixes.size()> widebandListenAttachments;
+    std::unique_ptr<BoxTextButton> widebandListenInactive;
 };
 
 MultibandModuleComponent::MultibandModuleComponent(Config configIn)
@@ -1224,11 +1429,11 @@ MultibandModuleComponent::MultibandModuleComponent(Config configIn)
     }
 
     if (! uiStateLoaded)
-        allBandsActive = activeSoloCount != 1;
+        allBandsActive = false;
 
     visibleBandIndex = juce::jmin(visibleBandIndex, getActiveBandCount() - 1);
 
-    auto allButton = makeTextButton("A");
+    auto allButton = makeTextButton("=");
     allButton->setClickingTogglesState(false);
     allButton->onClick = [this] { setAllBandsMonitoring(); };
     addAndMakeVisible(*allButton);
@@ -1257,7 +1462,7 @@ void MultibandModuleComponent::loadUiState()
     auto& state = valueTreeState.state;
     autoSoloEnabled = getBool(state, config.moduleKey, "autoSoloEnabled", false);
     manualSoloInclusive = getBool(state, config.moduleKey, "manualSoloInclusive", false);
-    allBandsActive = getBool(state, config.moduleKey, "allBandsActive", true);
+    allBandsActive = getBool(state, config.moduleKey, "allBandsActive", false);
     visibleBandIndex = static_cast<size_t>(juce::jlimit(0,
                                                        static_cast<int>(numBands - 1),
                                                        getInt(state, config.moduleKey, "visibleBandIndex", 0)));
@@ -1316,7 +1521,7 @@ juce::String MultibandModuleComponent::getUiStateSignature() const
     values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "hasUiState"), false).toString());
     values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "autoSoloEnabled"), false).toString());
     values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "manualSoloInclusive"), false).toString());
-    values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "allBandsActive"), true).toString());
+    values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "allBandsActive"), false).toString());
     values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "visibleBandIndex"), 0).toString());
     values.add(state.getProperty(makeStatePropertyId(config.moduleKey, "pageScrollY"), 0).toString());
 
@@ -1573,7 +1778,7 @@ void MultibandModuleComponent::updateMonitorButtons()
             const auto isActiveBand = bandIndex < activeBandCount;
             button->setVisible(true);
             button->setEnabled(isActiveBand);
-            button->setAlpha(isActiveBand ? 1.0f : 0.45f);
+            button->setAlpha(1.0f);
             button->setToggleState(! allBandsActive && bandIndex == visibleBandIndex, juce::dontSendNotification);
         }
 

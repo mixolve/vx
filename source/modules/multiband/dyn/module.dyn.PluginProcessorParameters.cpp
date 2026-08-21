@@ -64,9 +64,12 @@ dyn::dsp::DspCore::Parameters DynAudioProcessor::readBandParameters(const size_t
 
     dyn::dsp::DspCore::Parameters parameters;
     parameters.morph = loadFloat(ParameterSlot::morph);
-    parameters.peakHoldFrequency = loadFloat(ParameterSlot::peakHoldFrequency);
+    parameters.peakHoldMs = loadFloat(ParameterSlot::peakHoldMs);
+    parameters.lookaheadMs = loadFloat(ParameterSlot::lookahead);
     parameters.tensionFloor = loadFloat(ParameterSlot::tensionFloor);
     parameters.tensionHysteresis = loadFloat(ParameterSlot::tensionHysteresis);
+    parameters.releaseForm = juce::roundToInt(loadFloat(ParameterSlot::releaseForm));
+    parameters.releaseCurve = loadFloat(ParameterSlot::releaseCurve);
     parameters.thLU = loadFloat(ParameterSlot::thLU);
     parameters.tensLU = loadFloat(ParameterSlot::tensLU);
     parameters.relLU = loadFloat(ParameterSlot::relLU);

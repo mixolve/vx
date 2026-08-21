@@ -14,7 +14,7 @@ inline constexpr auto maximumLowCutFrequency = 20000.0f;
 inline constexpr auto minimumDesignFilterFrequency = 2.0;
 inline constexpr auto highFrequencyExtensionStart = 20000.0;
 inline constexpr auto lowFrequencyExtensionEnd = 25.0;
-inline constexpr auto defaultTiltFrequency = 632.0f;
+inline constexpr auto defaultFilterFrequencyHz = 632.46f;
 inline constexpr auto nyquistSafetyFactor = 0.98;
 inline constexpr auto flatTiltStageCount = 16;
 inline const juce::StringArray filterTypeChoices { "LCT", "LSH", "BEL", "FTL", "HSH", "HCT", "VOL" };
@@ -23,10 +23,10 @@ inline const juce::StringArray filterPlaceChoices { "LR", "LL", "RR", "MM", "SS"
 inline constexpr auto filterPresetsRootTag = "FILTER_PRESETS";
 inline constexpr auto presetTag = "PRESET";
 inline constexpr auto presetStorageVendorFolder = "mixolve";
-inline constexpr auto presetStorageProductFolder = "vx";
+inline constexpr auto presetStorageProductFolder = "ava";
 inline constexpr auto eqlPresetStorageModuleFolder = "eql";
 inline constexpr auto presetStorageRootFolder = "presets";
-inline constexpr auto eqlAppGroupIdentifier = "group.com.mixolve.vx";
+inline constexpr auto eqlAppGroupIdentifier = "group.com.mixolve.ava";
 
 struct ShelfSlopeBlend
 {
@@ -35,7 +35,7 @@ struct ShelfSlopeBlend
     double blend = 0.0;
 };
 
-float defaultFilterFrequencyForType(EqlModuleProcessor::FilterType type);
+float defaultFilterFrequency();
 float defaultFilterBandwidth();
 float defaultFilterSlope();
 

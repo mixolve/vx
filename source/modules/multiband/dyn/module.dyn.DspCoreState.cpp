@@ -8,7 +8,6 @@ namespace dyn::dsp
 namespace
 {
 constexpr double maxLookaheadMs = 24.0;
-constexpr double kneeRangeDb = 24.0;
 } // namespace
 
 void DspCore::resizeLookaheadBuffers()
@@ -16,10 +15,7 @@ void DspCore::resizeLookaheadBuffers()
     maxBuf = std::max(1, static_cast<int>(std::ceil(currentSampleRate * maxLookaheadMs * 0.001)) + 2);
 
     for (size_t branchIndex = 0; branchIndex < branchCount; ++branchIndex)
-    {
         dmBase[branchIndex].assign(static_cast<size_t>(maxBuf), 0.0);
-        dmGain[branchIndex].assign(static_cast<size_t>(maxBuf), 1.0);
-    }
 
     dryL.assign(static_cast<size_t>(maxBuf), 0.0);
     dryR.assign(static_cast<size_t>(maxBuf), 0.0);
@@ -28,20 +24,20 @@ void DspCore::resizeLookaheadBuffers()
 void DspCore::clearState()
 {
     for (size_t branchIndex = 0; branchIndex < branchCount; ++branchIndex)
-    {
         std::fill(dmBase[branchIndex].begin(), dmBase[branchIndex].end(), 0.0);
-        std::fill(dmGain[branchIndex].begin(), dmGain[branchIndex].end(), 1.0);
-    }
 
     std::fill(dryL.begin(), dryL.end(), 0.0);
     std::fill(dryR.begin(), dryR.end(), 0.0);
 
-    holdPeak = { 0, 0, 0, 0 };
-    holdBase = { 0, 0, 0, 0 };
-    envPeak = { 0.0, 0.0, 0.0, 0.0 };
     envBase = { 0.0, 0.0, 0.0, 0.0 };
     baseGainState = { 1.0, 1.0, 1.0, 1.0 };
-    gainReductionState = { 1.0, 1.0, 1.0, 1.0 };
+    cleanEnvPeak = { 0.0, 0.0 };
+    cleanGainState = { 1.0, 1.0 };
+    cleanHalfPeak = { 0.0, 0.0 };
+    cleanInputPositive = { true, true };
+    cleanHoldSamples = { 0, 0 };
+    baseReleaseStates = {};
+    cleanReleaseStates = {};
     bufPos = 0;
     bufPosDry = 0;
 }
@@ -64,10 +60,15 @@ void DspCore::updateDerivedParameters()
     const auto relLdMs = roundToParameterStep(parameters.relLD);
     const auto relRuMs = roundToParameterStep(parameters.relRU);
     const auto relRdMs = roundToParameterStep(parameters.relRD);
-    derived.releaseCoeffs[branchLu] = relLuMs <= 0.0 ? 0.0 : std::exp(-1.0 / std::max(1.0, relLuMs * 0.001 * sampleRate));
-    derived.releaseCoeffs[branchLd] = relLdMs <= 0.0 ? 0.0 : std::exp(-1.0 / std::max(1.0, relLdMs * 0.001 * sampleRate));
-    derived.releaseCoeffs[branchRu] = relRuMs <= 0.0 ? 0.0 : std::exp(-1.0 / std::max(1.0, relRuMs * 0.001 * sampleRate));
-    derived.releaseCoeffs[branchRd] = relRdMs <= 0.0 ? 0.0 : std::exp(-1.0 / std::max(1.0, relRdMs * 0.001 * sampleRate));
+    const auto toReleaseSamples = [sampleRate] (const double milliseconds)
+    {
+        return milliseconds <= 0.0 ? 0 : static_cast<int>(std::round(milliseconds * 0.001 * sampleRate));
+    };
+    derived.releaseSamples[branchLu] = toReleaseSamples(relLuMs);
+    derived.releaseSamples[branchLd] = toReleaseSamples(relLdMs);
+    derived.releaseSamples[branchRu] = toReleaseSamples(relRuMs);
+    derived.releaseSamples[branchRd] = toReleaseSamples(relRdMs);
+    derived.peakHoldSamples = toReleaseSamples(roundToParameterStep(parameters.peakHoldMs));
 
     derived.branchOutGains[branchLu] = dbToAmp(roundToParameterStep(parameters.outLU));
     derived.branchOutGains[branchLd] = dbToAmp(roundToParameterStep(parameters.outLD));
@@ -75,21 +76,21 @@ void DspCore::updateDerivedParameters()
     derived.branchOutGains[branchRd] = dbToAmp(roundToParameterStep(parameters.outRD));
 
     derived.morph = roundToParameterStep(parameters.morph) * 0.01;
-    derived.clipKneeDb = kneeRangeDb * derived.morph;
+    derived.clipKneeDb = 0.0;
 
-    auto holdHz = roundToParameterStep(parameters.peakHoldFrequency);
-    holdHz = std::max(21.0, holdHz);
+    const auto lookaheadSamples = static_cast<int>(std::round(
+        std::max(0.0, roundToParameterStep(parameters.lookaheadMs)) * 0.001 * sampleRate));
 
     derived.tensionFloor = dbToAmp(roundToParameterStep(parameters.tensionFloor));
     derived.tensionHysteresis = roundToParameterStep(parameters.tensionHysteresis) * 0.01;
+    derived.releaseLogarithmic = parameters.releaseForm == 1;
+    derived.releaseCurve = derived.releaseLogarithmic ? roundToParameterStep(parameters.releaseCurve) * 0.01 : 0.0;
     derived.delta = parameters.delta;
 
-    const auto holdTotalMs = 500.0 / holdHz;
-    auto holdSamples = static_cast<int>(std::floor(holdTotalMs * 0.001 * sampleRate));
-    holdSamples = std::max(0, holdSamples - 5);
-
-    derived.holdSamples = holdSamples;
-    derived.lookaheadSamples = juce::jlimit(0, std::max(0, maxBuf - 2), holdSamples);
+    derived.lookaheadSamples = juce::jlimit(
+        0,
+        std::max(0, maxBuf - 2),
+        lookaheadSamples);
     derived.bufferSize = derived.lookaheadSamples + 1;
     derived.dryBufferSize = derived.lookaheadSamples + 1;
     derived.latencySamples = derived.lookaheadSamples;

@@ -2,7 +2,7 @@
 #include "shell.UiConstants.h"
 #include "shell.EditorPresetSections.h"
 
-void VxAudioProcessorEditor::layoutNoModuleState(juce::Rectangle<int>& bounds)
+void AvaAudioProcessorEditor::layoutNoModuleState(juce::Rectangle<int>& bounds)
 {
     if (moduleAddButton == nullptr || ! moduleAddButton->isVisible())
         return;
@@ -16,7 +16,7 @@ void VxAudioProcessorEditor::layoutNoModuleState(juce::Rectangle<int>& bounds)
     moduleAddButton->setBounds(buttonBounds);
 }
 
-void VxAudioProcessorEditor::layoutModuleEditorContent(juce::Rectangle<int>& bounds)
+void AvaAudioProcessorEditor::layoutModuleEditorContent(juce::Rectangle<int>& bounds)
 {
     auto contentBounds = bounds;
     contentBounds.removeFromBottom(viewportToPotentiometerGap);

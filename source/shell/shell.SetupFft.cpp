@@ -2,13 +2,12 @@
 #include "shell.SetupSupport.h"
 #include "../modules/fft/module.fft.FftProcessor.h"
 
-#include <array>
 #include <cmath>
 
-void VxAudioProcessorEditor::rebindFftModeControls(FftModuleProcessor& fftProcessor)
+void AvaAudioProcessorEditor::rebindFftModeControls(FftModuleProcessor& fftProcessor)
 {
     auto& state = fftProcessor.getValueTreeState();
-    const auto phaseMode = fftProcessor.getDisplaySettings().phaseMode;
+    const auto phaseMode = fftProcessor.isPhaseCorrMode();
     const auto rebindIfNeeded = [&state] (ParameterControl* control, const char* parameterId)
     {
         if (control != nullptr && ! control->isBoundTo(parameterId))
@@ -42,66 +41,29 @@ void VxAudioProcessorEditor::rebindFftModeControls(FftModuleProcessor& fftProces
                    FftModuleProcessor::paramDualMonoRightAdaptiveId);
 }
 
-void VxAudioProcessorEditor::refreshFftAnalyserControls(FftModuleProcessor& fftProcessor)
+void AvaAudioProcessorEditor::refreshFftAnalyserControls(FftModuleProcessor& fftProcessor)
 {
     rebindFftModeControls(fftProcessor);
     const juce::ScopedValueSetter<bool> scopedIgnore(suppressFftAnalyserControlChangeHandlers, true);
-    static constexpr std::array<const char*, 5> fftSizeLabels { "1024", "2048", "4096", "8192", "16384" };
-    static constexpr std::array<const char*, 5> overlapLabels { "2", "4", "8", "16", "32" };
-    const auto phaseMode = fftProcessor.getDisplaySettings().phaseMode;
-
-    if (fftAnalyserFftSizeControl != nullptr)
-    {
-        const auto fftIndex = juce::jlimit(0,
-                                           static_cast<int>(fftSizeLabels.size()) - 1,
-                                           juce::roundToInt(fftProcessor.getAnalyserParameterValue(FftModuleProcessor::paramFftSizeId)));
-        fftAnalyserFftSizeControl->setSelectedChoiceIndex(fftIndex, false);
-    }
-
-    if (fftAnalyserOverlapControl != nullptr)
-    {
-        const auto overlapIndex = juce::jlimit(0,
-                                               static_cast<int>(overlapLabels.size()) - 1,
-                                               juce::roundToInt(fftProcessor.getAnalyserParameterValue(FftModuleProcessor::paramOverlapId)));
-        fftAnalyserOverlapControl->setSelectedChoiceIndex(overlapIndex, false);
-    }
-
-    if (fftAnalyserLeftControl != nullptr)
-        fftAnalyserLeftControl->setValue(fftProcessor.getAnalyserParameterValue(FftModuleProcessor::paramLeftId), false);
-
-    if (fftAnalyserRightControl != nullptr)
-        fftAnalyserRightControl->setValue(fftProcessor.getAnalyserParameterValue(FftModuleProcessor::paramRightId), false);
-
-    if (fftAnalyserRangeLowControl != nullptr)
-    {
-        fftAnalyserRangeLowControl->setValueRange(phaseMode ? -1.0 : -120.0,
-                                                   phaseMode ? 1.0 : -24.0,
-                                                   phaseMode ? 0.01 : 0.1);
-        fftAnalyserRangeLowControl->setValue(fftProcessor.getAnalyserParameterValue(FftModuleProcessor::paramRangeLowId), false);
-    }
-
-    if (fftAnalyserRangeHighControl != nullptr)
-    {
-        fftAnalyserRangeHighControl->setValueRange(phaseMode ? -1.0 : -48.0,
-                                                    phaseMode ? 1.0 : 20.0,
-                                                    phaseMode ? 0.01 : 0.1);
-        fftAnalyserRangeHighControl->setValue(fftProcessor.getAnalyserParameterValue(FftModuleProcessor::paramRangeHighId), false);
-    }
-
-    if (fftAnalyserSlopeControl != nullptr)
-    {
-        fftAnalyserSlopeControl->setVisible(! phaseMode);
-        fftAnalyserSlopeControl->setTitleText("SLOPE");
-        fftAnalyserSlopeControl->setInteractionEnabled(true);
-        fftAnalyserSlopeControl->clearOverrideText();
-        fftAnalyserSlopeControl->setValue(fftProcessor.getAnalyserParameterValue(FftModuleProcessor::paramSlopeId), false);
-    }
 
     if (fftAnalyserTimeControl != nullptr)
         fftAnalyserTimeControl->setValue(fftProcessor.getAnalyserParameterValue(FftModuleProcessor::paramTimeId), false);
+
+    if (fftAnalyserRangeControl != nullptr)
+    {
+        const auto phaseMode = fftProcessor.isPhaseCorrMode();
+        const auto parameterId = phaseMode ? FftModuleProcessor::paramPhaseReductionRangeId
+                                           : FftModuleProcessor::paramSpectralReductionRangeId;
+        fftAnalyserRangeControl->setValueRange(phaseMode ? 0.0 : -99.0,
+                                               phaseMode ? 100.0 : 0.0,
+                                               0.01,
+                                               phaseMode);
+        fftAnalyserRangeControl->setDefaultValue(phaseMode ? 50.0 : -36.0);
+        fftAnalyserRangeControl->setValue(fftProcessor.getAnalyserParameterValue(parameterId), false);
+    }
 }
 
-void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState& fftState,
+void AvaAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState& fftState,
                                               FftModuleProcessor& fftProcessor)
 {
         const auto refreshFftAnalyserState = [this, &fftProcessor]
@@ -136,9 +98,9 @@ void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState
         {
             header.setButtonText(text);
             header.setClickingTogglesState(false);
-            header.setBorderVisible(false);
+            header.setBorderVisible(true);
             header.setFillVisible(false);
-            header.setDividerLineVisible(true);
+            header.setDividerLineVisible(false);
             header.setPressFillEnabled(false);
             header.setTextJustification(juce::Justification::centredLeft);
             header.setInterceptsMouseClicks(false, false);
@@ -153,32 +115,25 @@ void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState
                                                                "WIN-SIZE");
         filterContent.addAndMakeVisible(*fftDspFftSizeControl);
 
-        fftDspHopDivisorControl = std::make_unique<ChoiceControl>(fftState,
-                                                                  FftModuleProcessor::paramDspHopDivisorId,
-                                                                  "HOP-DIV");
-        filterContent.addAndMakeVisible(*fftDspHopDivisorControl);
+        fftDspOverlapControl = std::make_unique<ChoiceControl>(fftState,
+                                                               FftModuleProcessor::paramDspOverlapId,
+                                                               "OVERLAP");
+        filterContent.addAndMakeVisible(*fftDspOverlapControl);
 
         fftDynamicProcessorHeader = std::make_unique<BoxTextButton>(uiAccent);
         configureSectionHeader(*fftDynamicProcessorHeader, "DYNAMIC PROCESSOR");
         filterContent.addAndMakeVisible(*fftDynamicProcessorHeader);
 
-        fftDynamicModeButton = std::make_unique<BoxTextButton>(uiGrey500);
-        fftDynamicModeButton->setButtonText("SPECTRAL");
-        fftDynamicModeButton->setTextJustification(juce::Justification::centred);
-        fftDynamicModeButton->setClickingTogglesState(true);
-        fftDynamicModeAttachment = std::make_unique<ButtonAttachment>(fftState,
-                                                                      FftModuleProcessor::paramDynamicModeId,
-                                                                      *fftDynamicModeButton);
-        assignFftButtonHostSlot(*fftDynamicModeButton,
-                                FftModuleProcessor::paramDynamicModeId,
-                                "MODE");
-        fftDynamicModeButton->onClick = [this]
+        fftDynamicModeControl = std::make_unique<ChoiceControl>(fftState,
+                                                                 FftModuleProcessor::paramDynamicModeId,
+                                                                 "MODE");
+        fftDynamicModeControl->onValueChanged = [this]
         {
             updateSectionStates();
             resized();
             clearKeyboardFocus(*this);
 
-            juce::Component::SafePointer<VxAudioProcessorEditor> safeEditor(this);
+            juce::Component::SafePointer<AvaAudioProcessorEditor> safeEditor(this);
             juce::MessageManager::callAsync([safeEditor]
             {
                 if (safeEditor == nullptr)
@@ -192,18 +147,18 @@ void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState
                 }
             });
         };
-        filterContent.addAndMakeVisible(*fftDynamicModeButton);
+        filterContent.addAndMakeVisible(*fftDynamicModeControl);
 
         fftAttackControl = std::make_unique<ParameterControl>(fftState,
                                                               FftModuleProcessor::paramAttackId,
                                                               "ATTACK",
-                                                              0);
+                                                              2);
         filterContent.addAndMakeVisible(*fftAttackControl);
 
         fftReleaseControl = std::make_unique<ParameterControl>(fftState,
                                                                FftModuleProcessor::paramReleaseId,
                                                                "RELEASE",
-                                                               0);
+                                                               2);
         filterContent.addAndMakeVisible(*fftReleaseControl);
 
         fftKneeControl = std::make_unique<ParameterControl>(fftState,
@@ -275,7 +230,7 @@ void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState
         {
             clearKeyboardFocus(*this);
         };
-        filterContent.addAndMakeVisible(*fftDeltaButton);
+        addAndMakeVisible(*fftDeltaButton);
 
         fftDualMonoLeftThresholdControl = std::make_unique<ParameterControl>(fftState,
                                                                              FftModuleProcessor::paramDualMonoLeftThresholdId,
@@ -286,7 +241,7 @@ void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState
         fftDualMonoLeftAdaptiveControl = std::make_unique<ParameterControl>(fftState,
                                                                             FftModuleProcessor::paramDualMonoLeftAdaptiveId,
                                                                             "L.ADAP",
-                                                                            0);
+                                                                            2);
         filterContent.addAndMakeVisible(*fftDualMonoLeftAdaptiveControl);
 
         fftDualMonoRightThresholdControl = std::make_unique<ParameterControl>(fftState,
@@ -298,7 +253,7 @@ void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState
         fftDualMonoRightAdaptiveControl = std::make_unique<ParameterControl>(fftState,
                                                                              FftModuleProcessor::paramDualMonoRightAdaptiveId,
                                                                              "R.ADAP",
-                                                                             0);
+                                                                             2);
         filterContent.addAndMakeVisible(*fftDualMonoRightAdaptiveControl);
 
         fftDualMonoLinkButton = std::make_unique<BoxTextButton>(uiAccent);
@@ -315,19 +270,9 @@ void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState
         };
         filterContent.addAndMakeVisible(*fftDualMonoLinkButton);
 
-        fftAdaptiveSettingsButton = std::make_unique<BoxTextButton>(uiAccent);
-        fftAdaptiveSettingsButton->setButtonText("ADAP SETTINGS");
-        fftAdaptiveSettingsButton->setTextJustification(juce::Justification::centred);
-        fftAdaptiveSettingsButton->setClickingTogglesState(true);
-        fftAdaptiveSettingsButton->onClick = [this]
-        {
-            fftAdaptiveSettingsExpanded = fftAdaptiveSettingsButton->getToggleState();
-            updateSectionStates();
-            resized();
-            storeEditorStateToValueTree();
-            clearKeyboardFocus(*this);
-        };
-        filterContent.addAndMakeVisible(*fftAdaptiveSettingsButton);
+        fftAdaptiveSettingsHeader = std::make_unique<BoxTextButton>(uiAccent);
+        configureSectionHeader(*fftAdaptiveSettingsHeader, "ADAP SETTINGS");
+        filterContent.addAndMakeVisible(*fftAdaptiveSettingsHeader);
 
         fftAdaptiveOffsetControl = std::make_unique<ParameterControl>(fftState,
                                                                        FftModuleProcessor::paramSpectralAdaptiveOffsetId,
@@ -338,19 +283,19 @@ void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState
         fftAdaptiveAttackControl = std::make_unique<ParameterControl>(fftState,
                                                                        FftModuleProcessor::paramSpectralAdaptiveAttackId,
                                                                        "ATTACK",
-                                                                       0);
+                                                                       2);
         filterContent.addAndMakeVisible(*fftAdaptiveAttackControl);
 
         fftAdaptiveHoldControl = std::make_unique<ParameterControl>(fftState,
                                                                      FftModuleProcessor::paramSpectralAdaptiveHoldId,
                                                                      "HOLD",
-                                                                     0);
+                                                                     2);
         filterContent.addAndMakeVisible(*fftAdaptiveHoldControl);
 
         fftAdaptiveReleaseControl = std::make_unique<ParameterControl>(fftState,
                                                                         FftModuleProcessor::paramSpectralAdaptiveReleaseId,
                                                                         "RELEASE",
-                                                                        0);
+                                                                        2);
         filterContent.addAndMakeVisible(*fftAdaptiveReleaseControl);
 
         fftDynamicBypassButton = std::make_unique<BoxTextButton>(uiAccent);
@@ -367,132 +312,26 @@ void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState
         {
             clearKeyboardFocus(*this);
         };
-        filterContent.addAndMakeVisible(*fftDynamicBypassButton);
+        addAndMakeVisible(*fftDynamicBypassButton);
 
-        fftAnalyserSettingsHeader = std::make_unique<BoxTextButton>(uiAccent);
-        configureSectionHeader(*fftAnalyserSettingsHeader, "ANALYZER SETTINGS");
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserSettingsHeader);
-
-        fftAnalyserFftSizeControl = std::make_unique<LocalChoiceControl>(
-            "FFT-SIZE",
-            juce::StringArray { "1024", "2048", "4096", "8192", "16384" },
-            2);
-        fftAnalyserFftSizeControl->onValueChanged = [this, &fftProcessor, refreshFftAnalyserState]
+        fftAnalyserRangeControl = std::make_unique<LocalParameterControl>("RANGE",
+                                                                           2,
+                                                                           -99.0,
+                                                                           0.0,
+                                                                           0.01,
+                                                                           -36.0);
+        fftAnalyserRangeControl->onValueChanged = [this, &fftProcessor, refreshFftAnalyserState]
         {
             if (suppressFftAnalyserControlChangeHandlers)
                 return;
 
-            fftProcessor.setAnalyserParameterValue(FftModuleProcessor::paramFftSizeId,
-                                                   static_cast<float>(fftAnalyserFftSizeControl->getSelectedChoiceIndex()));
+            fftProcessor.setAnalyserParameterValue(
+                fftProcessor.isPhaseCorrMode() ? FftModuleProcessor::paramPhaseReductionRangeId
+                                                : FftModuleProcessor::paramSpectralReductionRangeId,
+                static_cast<float>(fftAnalyserRangeControl->getValue()));
             refreshFftAnalyserState();
         };
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserFftSizeControl);
-
-        fftAnalyserOverlapControl = std::make_unique<LocalChoiceControl>(
-            "OVERLAP",
-            juce::StringArray { "2", "4", "8", "16", "32" },
-            4);
-        fftAnalyserOverlapControl->onValueChanged = [this, &fftProcessor, refreshFftAnalyserState]
-        {
-            if (suppressFftAnalyserControlChangeHandlers)
-                return;
-
-            fftProcessor.setAnalyserParameterValue(FftModuleProcessor::paramOverlapId,
-                                                   static_cast<float>(fftAnalyserOverlapControl->getSelectedChoiceIndex()));
-            refreshFftAnalyserState();
-        };
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserOverlapControl);
-
-        fftAnalyserLeftControl = std::make_unique<LocalParameterControl>("LEFT",
-                                                                         0,
-                                                                         0.0,
-                                                                         1000.0,
-                                                                         1.0,
-                                                                         21.0,
-                                                                         0.0,
-                                                                         false,
-                                                                         true);
-        fftAnalyserLeftControl->onValueChanged = [this, &fftProcessor, refreshFftAnalyserState]
-        {
-            if (suppressFftAnalyserControlChangeHandlers)
-                return;
-
-            fftProcessor.setAnalyserParameterValue(FftModuleProcessor::paramLeftId,
-                                                   static_cast<float>(fftAnalyserLeftControl->getValue()));
-            refreshFftAnalyserState();
-        };
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserLeftControl);
-
-        fftAnalyserRightControl = std::make_unique<LocalParameterControl>("RIGHT",
-                                                                          0,
-                                                                          1000.0,
-                                                                          24000.0,
-                                                                          1.0,
-                                                                          20000.0,
-                                                                          0.0,
-                                                                          false,
-                                                                          true);
-        fftAnalyserRightControl->onValueChanged = [this, &fftProcessor, refreshFftAnalyserState]
-        {
-            if (suppressFftAnalyserControlChangeHandlers)
-                return;
-
-            fftProcessor.setAnalyserParameterValue(FftModuleProcessor::paramRightId,
-                                                   static_cast<float>(fftAnalyserRightControl->getValue()));
-            refreshFftAnalyserState();
-        };
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserRightControl);
-
-        fftAnalyserRangeLowControl = std::make_unique<LocalParameterControl>("LOW",
-                                                                             2,
-                                                                             -120.0,
-                                                                             -24.0,
-                                                                             0.1,
-                                                                             -60.0);
-        fftAnalyserRangeLowControl->onValueChanged = [this, &fftProcessor, refreshFftAnalyserState]
-        {
-            if (suppressFftAnalyserControlChangeHandlers)
-                return;
-
-            fftProcessor.setAnalyserParameterValue(FftModuleProcessor::paramRangeLowId,
-                                                   static_cast<float>(fftAnalyserRangeLowControl->getValue()));
-            refreshFftAnalyserState();
-        };
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserRangeLowControl);
-
-        fftAnalyserRangeHighControl = std::make_unique<LocalParameterControl>("HIGH",
-                                                                              2,
-                                                                              -48.0,
-                                                                              20.0,
-                                                                              0.1,
-                                                                              10.0);
-        fftAnalyserRangeHighControl->onValueChanged = [this, &fftProcessor, refreshFftAnalyserState]
-        {
-            if (suppressFftAnalyserControlChangeHandlers)
-                return;
-
-            fftProcessor.setAnalyserParameterValue(FftModuleProcessor::paramRangeHighId,
-                                                   static_cast<float>(fftAnalyserRangeHighControl->getValue()));
-            refreshFftAnalyserState();
-        };
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserRangeHighControl);
-
-        fftAnalyserSlopeControl = std::make_unique<LocalParameterControl>("SLOPE",
-                                                                          2,
-                                                                          0.0,
-                                                                          6.0,
-                                                                          0.01,
-                                                                          4.5);
-        fftAnalyserSlopeControl->onValueChanged = [this, &fftProcessor, refreshFftAnalyserState]
-        {
-            if (suppressFftAnalyserControlChangeHandlers)
-                return;
-
-            fftProcessor.setAnalyserParameterValue(FftModuleProcessor::paramSlopeId,
-                                                   static_cast<float>(fftAnalyserSlopeControl->getValue()));
-            refreshFftAnalyserState();
-        };
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserSlopeControl);
+        filterContent.addAndMakeVisible(*fftAnalyserRangeControl);
 
         fftAnalyserTimeControl = std::make_unique<LocalParameterControl>("TIME",
                                                                          0,
@@ -509,7 +348,7 @@ void VxAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeState
                                                    static_cast<float>(fftAnalyserTimeControl->getValue()));
             refreshFftAnalyserState();
         };
-        fftAnalyserContent.addAndMakeVisible(*fftAnalyserTimeControl);
+        filterContent.addAndMakeVisible(*fftAnalyserTimeControl);
 
         refreshFftAnalyserControls(fftProcessor);
 

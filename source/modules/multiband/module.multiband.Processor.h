@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <vector>
 
-namespace vx::multiband
+namespace ava::multiband
 {
 namespace detail
 {
@@ -18,7 +18,7 @@ inline constexpr double epsilon = 1.0e-9;
 
 inline double roundToParameterStep(const double value)
 {
-    return std::floor((value * 10.0) + 0.5) * 0.1;
+    return std::floor((value * 100.0) + 0.5) * 0.01;
 }
 
 inline double dbToAmp(const double decibels)
@@ -245,4 +245,4 @@ private:
     int alignmentWritePosition = 0;
     int targetLatencySamples = 0;
 };
-} // namespace vx::multiband
+} // namespace ava::multiband

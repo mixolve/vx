@@ -2,5 +2,5 @@
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
-    return new VxAudioProcessor();
+    return new AvaAudioProcessor();
 }

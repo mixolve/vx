@@ -8,8 +8,8 @@ namespace
 {
 const std::array<juce::Identifier, 2> editorWindowStateProperties
 {
-    VxAudioProcessor::editorWidthStateKey,
-    VxAudioProcessor::editorHeightStateKey
+    AvaAudioProcessor::editorWidthStateKey,
+    AvaAudioProcessor::editorHeightStateKey
 };
 
 }

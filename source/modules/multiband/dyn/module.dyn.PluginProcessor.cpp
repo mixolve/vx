@@ -35,14 +35,14 @@ void DynAudioProcessor::reset()
 
 bool DynAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    return vx::multiband::detail::supportsMatchingMonoOrStereoLayout(layouts);
+    return ava::multiband::detail::supportsMatchingMonoOrStereoLayout(layouts);
 }
 
 void DynAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    vx::multiband::detail::clearOutputOnlyChannels(*this, buffer);
+    ava::multiband::detail::clearOutputOnlyChannels(*this, buffer);
 
     syncParameters();
 
@@ -227,9 +227,21 @@ void DynAudioProcessor::setStateInformation(const void* data, const int sizeInBy
                 };
 
                 syncGlobalFromBand0(ParameterSlot::morph);
-                syncGlobalFromBand0(ParameterSlot::peakHoldFrequency);
+                syncGlobalFromBand0(ParameterSlot::peakHoldMs);
+                syncGlobalFromBand0(ParameterSlot::lookahead);
                 syncGlobalFromBand0(ParameterSlot::tensionFloor);
                 syncGlobalFromBand0(ParameterSlot::tensionHysteresis);
+                syncGlobalFromBand0(ParameterSlot::releaseForm);
+
+                if (readBandSlotValue(0, ParameterSlot::releaseForm) < 0.5f)
+                {
+                    for (size_t targetBand = 0; targetBand < numBands; ++targetBand)
+                        setBandSlotValue(targetBand, ParameterSlot::releaseCurve, 0.0f);
+                }
+                else
+                {
+                    syncGlobalFromBand0(ParameterSlot::releaseCurve);
+                }
             }
 
             markParametersDirty();
@@ -482,9 +494,12 @@ void DynAudioProcessor::parameterChanged(const juce::String& parameterID, float)
         const auto isGlobalMainSlot = [] (const ParameterSlot slotToCheck)
         {
             return slotToCheck == ParameterSlot::morph
-                || slotToCheck == ParameterSlot::peakHoldFrequency
+                || slotToCheck == ParameterSlot::peakHoldMs
+                || slotToCheck == ParameterSlot::lookahead
                 || slotToCheck == ParameterSlot::tensionFloor
-                || slotToCheck == ParameterSlot::tensionHysteresis;
+                || slotToCheck == ParameterSlot::tensionHysteresis
+                || slotToCheck == ParameterSlot::releaseForm
+                || slotToCheck == ParameterSlot::releaseCurve;
         };
 
         if (isGlobalMainSlot(sourceSlot))
@@ -497,6 +512,12 @@ void DynAudioProcessor::parameterChanged(const juce::String& parameterID, float)
 
                 for (size_t targetBand = 0; targetBand < numBands; ++targetBand)
                     setBandSlotValue(targetBand, sourceSlot, sourceValue);
+
+                if (sourceSlot == ParameterSlot::releaseForm && sourceValue < 0.5f)
+                {
+                    for (size_t targetBand = 0; targetBand < numBands; ++targetBand)
+                        setBandSlotValue(targetBand, ParameterSlot::releaseCurve, 0.0f);
+                }
             }
 
             continue;

@@ -3,7 +3,7 @@
 #include <array>
 #include <cstddef>
 
-namespace vx::multiband
+namespace ava::multiband
 {
 class Crossover
 {
@@ -72,4 +72,4 @@ private:
     std::array<CascadeState, numCompensators> compHpLeft {};
     std::array<CascadeState, numCompensators> compHpRight {};
 };
-} // namespace vx::multiband
+} // namespace ava::multiband

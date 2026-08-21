@@ -52,6 +52,19 @@ private:
     static constexpr size_t numBands = tls::dsp::MultibandProcessor::numBands;
     static constexpr size_t numParameterSlots = tls::parameters::numParameterSlots;
     static constexpr size_t numCrossoverSlots = tls::parameters::numCrossoverSlots;
+    static constexpr size_t numWidebandListenSlots = tls::parameters::widebandListenSpecs.size();
+
+    enum class WidebandListenMode
+    {
+        neutral,
+        leftCenter,
+        rightCenter,
+        midCenter,
+        sideCenter,
+        leftLeft,
+        rightRight,
+        sideStereo
+    };
 
     void cacheParameterPointers();
     void registerParameterListeners();
@@ -61,17 +74,21 @@ private:
     tls::dsp::MultibandProcessor::CrossoverFrequencies readCrossoverFrequencies() const;
     size_t readActiveSplitCount() const;
     tls::dsp::MultibandProcessor::SoloMask readSoloMask() const;
+    WidebandListenMode readWidebandListenMode() const noexcept;
+    static void applyWidebandListen(juce::AudioBuffer<float>& buffer, WidebandListenMode mode) noexcept;
     juce::UndoManager undoManager;
     juce::AudioProcessorValueTreeState valueTreeState;
     tls::dsp::MultibandProcessor multibandProcessor;
     std::atomic<float>* rawActiveSplitCountParameter = nullptr;
     std::array<std::atomic<float>*, numBands> rawSoloParameters {};
     std::array<std::atomic<float>*, numCrossoverSlots> rawCrossoverParameters {};
+    std::array<std::atomic<float>*, numWidebandListenSlots> rawWidebandListenParameters {};
     std::array<std::array<std::atomic<float>*, numParameterSlots>, numBands> rawBandParameters {};
     tls::dsp::MultibandProcessor::CrossoverFrequencies currentCrossoverFrequencies {};
     size_t currentActiveSplitCount = tls::dsp::MultibandProcessor::numSplits;
     std::array<tls::dsp::DspCore::Parameters, numBands> currentBandParameters {};
     tls::dsp::MultibandProcessor::SoloMask currentSoloMask {};
+    WidebandListenMode currentWidebandListenMode = WidebandListenMode::neutral;
     std::atomic<int> moduleLatencySamples { 0 };
     std::atomic<bool> parametersDirty { true };
 

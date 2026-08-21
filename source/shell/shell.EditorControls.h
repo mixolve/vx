@@ -54,10 +54,10 @@ private:
     bool hintsEnabled = true;
 };
 
-class VxAudioProcessorEditor::VxLookAndFeel final : public juce::LookAndFeel_V4
+class AvaAudioProcessorEditor::AvaLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
-    VxLookAndFeel();
+    AvaLookAndFeel();
 
     void setTooltipBoundsConstraint(juce::Rectangle<int> bounds) noexcept;
 

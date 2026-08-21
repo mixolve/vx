@@ -7,7 +7,7 @@
 #include "../modules/fft/module.fft.FftProcessor.h"
 #include "../modules/multiband/trs/module.trs.TrsProcessor.h"
 
-juce::RangedAudioParameter* VxAudioProcessorEditor::findHostAssignableParameter(const juce::String& parameterId) const noexcept
+juce::RangedAudioParameter* AvaAudioProcessorEditor::findHostAssignableParameter(const juce::String& parameterId) const noexcept
 {
     const auto trimmedParameterId = parameterId.trim();
 
@@ -27,18 +27,18 @@ juce::RangedAudioParameter* VxAudioProcessorEditor::findHostAssignableParameter(
 
     switch (audioProcessor.getActiveModule())
     {
-        case VxAudioProcessor::ActiveModule::eql: return findInModule(audioProcessor.getEqlModuleProcessor());
-        case VxAudioProcessor::ActiveModule::fft: return findInModule(audioProcessor.getFftModuleProcessor());
-        case VxAudioProcessor::ActiveModule::tls: return findInModule(audioProcessor.getTlsModuleProcessor());
-        case VxAudioProcessor::ActiveModule::dyn: return findInModule(audioProcessor.getDynModuleProcessor());
-        case VxAudioProcessor::ActiveModule::trs: return findInModule(audioProcessor.getTrsModuleProcessor());
-        case VxAudioProcessor::ActiveModule::none: break;
+        case AvaAudioProcessor::ActiveModule::eql: return findInModule(audioProcessor.getEqlModuleProcessor());
+        case AvaAudioProcessor::ActiveModule::fft: return findInModule(audioProcessor.getFftModuleProcessor());
+        case AvaAudioProcessor::ActiveModule::tls: return findInModule(audioProcessor.getTlsModuleProcessor());
+        case AvaAudioProcessor::ActiveModule::dyn: return findInModule(audioProcessor.getDynModuleProcessor());
+        case AvaAudioProcessor::ActiveModule::trs: return findInModule(audioProcessor.getTrsModuleProcessor());
+        case AvaAudioProcessor::ActiveModule::none: break;
     }
 
     return nullptr;
 }
 
-void VxAudioProcessorEditor::syncHostSlotAssignmentValue(const int slotIndex, const float normalizedValue)
+void AvaAudioProcessorEditor::syncHostSlotAssignmentValue(const int slotIndex, const float normalizedValue)
 {
     if (! juce::isPositiveAndBelow(slotIndex, static_cast<int>(hostSlotAssignments.size())))
         return;
@@ -54,11 +54,11 @@ void VxAudioProcessorEditor::syncHostSlotAssignmentValue(const int slotIndex, co
     }
 }
 
-void VxAudioProcessorEditor::parameterChanged(const juce::String& parameterID, float newValue)
+void AvaAudioProcessorEditor::parameterChanged(const juce::String& parameterID, float newValue)
 {
     if (parameterID == FftModuleProcessor::paramDynamicModeId)
     {
-        juce::Component::SafePointer<VxAudioProcessorEditor> safeEditor(this);
+        juce::Component::SafePointer<AvaAudioProcessorEditor> safeEditor(this);
         juce::MessageManager::callAsync([safeEditor]
         {
             if (safeEditor == nullptr)
@@ -79,7 +79,7 @@ void VxAudioProcessorEditor::parameterChanged(const juce::String& parameterID, f
 
         for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
         {
-            const auto slotParameterId = VxAudioProcessor::getHostSlotParameterId(slotIndex);
+            const auto slotParameterId = AvaAudioProcessor::getHostSlotParameterId(slotIndex);
 
             if (parameterID == slotParameterId)
             {
@@ -97,7 +97,7 @@ void VxAudioProcessorEditor::parameterChanged(const juce::String& parameterID, f
                 continue;
 
             auto* assignedParameter = findHostAssignableParameter(parameterID);
-            auto* slotParameter = valueTreeState.getParameter(VxAudioProcessor::getHostSlotParameterId(slotIndex));
+            auto* slotParameter = valueTreeState.getParameter(AvaAudioProcessor::getHostSlotParameterId(slotIndex));
 
             if (assignedParameter == nullptr || slotParameter == nullptr)
                 continue;
@@ -111,7 +111,7 @@ void VxAudioProcessorEditor::parameterChanged(const juce::String& parameterID, f
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::resyncEditorFromProcessorState()
+void AvaAudioProcessorEditor::resyncEditorFromProcessorState()
 {
     restoreEditorStateFromValueTree();
     refreshModuleStateListeners();
@@ -122,18 +122,18 @@ void VxAudioProcessorEditor::resyncEditorFromProcessorState()
     repaint();
 }
 
-void VxAudioProcessorEditor::valueTreePropertyChanged(juce::ValueTree& treeWhosePropertyHasChanged,
+void AvaAudioProcessorEditor::valueTreePropertyChanged(juce::ValueTree& treeWhosePropertyHasChanged,
                                                        const juce::Identifier& property)
 {
     if (treeWhosePropertyHasChanged == valueTreeState.state
-        && property == juce::Identifier(VxAudioProcessor::activeModuleStateKey)
+        && property == juce::Identifier(AvaAudioProcessor::activeModuleStateKey)
         && ! suppressProcessorStateResync)
         resyncEditorFromProcessorState();
 
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::valueTreeRedirected(juce::ValueTree& treeWhichHasBeenChanged)
+void AvaAudioProcessorEditor::valueTreeRedirected(juce::ValueTree& treeWhichHasBeenChanged)
 {
     if (treeWhichHasBeenChanged == valueTreeState.state)
         resyncEditorFromProcessorState();
@@ -141,10 +141,10 @@ void VxAudioProcessorEditor::valueTreeRedirected(juce::ValueTree& treeWhichHasBe
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::registerParameterListeners()
+void AvaAudioProcessorEditor::registerParameterListeners()
 {
-    for (int slotIndex = 0; slotIndex < VxAudioProcessor::hostAutomationSlotCount; ++slotIndex)
-        valueTreeState.addParameterListener(VxAudioProcessor::getHostSlotParameterId(slotIndex), this);
+    for (int slotIndex = 0; slotIndex < AvaAudioProcessor::hostAutomationSlotCount; ++slotIndex)
+        valueTreeState.addParameterListener(AvaAudioProcessor::getHostSlotParameterId(slotIndex), this);
 
     if (! shellStateListenerRegistered)
     {
@@ -155,7 +155,7 @@ void VxAudioProcessorEditor::registerParameterListeners()
     refreshModuleStateListeners();
 }
 
-void VxAudioProcessorEditor::registerObservedModuleParameterListeners(juce::AudioProcessorValueTreeState& moduleValueTreeState)
+void AvaAudioProcessorEditor::registerObservedModuleParameterListeners(juce::AudioProcessorValueTreeState& moduleValueTreeState)
 {
     auto observedListeners = ObservedModuleParameterListeners {};
     observedListeners.valueTreeState = &moduleValueTreeState;
@@ -175,10 +175,10 @@ void VxAudioProcessorEditor::registerObservedModuleParameterListeners(juce::Audi
     observedModuleParameterListeners.push_back(std::move(observedListeners));
 }
 
-void VxAudioProcessorEditor::unregisterParameterListeners()
+void AvaAudioProcessorEditor::unregisterParameterListeners()
 {
-    for (int slotIndex = 0; slotIndex < VxAudioProcessor::hostAutomationSlotCount; ++slotIndex)
-        valueTreeState.removeParameterListener(VxAudioProcessor::getHostSlotParameterId(slotIndex), this);
+    for (int slotIndex = 0; slotIndex < AvaAudioProcessor::hostAutomationSlotCount; ++slotIndex)
+        valueTreeState.removeParameterListener(AvaAudioProcessor::getHostSlotParameterId(slotIndex), this);
 
     if (shellStateListenerRegistered)
     {
@@ -189,7 +189,7 @@ void VxAudioProcessorEditor::unregisterParameterListeners()
     clearModuleStateListeners();
 }
 
-void VxAudioProcessorEditor::refreshModuleStateListeners()
+void AvaAudioProcessorEditor::refreshModuleStateListeners()
 {
     clearModuleStateListeners();
 
@@ -210,27 +210,27 @@ void VxAudioProcessorEditor::refreshModuleStateListeners()
 
     switch (audioProcessor.getActiveModule())
     {
-        case VxAudioProcessor::ActiveModule::eql:
+        case AvaAudioProcessor::ActiveModule::eql:
             observeModule(audioProcessor.getEqlModuleProcessor());
             break;
 
-        case VxAudioProcessor::ActiveModule::fft:
+        case AvaAudioProcessor::ActiveModule::fft:
             observeModule(audioProcessor.getFftModuleProcessor());
             break;
 
-        case VxAudioProcessor::ActiveModule::tls:
+        case AvaAudioProcessor::ActiveModule::tls:
             observeModule(audioProcessor.getTlsModuleProcessor());
             break;
 
-        case VxAudioProcessor::ActiveModule::dyn:
+        case AvaAudioProcessor::ActiveModule::dyn:
             observeModule(audioProcessor.getDynModuleProcessor());
             break;
 
-        case VxAudioProcessor::ActiveModule::trs:
+        case AvaAudioProcessor::ActiveModule::trs:
             observeModule(audioProcessor.getTrsModuleProcessor());
             break;
 
-        case VxAudioProcessor::ActiveModule::none:
+        case AvaAudioProcessor::ActiveModule::none:
             break;
     }
 
@@ -241,7 +241,7 @@ void VxAudioProcessorEditor::refreshModuleStateListeners()
     }
 }
 
-void VxAudioProcessorEditor::clearModuleStateListeners()
+void AvaAudioProcessorEditor::clearModuleStateListeners()
 {
     for (auto& observedListeners : observedModuleParameterListeners)
     {
@@ -261,7 +261,7 @@ void VxAudioProcessorEditor::clearModuleStateListeners()
     observedModuleStates.clear();
 }
 
-void VxAudioProcessorEditor::detachModuleEditorBindings()
+void AvaAudioProcessorEditor::detachModuleEditorBindings()
 {
     clearModuleStateListeners();
 
@@ -272,15 +272,15 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
     fftDeltaAttachment.reset();
     fftDualMonoLinkAttachment.reset();
     fftDynamicBypassAttachment.reset();
-    fftDynamicModeAttachment.reset();
 
     if (fftAttackControl != nullptr) fftAttackControl->detach();
     if (fftReleaseControl != nullptr) fftReleaseControl->detach();
     if (fftKneeControl != nullptr) fftKneeControl->detach();
     if (fftRatioControl != nullptr) fftRatioControl->detach();
     if (fftFloorControl != nullptr) fftFloorControl->detach();
+    if (fftDynamicModeControl != nullptr) fftDynamicModeControl->detach();
     if (fftDspFftSizeControl != nullptr) fftDspFftSizeControl->detach();
-    if (fftDspHopDivisorControl != nullptr) fftDspHopDivisorControl->detach();
+    if (fftDspOverlapControl != nullptr) fftDspOverlapControl->detach();
     if (fftDspSlopeControl != nullptr) fftDspSlopeControl->detach();
     if (fftPhaseImpactControl != nullptr) fftPhaseImpactControl->detach();
     if (fftDualMonoLeftThresholdControl != nullptr) fftDualMonoLeftThresholdControl->detach();
@@ -291,13 +291,13 @@ void VxAudioProcessorEditor::detachModuleEditorBindings()
     if (fftAdaptiveAttackControl != nullptr) fftAdaptiveAttackControl->detach();
     if (fftAdaptiveHoldControl != nullptr) fftAdaptiveHoldControl->detach();
     if (fftAdaptiveReleaseControl != nullptr) fftAdaptiveReleaseControl->detach();
-    shell_setup_support::removeOwnedChild(fftAnalyserContent, fftAnalyserComponent);
+    shell_setup_support::removeOwnedChild(*this, fftAnalyserComponent);
     shell_setup_support::removeOwnedChild(*this, tlsModuleEditor);
     shell_setup_support::removeOwnedChild(*this, dynModuleEditor);
     shell_setup_support::removeOwnedChild(*this, trsModuleEditor);
 }
 
-void VxAudioProcessorEditor::scheduleHistorySnapshot()
+void AvaAudioProcessorEditor::scheduleHistorySnapshot()
 {
     if (suppressHistorySnapshots)
         return;
@@ -307,7 +307,7 @@ void VxAudioProcessorEditor::scheduleHistorySnapshot()
     lastHistoryChangeTimeMs.store(juce::Time::getMillisecondCounter(), std::memory_order_relaxed);
 }
 
-void VxAudioProcessorEditor::commitPendingHistorySnapshot(const bool force)
+void AvaAudioProcessorEditor::commitPendingHistorySnapshot(const bool force)
 {
     if (! pendingHistorySnapshot.load(std::memory_order_relaxed) || suppressHistorySnapshots)
         return;
@@ -343,12 +343,12 @@ void VxAudioProcessorEditor::commitPendingHistorySnapshot(const bool force)
     updateUndoRedoButtons();
 }
 
-void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snapshot)
+void AvaAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snapshot)
 {
     if (snapshot.isEmpty())
         return;
 
-    auto mergedStateXml = VxAudioProcessor::getXmlFromBinary(snapshot.getData(), static_cast<int>(snapshot.getSize()));
+    auto mergedStateXml = AvaAudioProcessor::getXmlFromBinary(snapshot.getData(), static_cast<int>(snapshot.getSize()));
 
     if (mergedStateXml == nullptr || ! mergedStateXml->hasTagName(valueTreeState.state.getType().toString()))
         return;
@@ -356,7 +356,7 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
     preserveEditorWindowState(*mergedStateXml, valueTreeState.state);
 
     juce::MemoryBlock mergedSnapshot;
-    VxAudioProcessor::copyXmlToBinary(*mergedStateXml, mergedSnapshot);
+    AvaAudioProcessor::copyXmlToBinary(*mergedStateXml, mergedSnapshot);
 
     struct PreservedUiState
     {
@@ -369,7 +369,7 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
         hostParametersExpanded,
         filterViewport.getViewPositionY()
     };
-    auto* bypassParameter = valueTreeState.getParameter(VxAudioProcessor::paramGlobalBypassId);
+    auto* bypassParameter = valueTreeState.getParameter(AvaAudioProcessor::paramGlobalBypassId);
     const auto preservedBypassValue = bypassParameter != nullptr ? bypassParameter->getValue() : 0.0f;
 
     const juce::ScopedValueSetter<bool> suppressHistory(suppressHistorySnapshots, true);
@@ -406,7 +406,7 @@ void VxAudioProcessorEditor::applyHistorySnapshot(const juce::MemoryBlock& snaps
     updateUndoRedoButtons();
 }
 
-void VxAudioProcessorEditor::refreshEqlFilterSectionsFromProcessor()
+void AvaAudioProcessorEditor::refreshEqlFilterSectionsFromProcessor()
 {
     for (auto& sectionPtr : filterSections)
     {
@@ -424,7 +424,7 @@ void VxAudioProcessorEditor::refreshEqlFilterSectionsFromProcessor()
     }
 }
 
-void VxAudioProcessorEditor::captureCurrentABState()
+void AvaAudioProcessorEditor::captureCurrentABState()
 {
     const auto activeSlot = audioProcessor.getABCompareActiveSlot();
 
@@ -433,12 +433,12 @@ void VxAudioProcessorEditor::captureCurrentABState()
     audioProcessor.setABCompareSnapshot(activeSlot, snapshot);
 }
 
-void VxAudioProcessorEditor::restoreABStateSnapshot(const juce::MemoryBlock& snapshot)
+void AvaAudioProcessorEditor::restoreABStateSnapshot(const juce::MemoryBlock& snapshot)
 {
     if (snapshot.isEmpty())
         return;
 
-    auto stateXml = VxAudioProcessor::getXmlFromBinary(snapshot.getData(), static_cast<int>(snapshot.getSize()));
+    auto stateXml = AvaAudioProcessor::getXmlFromBinary(snapshot.getData(), static_cast<int>(snapshot.getSize()));
 
     if (stateXml == nullptr || ! stateXml->hasTagName(valueTreeState.state.getType().toString()))
         return;
@@ -446,7 +446,7 @@ void VxAudioProcessorEditor::restoreABStateSnapshot(const juce::MemoryBlock& sna
     preserveEditorWindowState(*stateXml, valueTreeState.state);
 
     juce::MemoryBlock restoredSnapshot;
-    VxAudioProcessor::copyXmlToBinary(*stateXml, restoredSnapshot);
+    AvaAudioProcessor::copyXmlToBinary(*stateXml, restoredSnapshot);
 
     struct PreservedUiState
     {
@@ -501,7 +501,7 @@ void VxAudioProcessorEditor::restoreABStateSnapshot(const juce::MemoryBlock& sna
     refreshABCompareButton();
 }
 
-void VxAudioProcessorEditor::switchABState()
+void AvaAudioProcessorEditor::switchABState()
 {
     captureCurrentABState();
 
@@ -525,7 +525,7 @@ void VxAudioProcessorEditor::switchABState()
     clearKeyboardFocus(*this);
 }
 
-void VxAudioProcessorEditor::copyCurrentABStateToOtherSlot()
+void AvaAudioProcessorEditor::copyCurrentABStateToOtherSlot()
 {
     captureCurrentABState();
 
@@ -540,7 +540,7 @@ void VxAudioProcessorEditor::copyCurrentABStateToOtherSlot()
     clearKeyboardFocus(*this);
 }
 
-void VxAudioProcessorEditor::refreshABCompareButton()
+void AvaAudioProcessorEditor::refreshABCompareButton()
 {
     if (abCompareButton == nullptr)
         return;
@@ -552,26 +552,26 @@ void VxAudioProcessorEditor::refreshABCompareButton()
     abCompareButton->setTooltip(activeABSlot == 0 ? "A/B COMPARE: A" : "A/B COMPARE: B");
 }
 
-void VxAudioProcessorEditor::updateUndoRedoButtons()
+void AvaAudioProcessorEditor::updateUndoRedoButtons()
 {
     if (undoButton != nullptr)
     {
         const auto canUndo = ! undoHistory.empty();
         undoButton->setEnabled(canUndo);
-        undoButton->setAlpha(canUndo ? 1.0f : 0.45f);
+        undoButton->setAlpha(1.0f);
     }
 
     if (redoButton != nullptr)
     {
         const auto canRedo = ! redoHistory.empty();
         redoButton->setEnabled(canRedo);
-        redoButton->setAlpha(canRedo ? 1.0f : 0.45f);
+        redoButton->setAlpha(1.0f);
     }
 
     refreshABCompareButton();
 }
 
-void VxAudioProcessorEditor::resetFilterSectionStoredValues(const int filterIndex)
+void AvaAudioProcessorEditor::resetFilterSectionStoredValues(const int filterIndex)
 {
     if (! juce::isPositiveAndBelow(filterIndex, static_cast<int>(filterSections.size())))
         return;
@@ -581,10 +581,10 @@ void VxAudioProcessorEditor::resetFilterSectionStoredValues(const int filterInde
     if (section == nullptr)
         return;
 
-    for (const auto filterType : VxAudioProcessor::filterTypePresetOrder)
+    for (const auto filterType : AvaAudioProcessor::filterTypePresetOrder)
     {
         section->setStoredValues(filterType,
-                                 defaultFilterFrequencyForType(filterType),
+                                 defaultFilterFrequency(),
                                  defaultFilterBandwidth(),
                                  defaultFilterSlope(),
                                  0,
@@ -596,7 +596,7 @@ void VxAudioProcessorEditor::resetFilterSectionStoredValues(const int filterInde
     section->captureCurrentValuesForCurrentType(true);
 }
 
-void VxAudioProcessorEditor::removeFilterSectionStoredValues(const int removedIndex, const int previousCount)
+void AvaAudioProcessorEditor::removeFilterSectionStoredValues(const int removedIndex, const int previousCount)
 {
     if (previousCount <= 0)
         return;

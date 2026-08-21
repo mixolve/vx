@@ -72,7 +72,7 @@ juce::String makeUniquePresetName(const juce::String& requestedName,
 }
 }
 
-void VxAudioProcessorEditor::refreshFilterPresetList(const juce::String& preferredSelection)
+void AvaAudioProcessorEditor::refreshFilterPresetList(const juce::String& preferredSelection)
 {
     if (presetsSection == nullptr)
         return;
@@ -91,23 +91,23 @@ void VxAudioProcessorEditor::refreshFilterPresetList(const juce::String& preferr
         && selectedPresetName.equalsIgnoreCase(defaultPresetName);
     const auto canDeletePreset = presetNames.size() > 1 && hasPresetSelection;
     presetsSection->deleteButton->setEnabled(canDeletePreset);
-    presetsSection->deleteButton->setAlpha(canDeletePreset ? 1.0f : 0.45f);
+    presetsSection->deleteButton->setAlpha(1.0f);
     presetsSection->renameButton->setEnabled(hasPresetSelection);
-    presetsSection->renameButton->setAlpha(hasPresetSelection ? 1.0f : 0.45f);
+    presetsSection->renameButton->setAlpha(1.0f);
     presetsSection->defaultButton->setEnabled(hasPresetSelection);
-    presetsSection->defaultButton->setAlpha(hasPresetSelection ? 1.0f : 0.45f);
+    presetsSection->defaultButton->setAlpha(1.0f);
     presetsSection->defaultButton->setAlwaysAccentOutline(selectedPresetIsDefault);
 }
 
-void VxAudioProcessorEditor::reloadFilterPresetFromProcessor()
+void AvaAudioProcessorEditor::reloadFilterPresetFromProcessor()
 {
     if (presetsSection == nullptr)
         return;
 
     filterDisplayOrder.clear();
-    filterDisplayOrder.reserve(VxAudioProcessor::maxEqlFilterCount);
+    filterDisplayOrder.reserve(AvaAudioProcessor::maxEqlFilterCount);
 
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
+    for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
         filterDisplayOrder.push_back(filterIndex);
 
     for (auto& sectionPtr : filterSections)
@@ -123,10 +123,10 @@ void VxAudioProcessorEditor::reloadFilterPresetFromProcessor()
         section->slopeControl->setChoiceEnabled(0, loadedType != EqlModuleProcessor::FilterType::bell);
         section->updatePlaceChoicesForType(true);
 
-        for (const auto filterType : VxAudioProcessor::filterTypePresetOrder)
+        for (const auto filterType : AvaAudioProcessor::filterTypePresetOrder)
         {
             section->setStoredValues(filterType,
-                                     defaultFilterFrequencyForType(filterType),
+                                     defaultFilterFrequency(),
                                      defaultFilterBandwidth(),
                                      defaultFilterSlope(),
                                      0,
@@ -142,7 +142,7 @@ void VxAudioProcessorEditor::reloadFilterPresetFromProcessor()
     resized();
 }
 
-void VxAudioProcessorEditor::commitFilterDisplayOrderToProcessor()
+void AvaAudioProcessorEditor::commitFilterDisplayOrderToProcessor()
 {
     auto* eqlProcessor = getActiveEqlProcessor();
     const auto activeCount = getActiveFilterCount();
@@ -170,9 +170,9 @@ void VxAudioProcessorEditor::commitFilterDisplayOrderToProcessor()
         return;
 
     filterDisplayOrder.clear();
-    filterDisplayOrder.reserve(VxAudioProcessor::maxEqlFilterCount);
+    filterDisplayOrder.reserve(AvaAudioProcessor::maxEqlFilterCount);
 
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
+    for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
         filterDisplayOrder.push_back(filterIndex);
 
     for (auto& sectionPtr : filterSections)
@@ -195,7 +195,7 @@ void VxAudioProcessorEditor::commitFilterDisplayOrderToProcessor()
     resized();
 }
 
-void VxAudioProcessorEditor::addFilterPreset()
+void AvaAudioProcessorEditor::addFilterPreset()
 {
     if (presetsSection == nullptr)
         return;
@@ -212,7 +212,7 @@ void VxAudioProcessorEditor::addFilterPreset()
         refreshFilterPresetList(presetName);
 }
 
-void VxAudioProcessorEditor::saveFilterPreset()
+void AvaAudioProcessorEditor::saveFilterPreset()
 {
     if (presetsSection == nullptr)
         return;
@@ -235,7 +235,7 @@ void VxAudioProcessorEditor::saveFilterPreset()
         refreshFilterPresetList(presetName);
 }
 
-bool VxAudioProcessorEditor::renameFilterPreset(const juce::String& sourcePresetName, const juce::String& newPresetName)
+bool AvaAudioProcessorEditor::renameFilterPreset(const juce::String& sourcePresetName, const juce::String& newPresetName)
 {
     const auto trimmedSourceName = sourcePresetName.trim();
     const auto trimmedNewName = newPresetName.trim();
@@ -252,7 +252,7 @@ bool VxAudioProcessorEditor::renameFilterPreset(const juce::String& sourcePreset
     return true;
 }
 
-void VxAudioProcessorEditor::setDefaultFilterPreset()
+void AvaAudioProcessorEditor::setDefaultFilterPreset()
 {
     if (presetsSection == nullptr)
         return;
@@ -266,7 +266,7 @@ void VxAudioProcessorEditor::setDefaultFilterPreset()
         refreshFilterPresetList(presetName);
 }
 
-void VxAudioProcessorEditor::deleteSelectedFilterPreset()
+void AvaAudioProcessorEditor::deleteSelectedFilterPreset()
 {
     if (presetsSection == nullptr)
         return;

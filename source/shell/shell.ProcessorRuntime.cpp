@@ -7,7 +7,7 @@
 
 #include <cmath>
 
-void VxAudioProcessor::prepareToPlay(const double sampleRate, const int samplesPerBlock)
+void AvaAudioProcessor::prepareToPlay(const double sampleRate, const int samplesPerBlock)
 {
     processingPrepared.store(false, std::memory_order_release);
     const juce::ScopedLock lock(processingLock);
@@ -31,7 +31,7 @@ void VxAudioProcessor::prepareToPlay(const double sampleRate, const int samplesP
     processingPrepared.store(true, std::memory_order_release);
 }
 
-void VxAudioProcessor::releaseResources()
+void AvaAudioProcessor::releaseResources()
 {
     processingPrepared.store(false, std::memory_order_release);
     const juce::ScopedLock lock(processingLock);
@@ -51,7 +51,7 @@ void VxAudioProcessor::releaseResources()
     currentSampleRate = 0.0;
 }
 
-void VxAudioProcessor::reset()
+void AvaAudioProcessor::reset()
 {
     const juce::ScopedLock lock(processingLock);
 
@@ -69,7 +69,7 @@ void VxAudioProcessor::reset()
     globalClipIndicator.store(0.0f, std::memory_order_relaxed);
 }
 
-int VxAudioProcessor::getActiveModuleLatencySamples() const noexcept
+int AvaAudioProcessor::getActiveModuleLatencySamples() const noexcept
 {
     const auto module = activeModule.load(std::memory_order_acquire);
 
@@ -107,7 +107,7 @@ int VxAudioProcessor::getActiveModuleLatencySamples() const noexcept
     return 0;
 }
 
-void VxAudioProcessor::updateShellLatency() noexcept
+void AvaAudioProcessor::updateShellLatency() noexcept
 {
     auto totalLatencySamples = getActiveModuleLatencySamples();
 
@@ -121,7 +121,7 @@ void VxAudioProcessor::updateShellLatency() noexcept
         setLatencySamples(totalLatencySamples);
 }
 
-bool VxAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
+bool AvaAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
     const auto mainInput = layouts.getMainInputChannelSet();
     const auto mainOutput = layouts.getMainOutputChannelSet();
@@ -133,7 +133,7 @@ bool VxAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
         || mainInput == juce::AudioChannelSet::stereo();
 }
 
-void VxAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
+void AvaAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
 

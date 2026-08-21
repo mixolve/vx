@@ -31,18 +31,73 @@ void TlsAudioProcessor::reset()
 
 bool TlsAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) const
 {
-    return vx::multiband::detail::supportsMatchingMonoOrStereoLayout(layouts);
+    return ava::multiband::detail::supportsMatchingMonoOrStereoLayout(layouts);
 }
 
 void TlsAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&)
 {
     juce::ScopedNoDenormals noDenormals;
 
-    vx::multiband::detail::clearOutputOnlyChannels(*this, buffer);
+    ava::multiband::detail::clearOutputOnlyChannels(*this, buffer);
 
     syncParameters();
 
     multibandProcessor.process(buffer);
+    applyWidebandListen(buffer, currentWidebandListenMode);
+}
+
+void TlsAudioProcessor::applyWidebandListen(juce::AudioBuffer<float>& buffer,
+                                             const WidebandListenMode mode) noexcept
+{
+    if (mode == WidebandListenMode::neutral || buffer.getNumChannels() == 0)
+        return;
+
+    auto* leftChannel = buffer.getWritePointer(0);
+    auto* rightChannel = buffer.getNumChannels() > 1 ? buffer.getWritePointer(1) : nullptr;
+
+    for (int sampleIndex = 0; sampleIndex < buffer.getNumSamples(); ++sampleIndex)
+    {
+        const auto left = leftChannel[sampleIndex];
+        const auto right = rightChannel != nullptr ? rightChannel[sampleIndex] : left;
+        const auto mid = 0.5f * (left + right);
+        const auto side = 0.5f * (left - right);
+
+        if (mode == WidebandListenMode::leftCenter)
+        {
+            leftChannel[sampleIndex] = left;
+            if (rightChannel != nullptr) rightChannel[sampleIndex] = left;
+        }
+        else if (mode == WidebandListenMode::rightCenter)
+        {
+            leftChannel[sampleIndex] = right;
+            if (rightChannel != nullptr) rightChannel[sampleIndex] = right;
+        }
+        else if (mode == WidebandListenMode::midCenter)
+        {
+            leftChannel[sampleIndex] = mid;
+            if (rightChannel != nullptr) rightChannel[sampleIndex] = mid;
+        }
+        else if (mode == WidebandListenMode::sideCenter)
+        {
+            leftChannel[sampleIndex] = side;
+            if (rightChannel != nullptr) rightChannel[sampleIndex] = side;
+        }
+        else if (mode == WidebandListenMode::leftLeft)
+        {
+            leftChannel[sampleIndex] = left;
+            if (rightChannel != nullptr) rightChannel[sampleIndex] = 0.0f;
+        }
+        else if (mode == WidebandListenMode::rightRight)
+        {
+            leftChannel[sampleIndex] = 0.0f;
+            if (rightChannel != nullptr) rightChannel[sampleIndex] = right;
+        }
+        else if (mode == WidebandListenMode::sideStereo)
+        {
+            leftChannel[sampleIndex] = side;
+            if (rightChannel != nullptr) rightChannel[sampleIndex] = -side;
+        }
+    }
 }
 
 juce::AudioProcessorEditor* TlsAudioProcessor::createEditor()
@@ -179,6 +234,9 @@ void TlsAudioProcessor::registerParameterListeners()
 
     for (const auto& spec : crossoverSpecs)
         addListenerIfPresent(makeFullbandParameterId(spec.suffix));
+
+    for (const auto& spec : tls::parameters::widebandListenSpecs)
+        addListenerIfPresent(makeFullbandParameterId(spec.suffix));
 }
 
 void TlsAudioProcessor::unregisterParameterListeners()
@@ -207,6 +265,9 @@ void TlsAudioProcessor::unregisterParameterListeners()
     }
 
     for (const auto& spec : crossoverSpecs)
+        removeListenerIfPresent(makeFullbandParameterId(spec.suffix));
+
+    for (const auto& spec : tls::parameters::widebandListenSpecs)
         removeListenerIfPresent(makeFullbandParameterId(spec.suffix));
 }
 

@@ -4,12 +4,12 @@
 
 #include <utility>
 
-void VxAudioProcessorEditor::showModulePicker()
+void AvaAudioProcessorEditor::showModulePicker()
 {
     if (moduleAddButton == nullptr)
         return;
 
-    const auto canLoadModule = audioProcessor.getActiveModule() == VxAudioProcessor::ActiveModule::none;
+    const auto canLoadModule = audioProcessor.getActiveModule() == AvaAudioProcessor::ActiveModule::none;
 
     if (! canLoadModule)
         return;
@@ -41,9 +41,9 @@ void VxAudioProcessorEditor::showModulePicker()
                      {});
 }
 
-void VxAudioProcessorEditor::closeActiveModule()
+void AvaAudioProcessorEditor::closeActiveModule()
 {
-    if (audioProcessor.getActiveModule() == VxAudioProcessor::ActiveModule::none)
+    if (audioProcessor.getActiveModule() == AvaAudioProcessor::ActiveModule::none)
         return;
 
     detachModuleEditorBindings();
@@ -51,7 +51,7 @@ void VxAudioProcessorEditor::closeActiveModule()
     if (! audioProcessor.clearLoadedModule())
         return;
 
-    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::none);
+    setLoadedModuleFlags(AvaAudioProcessor::ActiveModule::none);
 
     hostParametersExpanded = false;
     for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
@@ -112,12 +112,12 @@ void VxAudioProcessorEditor::closeActiveModule()
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::loadEqlModule()
+void AvaAudioProcessorEditor::loadEqlModule()
 {
-    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::eql))
+    if (! audioProcessor.loadModule(AvaAudioProcessor::ActiveModule::eql))
         return;
 
-    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::eql);
+    setLoadedModuleFlags(AvaAudioProcessor::ActiveModule::eql);
 
     hostParametersExpanded = false;
 
@@ -131,12 +131,12 @@ void VxAudioProcessorEditor::loadEqlModule()
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::loadTlsModule()
+void AvaAudioProcessorEditor::loadTlsModule()
 {
-    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::tls))
+    if (! audioProcessor.loadModule(AvaAudioProcessor::ActiveModule::tls))
         return;
 
-    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::tls);
+    setLoadedModuleFlags(AvaAudioProcessor::ActiveModule::tls);
 
     hostParametersExpanded = false;
 
@@ -149,12 +149,12 @@ void VxAudioProcessorEditor::loadTlsModule()
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::loadDynModule()
+void AvaAudioProcessorEditor::loadDynModule()
 {
-    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::dyn))
+    if (! audioProcessor.loadModule(AvaAudioProcessor::ActiveModule::dyn))
         return;
 
-    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::dyn);
+    setLoadedModuleFlags(AvaAudioProcessor::ActiveModule::dyn);
 
     hostParametersExpanded = false;
 
@@ -167,12 +167,12 @@ void VxAudioProcessorEditor::loadDynModule()
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::loadTrsModule()
+void AvaAudioProcessorEditor::loadTrsModule()
 {
-    if (! audioProcessor.loadModule(VxAudioProcessor::ActiveModule::trs))
+    if (! audioProcessor.loadModule(AvaAudioProcessor::ActiveModule::trs))
         return;
 
-    setLoadedModuleFlags(VxAudioProcessor::ActiveModule::trs);
+    setLoadedModuleFlags(AvaAudioProcessor::ActiveModule::trs);
 
     hostParametersExpanded = false;
 
@@ -185,21 +185,24 @@ void VxAudioProcessorEditor::loadTrsModule()
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::refreshModuleTabButton()
+void AvaAudioProcessorEditor::refreshModuleTabButton()
 {
     if (moduleTabButton == nullptr)
     {
-        moduleTabButton = std::make_unique<BoxTextButton>(uiClip);
+        moduleTabButton = std::make_unique<BoxTextButton>(uiGrey500);
         moduleTabButton->setTextJustification(juce::Justification::centred);
+        moduleTabButton->setFillVisible(false);
+        moduleTabButton->setAlwaysAccentOutline(false);
+        moduleTabButton->setToggleAccentVisible(false);
         moduleTabButton->setInterceptsMouseClicks(false, false);
         addAndMakeVisible(*moduleTabButton);
     }
 
-    moduleTabButton->setButtonText(juce::String(VxAudioProcessor::stateIdForModule(audioProcessor.getActiveModule())).toUpperCase());
-    moduleTabButton->setVisible(audioProcessor.getActiveModule() != VxAudioProcessor::ActiveModule::none);
+    moduleTabButton->setButtonText(juce::String(AvaAudioProcessor::stateIdForModule(audioProcessor.getActiveModule())).toUpperCase());
+    moduleTabButton->setVisible(audioProcessor.getActiveModule() != AvaAudioProcessor::ActiveModule::none);
 }
 
-void VxAudioProcessorEditor::toggleHostParametersSection()
+void AvaAudioProcessorEditor::toggleHostParametersSection()
 {
     hostParametersExpanded = ! hostParametersExpanded;
 

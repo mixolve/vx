@@ -30,14 +30,14 @@ public:
     }
 };
 
-class VxAudioProcessorEditor final : public juce::AudioProcessorEditor,
+class AvaAudioProcessorEditor final : public juce::AudioProcessorEditor,
                                       private juce::Timer,
                                       private juce::AudioProcessorValueTreeState::Listener,
                                       private juce::ValueTree::Listener
 {
 public:
-    explicit VxAudioProcessorEditor(VxAudioProcessor&);
-    ~VxAudioProcessorEditor() override;
+    explicit AvaAudioProcessorEditor(AvaAudioProcessor&);
+    ~AvaAudioProcessorEditor() override;
 
     void mouseDown(const juce::MouseEvent& event) override;
     void mouseWheelMove(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel) override;
@@ -46,7 +46,7 @@ public:
 
 private:
     using ButtonAttachment = juce::AudioProcessorValueTreeState::ButtonAttachment;
-    class VxLookAndFeel;
+    class AvaLookAndFeel;
     struct PresetsSection;
     struct FilterSection;
 
@@ -111,7 +111,7 @@ private:
     void enforceSingleExpandedFilterSection(int preferredFilterIndex = -1);
     void restoreEditorStateFromValueTree();
     void storeEditorStateToValueTree() noexcept;
-    void setLoadedModuleFlags(VxAudioProcessor::ActiveModule activeModule) noexcept;
+    void setLoadedModuleFlags(AvaAudioProcessor::ActiveModule activeModule) noexcept;
     juce::Point<int> getRestoredEditorSize() const noexcept;
     juce::Rectangle<int> getFilterSectionBounds(int filterIndex) const;
     void resetFilterSectionStoredValues(int filterIndex);
@@ -152,7 +152,6 @@ private:
     int getActiveFilterContentHeight() const;
     int getFilterContentHeight() const;
     int getFftMainContentHeight() const;
-    int getFftAnalyserContentHeight() const;
     int getActiveFilterCount() const noexcept;
     void resetAnalyserPanelBounds();
     void layoutGlobalControlsSection(juce::Rectangle<int>& bounds, int editorInsetX);
@@ -166,6 +165,7 @@ private:
     void refreshModuleTabButton();
     void updateTooltipBoundsConstraint() noexcept;
     void clearHostSlot(int slotIndex);
+    void moveHostSlotAssignment(int slotIndex, int direction);
     void refreshHostSlotButtons();
 
     struct ObservedModuleParameterListeners
@@ -174,11 +174,11 @@ private:
         std::vector<juce::String> parameterIds;
     };
 
-    VxAudioProcessor& audioProcessor;
+    AvaAudioProcessor& audioProcessor;
     juce::AudioProcessorValueTreeState& valueTreeState;
     std::vector<juce::ValueTree> observedModuleStates;
     std::vector<ObservedModuleParameterListeners> observedModuleParameterListeners;
-    std::unique_ptr<VxLookAndFeel> lookAndFeel;
+    std::unique_ptr<AvaLookAndFeel> lookAndFeel;
     std::unique_ptr<DelayedTooltipWindow> tooltipWindow;
     std::unique_ptr<BoxTextButton> clipButton;
     std::unique_ptr<BoxTextButton> hostButton;
@@ -188,8 +188,7 @@ private:
     std::unique_ptr<PresetsSection> presetsSection;
     std::unique_ptr<BoxTextButton> fftGeneralProcessorHeader;
     std::unique_ptr<BoxTextButton> fftDynamicProcessorHeader;
-    std::unique_ptr<BoxTextButton> fftDynamicModeButton;
-    std::unique_ptr<ButtonAttachment> fftDynamicModeAttachment;
+    std::unique_ptr<ChoiceControl> fftDynamicModeControl;
     std::unique_ptr<ParameterControl> fftAttackControl;
     std::unique_ptr<ParameterControl> fftReleaseControl;
     std::unique_ptr<ParameterControl> fftKneeControl;
@@ -206,22 +205,15 @@ private:
     std::unique_ptr<ParameterControl> fftDualMonoRightAdaptiveControl;
     std::unique_ptr<BoxTextButton> fftDualMonoLinkButton;
     std::unique_ptr<ButtonAttachment> fftDualMonoLinkAttachment;
-    std::unique_ptr<BoxTextButton> fftAdaptiveSettingsButton;
+    std::unique_ptr<BoxTextButton> fftAdaptiveSettingsHeader;
     std::unique_ptr<ParameterControl> fftAdaptiveOffsetControl;
     std::unique_ptr<ParameterControl> fftAdaptiveAttackControl;
     std::unique_ptr<ParameterControl> fftAdaptiveHoldControl;
     std::unique_ptr<ParameterControl> fftAdaptiveReleaseControl;
     std::unique_ptr<BoxTextButton> fftDynamicBypassButton;
     std::unique_ptr<ButtonAttachment> fftDynamicBypassAttachment;
-    std::unique_ptr<ChoiceControl> fftDspHopDivisorControl;
-    std::unique_ptr<BoxTextButton> fftAnalyserSettingsHeader;
-    std::unique_ptr<LocalChoiceControl> fftAnalyserFftSizeControl;
-    std::unique_ptr<LocalChoiceControl> fftAnalyserOverlapControl;
-    std::unique_ptr<LocalParameterControl> fftAnalyserLeftControl;
-    std::unique_ptr<LocalParameterControl> fftAnalyserRightControl;
-    std::unique_ptr<LocalParameterControl> fftAnalyserRangeLowControl;
-    std::unique_ptr<LocalParameterControl> fftAnalyserRangeHighControl;
-    std::unique_ptr<LocalParameterControl> fftAnalyserSlopeControl;
+    std::unique_ptr<ChoiceControl> fftDspOverlapControl;
+    std::unique_ptr<LocalParameterControl> fftAnalyserRangeControl;
     std::unique_ptr<LocalParameterControl> fftAnalyserTimeControl;
     std::unique_ptr<BoxTextButton> globalBypassButton;
     std::unique_ptr<ButtonAttachment> globalBypassAttachment;
@@ -231,12 +223,13 @@ private:
     std::unique_ptr<BoxTextButton> sortPlaceButton;
     std::unique_ptr<BoxTextButton> sortFreqButton;
     std::unique_ptr<BoxTextButton> sortDuoButton;
-    std::array<std::unique_ptr<BoxTextButton>, VxAudioProcessor::hostAutomationSlotCount> hostSlotButtons;
-    std::array<std::unique_ptr<FilterSection>, VxAudioProcessor::maxEqlFilterCount> filterSections;
+    std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::hostAutomationSlotCount> hostSlotMoveUpButtons;
+    std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::hostAutomationSlotCount> hostSlotNameFields;
+    std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::hostAutomationSlotCount> hostSlotButtons;
+    std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::hostAutomationSlotCount> hostSlotMoveDownButtons;
+    std::array<std::unique_ptr<FilterSection>, AvaAudioProcessor::maxEqlFilterCount> filterSections;
     juce::Viewport hostParametersViewport;
     ParameterFocusClearingComponent hostParametersContent;
-    juce::Viewport fftAnalyserViewport;
-    ParameterFocusClearingComponent fftAnalyserContent;
     juce::Viewport filterViewport;
     ParameterFocusClearingComponent filterContent;
     std::unique_ptr<juce::Slider> focusedParameterControl;
@@ -254,7 +247,6 @@ private:
     bool dynModuleLoaded = false;
     bool trsModuleLoaded = false;
     bool hostParametersExpanded = false;
-    bool fftAdaptiveSettingsExpanded = false;
     bool tooltipsEnabled = true;
     std::vector<int> filterDisplayOrder;
     bool suppressFilterSectionValueChangeHandlers = false;
@@ -278,10 +270,10 @@ private:
         juce::String parameterId;
         juce::String parameterName;
     };
-    std::array<HostSlotAssignment, VxAudioProcessor::hostAutomationSlotCount> hostSlotAssignments;
+    std::array<HostSlotAssignment, AvaAudioProcessor::hostAutomationSlotCount> hostSlotAssignments;
 
     int getFilterIndexForOrderPosition(int orderIndex) const noexcept;
     int getFilterOrderPositionForIndex(int filterIndex) const noexcept;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(VxAudioProcessorEditor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(AvaAudioProcessorEditor)
 };

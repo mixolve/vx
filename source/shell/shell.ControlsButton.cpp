@@ -250,6 +250,15 @@ void BoxTextButton::setAlwaysAccentOutline(const bool shouldAlwaysAccent)
     repaint();
 }
 
+void BoxTextButton::setToggleAccentVisible(const bool shouldShow) noexcept
+{
+    if (toggleAccentVisible == shouldShow)
+        return;
+
+    toggleAccentVisible = shouldShow;
+    repaint();
+}
+
 void BoxTextButton::setPressFillEnabled(const bool shouldEnable) noexcept
 {
     pressFillEnabled = shouldEnable;
@@ -287,6 +296,15 @@ void BoxTextButton::setTextJustification(const juce::Justification justification
 void BoxTextButton::setArrowDirection(const ArrowDirection direction) noexcept
 {
     arrowDirection = direction;
+    repaint();
+}
+
+void BoxTextButton::setDisclosureArrowVisible(const bool shouldShow) noexcept
+{
+    if (disclosureArrowVisible == shouldShow)
+        return;
+
+    disclosureArrowVisible = shouldShow;
     repaint();
 }
 
@@ -354,7 +372,7 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool, bool)
     const auto buttonDown = isEnabled()
         && pressFillEnabled
         && pressHighlight;
-    const auto accentActive = isEnabled() && (alwaysAccentOutline || getToggleState());
+    const auto accentActive = isEnabled() && (alwaysAccentOutline || (toggleAccentVisible && getToggleState()));
     const auto fill = buttonDown ? uiGrey700 : uiGrey800;
     const auto outline = confirmationFlashActive ? juce::Colour { 0xFF99CCCC }
                                                    : (accentActive ? accentColour : uiGrey500);
@@ -385,23 +403,71 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool, bool)
         graphics.fillRect(bounds.withY(bounds.getBottom() - dividerThickness).withHeight(dividerThickness));
     };
 
+    const auto drawDisclosureArrow = [&graphics, this, textColour]
+    {
+        if (! disclosureArrowVisible)
+            return;
+
+        const auto bounds = getLocalBounds().toFloat();
+        const auto firstCentreX = bounds.getRight() - 21.0f;
+        const auto secondCentreX = bounds.getRight() - 11.0f;
+        const auto centreY = bounds.getCentreY();
+        constexpr auto shaftHalfHeight = 6.0f;
+        constexpr auto headWidth = 2.5f;
+        constexpr auto headHeight = 3.0f;
+        const auto drawArrow = [&graphics, textColour, centreY] (const float centreX, const bool pointsUp)
+        {
+            juce::Path arrowPath;
+            const auto top = centreY - shaftHalfHeight;
+            const auto bottom = centreY + shaftHalfHeight;
+
+            if (pointsUp)
+            {
+                arrowPath.startNewSubPath(centreX, bottom);
+                arrowPath.lineTo(centreX, top + headHeight);
+                arrowPath.startNewSubPath(centreX - headWidth, top + headHeight);
+                arrowPath.lineTo(centreX, top);
+                arrowPath.lineTo(centreX + headWidth, top + headHeight);
+            }
+            else
+            {
+                arrowPath.startNewSubPath(centreX, top);
+                arrowPath.lineTo(centreX, bottom - headHeight);
+                arrowPath.startNewSubPath(centreX - headWidth, bottom - headHeight);
+                arrowPath.lineTo(centreX, bottom);
+                arrowPath.lineTo(centreX + headWidth, bottom - headHeight);
+            }
+
+            graphics.setColour(textColour);
+            graphics.strokePath(arrowPath, juce::PathStrokeType(1.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        };
+
+        const auto pointsUp = getToggleState();
+        drawArrow(firstCentreX, pointsUp);
+        drawArrow(secondCentreX, pointsUp);
+    };
+
     graphics.setColour(textColour);
     if (arrowDirection == ArrowDirection::none)
     {
         const auto font = makeUiFont();
         graphics.setFont(font);
 
-        const auto textBounds = getLocalBounds().reduced(6, 0);
+        auto textBounds = getLocalBounds().reduced(6, 0);
+        if (disclosureArrowVisible)
+            textBounds.removeFromRight(26);
 
         if (eqlFilterHeaderColouringEnabled
             && drawEqlFilterHeaderHighlight(graphics, getButtonText(), textBounds, font, textJustification))
         {
+            drawDisclosureArrow();
             drawBottomDivider();
             return;
         }
 
         if (drawChannelTokenHighlight(graphics, getButtonText(), textBounds, font, textJustification))
         {
+            drawDisclosureArrow();
             drawBottomDivider();
             return;
         }
@@ -417,11 +483,13 @@ void BoxTextButton::paintButton(juce::Graphics& graphics, bool, bool)
                                          textBounds,
                                          font,
                                          textJustification);
+            drawDisclosureArrow();
             drawBottomDivider();
             return;
         }
 
         graphics.drawFittedText(getButtonText(), textBounds, textJustification, 1, 1.0f);
+        drawDisclosureArrow();
         drawBottomDivider();
         return;
     }

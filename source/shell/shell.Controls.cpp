@@ -167,7 +167,7 @@ void NoTickComboBox::showPopup()
 
     if (promptStylePopupEnabled)
     {
-        if (auto* owner = findParentComponentOfClass<VxAudioProcessorEditor>())
+        if (auto* owner = findParentComponentOfClass<AvaAudioProcessorEditor>())
         {
             const auto itemCount = getNumItems();
 

@@ -10,8 +10,8 @@
 
 namespace tls::dsp
 {
-using vx::multiband::detail::dbToAmp;
-using vx::multiband::detail::wrapIndex;
+using ava::multiband::detail::dbToAmp;
+using ava::multiband::detail::wrapIndex;
 
 inline double roundToParameterStep(const double value)
 {
@@ -158,5 +158,5 @@ private:
     std::array<double, depPhaseTaps> depPhaseCoefficients {};
 };
 
-using MultibandProcessor = vx::multiband::Processor<DspCore>;
+using MultibandProcessor = ava::multiband::Processor<DspCore>;
 } // namespace tls::dsp

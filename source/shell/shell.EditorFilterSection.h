@@ -4,7 +4,7 @@
 
 #include <array>
 
-struct VxAudioProcessorEditor::FilterSection
+struct AvaAudioProcessorEditor::FilterSection
 {
     using FilterType = EqlModuleProcessor::FilterType;
 
@@ -51,7 +51,7 @@ struct VxAudioProcessorEditor::FilterSection
     juce::AudioParameterChoice* slopeParameter = nullptr;
     juce::AudioParameterFloat* gainParameter = nullptr;
     int bandIndex = 0;
-    std::array<double, 7> storedFrequencies { 40.0, 120.0, 632.0, 632.0, 5000.0, 12000.0, 632.0 };
+    std::array<double, 7> storedFrequencies { 632.46, 632.46, 632.46, 632.46, 632.46, 632.46, 632.46 };
     std::array<double, 7> storedBandwidths { 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0 };
     std::array<double, 7> storedSlopes { 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0 };
     std::array<int, 7> storedPlace { 0, 0, 0, 0, 0, 0, 0 };

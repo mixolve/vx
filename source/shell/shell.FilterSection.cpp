@@ -1,7 +1,7 @@
 #include "shell.EditorFilterSection.h"
 #include "../modules/eql/module.eql.ProcessorSupport.h"
 
-VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTreeState& state, const int bandIndexIn)
+AvaAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTreeState& state, const int bandIndexIn)
     : moveUpButton(std::make_unique<BoxTextButton>(uiGrey500)),
       header(std::make_unique<BoxTextButton>(uiAccent)),
       moveDownButton(std::make_unique<BoxTextButton>(uiGrey500)),
@@ -59,6 +59,8 @@ VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTr
     header->setTextJustification(juce::Justification::centred);
     header->setEqlFilterHeaderColouringEnabled(true);
     header->setClickingTogglesState(true);
+    header->setToggleAccentVisible(false);
+    header->setDisclosureArrowVisible(true);
     header->setCancelClickOnLeave(true);
 
     moveDownButton->setButtonText({});
@@ -80,7 +82,7 @@ VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTr
             return false;
 
         auto* editor = bypassButton != nullptr
-            ? bypassButton->findParentComponentOfClass<VxAudioProcessorEditor>()
+            ? bypassButton->findParentComponentOfClass<AvaAudioProcessorEditor>()
             : nullptr;
 
         if (editor == nullptr)
@@ -100,7 +102,7 @@ VxAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueTr
     updatePlaceChoicesForType(true);
 }
 
-void VxAudioProcessorEditor::FilterSection::detach() noexcept
+void AvaAudioProcessorEditor::FilterSection::detach() noexcept
 {
     if (typeControl != nullptr)
         typeControl->detach();
@@ -129,7 +131,7 @@ void VxAudioProcessorEditor::FilterSection::detach() noexcept
     gainParameter = nullptr;
 }
 
-void VxAudioProcessorEditor::FilterSection::rebind(juce::AudioProcessorValueTreeState& state)
+void AvaAudioProcessorEditor::FilterSection::rebind(juce::AudioProcessorValueTreeState& state)
 {
     typeControl->rebind(state);
     placeControl->rebind(state);
@@ -156,7 +158,7 @@ void VxAudioProcessorEditor::FilterSection::rebind(juce::AudioProcessorValueTree
     updatePlaceChoicesForType(true);
 }
 
-VxAudioProcessorEditor::FilterSection::FilterType VxAudioProcessorEditor::FilterSection::getFilterType() const noexcept
+AvaAudioProcessorEditor::FilterSection::FilterType AvaAudioProcessorEditor::FilterSection::getFilterType() const noexcept
 {
     if (typeParameter == nullptr)
         return FilterType::bell;
@@ -164,19 +166,19 @@ VxAudioProcessorEditor::FilterSection::FilterType VxAudioProcessorEditor::Filter
     return EqlModuleProcessor::filterTypeFromChoiceIndex(typeParameter->getIndex());
 }
 
-int VxAudioProcessorEditor::FilterSection::getPlace() const noexcept
+int AvaAudioProcessorEditor::FilterSection::getPlace() const noexcept
 {
     return placeParameter != nullptr ? placeParameter->getIndex()
                                     : 0;
 }
 
-double VxAudioProcessorEditor::FilterSection::getFrequency() const noexcept
+double AvaAudioProcessorEditor::FilterSection::getFrequency() const noexcept
 {
     return frequencyParameter != nullptr ? static_cast<double>(frequencyParameter->get())
                                          : 0.0;
 }
 
-bool VxAudioProcessorEditor::FilterSection::isBandwidthInactiveAtCurrentSlope() const noexcept
+bool AvaAudioProcessorEditor::FilterSection::isBandwidthInactiveAtCurrentSlope() const noexcept
 {
     const auto filterType = getFilterType();
     if (filterType == FilterType::volume)
@@ -196,21 +198,21 @@ bool VxAudioProcessorEditor::FilterSection::isBandwidthInactiveAtCurrentSlope() 
         && (slope <= 6.05f || slope > 96.0f);
 }
 
-bool VxAudioProcessorEditor::FilterSection::isSlopeInactive() const noexcept
+bool AvaAudioProcessorEditor::FilterSection::isSlopeInactive() const noexcept
 {
     const auto filterType = getFilterType();
     return filterType == FilterType::tilt
         || filterType == FilterType::volume;
 }
 
-bool VxAudioProcessorEditor::FilterSection::isGainInactive() const noexcept
+bool AvaAudioProcessorEditor::FilterSection::isGainInactive() const noexcept
 {
     const auto filterType = getFilterType();
     return filterType == FilterType::lowCut
         || filterType == FilterType::highCut;
 }
 
-void VxAudioProcessorEditor::FilterSection::updateFrequencyRangeForType()
+void AvaAudioProcessorEditor::FilterSection::updateFrequencyRangeForType()
 {
     if (frequencyControl == nullptr)
         return;
@@ -224,7 +226,7 @@ void VxAudioProcessorEditor::FilterSection::updateFrequencyRangeForType()
         frequencyControl->setValue(maximumFrequency, true);
 }
 
-void VxAudioProcessorEditor::FilterSection::setGainDisplaysDegrees(const bool shouldDisplayDegrees)
+void AvaAudioProcessorEditor::FilterSection::setGainDisplaysDegrees(const bool shouldDisplayDegrees)
 {
     if (gainControl == nullptr)
         return;
@@ -272,7 +274,7 @@ void VxAudioProcessorEditor::FilterSection::setGainDisplaysDegrees(const bool sh
     }
 }
 
-void VxAudioProcessorEditor::FilterSection::updatePlaceChoicesForType(const bool normalizeSelection)
+void AvaAudioProcessorEditor::FilterSection::updatePlaceChoicesForType(const bool normalizeSelection)
 {
     if (placeControl == nullptr)
         return;
@@ -287,7 +289,7 @@ void VxAudioProcessorEditor::FilterSection::updatePlaceChoicesForType(const bool
         placeControl->setSelectedChoiceIndex(0, true);
 }
 
-void VxAudioProcessorEditor::FilterSection::setStoredValues(const FilterType type,
+void AvaAudioProcessorEditor::FilterSection::setStoredValues(const FilterType type,
                                                            const double frequency,
                                                            const double bandwidth,
                                                            const double slope,
@@ -303,12 +305,12 @@ void VxAudioProcessorEditor::FilterSection::setStoredValues(const FilterType typ
     storedValuesCustom[index] = isCustom;
 }
 
-int VxAudioProcessorEditor::FilterSection::getStoredPlace(const FilterType type) const noexcept
+int AvaAudioProcessorEditor::FilterSection::getStoredPlace(const FilterType type) const noexcept
 {
     return storedPlace[static_cast<size_t>(EqlModuleProcessor::choiceIndexFromFilterType(type))];
 }
 
-void VxAudioProcessorEditor::FilterSection::captureCurrentValuesForType(const FilterType type,
+void AvaAudioProcessorEditor::FilterSection::captureCurrentValuesForType(const FilterType type,
                                                                         const bool markCustom) noexcept
 {
     if (suppressStoredValueCapture)
@@ -325,13 +327,13 @@ void VxAudioProcessorEditor::FilterSection::captureCurrentValuesForType(const Fi
                     markCustom);
 }
 
-void VxAudioProcessorEditor::FilterSection::captureCurrentValuesForCurrentType(const bool markCustom) noexcept
+void AvaAudioProcessorEditor::FilterSection::captureCurrentValuesForCurrentType(const bool markCustom) noexcept
 {
     captureCurrentValuesForType(getFilterType(), markCustom);
     lastFilterType = getFilterType();
 }
 
-void VxAudioProcessorEditor::FilterSection::copyStoredValuesFrom(const FilterSection& other) noexcept
+void AvaAudioProcessorEditor::FilterSection::copyStoredValuesFrom(const FilterSection& other) noexcept
 {
     storedFrequencies = other.storedFrequencies;
     storedBandwidths = other.storedBandwidths;

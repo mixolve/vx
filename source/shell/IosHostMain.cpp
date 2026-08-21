@@ -8,8 +8,8 @@ class HostContent final : public juce::Component
 public:
     HostContent()
     {
-        processor = std::make_unique<VxAudioProcessor>();
-        editor = std::make_unique<VxAudioProcessorEditor>(*processor);
+        processor = std::make_unique<AvaAudioProcessor>();
+        editor = std::make_unique<AvaAudioProcessorEditor>(*processor);
         editor->setResizable(false, false);
         addAndMakeVisible(*editor);
         setOpaque(true);
@@ -27,8 +27,8 @@ public:
     }
 
 private:
-    std::unique_ptr<VxAudioProcessor> processor;
-    std::unique_ptr<VxAudioProcessorEditor> editor;
+    std::unique_ptr<AvaAudioProcessor> processor;
+    std::unique_ptr<AvaAudioProcessorEditor> editor;
 };
 
 class HostWindow final : public juce::DocumentWindow
@@ -56,10 +56,10 @@ public:
     }
 };
 
-class VxIosHostApplication final : public juce::JUCEApplication
+class AvaIosHostApplication final : public juce::JUCEApplication
 {
 public:
-    const juce::String getApplicationName() override { return "vx"; }
+    const juce::String getApplicationName() override { return "ava"; }
     const juce::String getApplicationVersion() override { return "0.1.2"; }
     bool moreThanOneInstanceAllowed() override { return true; }
 
@@ -91,4 +91,4 @@ private:
     std::unique_ptr<HostWindow> mainWindow;
 };
 
-START_JUCE_APPLICATION(VxIosHostApplication)
+START_JUCE_APPLICATION(AvaIosHostApplication)

@@ -118,12 +118,14 @@ public:
     ~BoxTextButton() override;
 
     void setAlwaysAccentOutline(bool shouldAlwaysAccent);
+    void setToggleAccentVisible(bool shouldShow) noexcept;
     void setPressFillEnabled(bool shouldEnable) noexcept;
     void setClearsParameterFocusOnMouseDown(bool shouldClear) noexcept;
     void setFillVisible(bool shouldShow) noexcept;
     void setDividerLineVisible(bool shouldShow) noexcept;
     void setTextJustification(juce::Justification justification) noexcept;
     void setArrowDirection(ArrowDirection direction) noexcept;
+    void setDisclosureArrowVisible(bool shouldShow) noexcept;
     void setBorderVisible(bool shouldShow) noexcept;
     void setEqlFilterHeaderColouringEnabled(bool shouldEnable) noexcept;
     void setABCompareHighlightIndex(int highlightedIndex) noexcept;
@@ -144,6 +146,7 @@ public:
 private:
     juce::Colour accentColour;
     bool alwaysAccentOutline = false;
+    bool toggleAccentVisible = true;
     bool pressFillEnabled = true;
     bool clearsParameterFocusOnMouseDown = true;
     bool fillVisible = true;
@@ -155,6 +158,7 @@ private:
     bool pressCanceled = false;
     juce::Justification textJustification = juce::Justification::centred;
     ArrowDirection arrowDirection = ArrowDirection::none;
+    bool disclosureArrowVisible = false;
     bool borderVisible = true;
     bool eqlFilterHeaderColouringEnabled = false;
     int abCompareHighlightIndex = -1;

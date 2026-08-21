@@ -27,6 +27,16 @@ inline constexpr auto tlsCrossoverFullbandOrder = std::to_array<ParameterOrderEn
     { "xover5", "CROSSOVER", "CROSSOVER 5" },
 });
 
+inline constexpr auto tlsWidebandListenOrder = std::to_array<ParameterOrderEntry>({
+    { "listenLc", "LISTEN", "LC" },
+    { "listenRc", "LISTEN", "RC" },
+    { "listenMc", "LISTEN", "MC" },
+    { "listenSc", "LISTEN", "SC" },
+    { "listenLl", "LISTEN", "LL" },
+    { "listenRr", "LISTEN", "RR" },
+    { "listenSs", "LISTEN", "SS" },
+});
+
 inline constexpr auto tlsBandOrder = std::to_array<ParameterOrderEntry>({
     { "gainMid", "GAIN", "MID" },
     { "gainMidMute", "GAIN", "MID MUTE" },
@@ -78,8 +88,8 @@ juce::String makeFullbandHostName(const juce::String& blockName, const juce::Str
 
 juce::String makeBandHostName(const size_t bandIndex, const juce::String& blockName, const juce::String& parameterName)
 {
-    return "TLS / " + blockName + " / BAND "
-        + juce::String(static_cast<int>(bandIndex + 1)) + " " + parameterName;
+    return "TLS / BAND " + juce::String(static_cast<int>(bandIndex + 1))
+        + " / " + blockName + " / " + parameterName;
 }
 
 juce::String formatParameterValue(const float value, const int decimalPlaces, const bool muteAtMinimum, const float minimum)
@@ -90,7 +100,6 @@ juce::String formatParameterValue(const float value, const int decimalPlaces, co
     return juce::String(value, juce::jmax(0, decimalPlaces));
 }
 
-constexpr bool isHostEditableParameter = false;
 } // namespace
 
 juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
@@ -142,14 +151,27 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
         return std::make_unique<juce::AudioParameterBool>(juce::ParameterID { id, 1 }, name, defaultValue, attributes);
     };
 
+    auto choiceParam = [] (const juce::String& id,
+                           const juce::String& name,
+                           const juce::StringArray& choices,
+                           const int defaultIndex,
+                           const bool isAutomatable,
+                           const bool isMeta = false) -> Parameter
+    {
+        auto attributes = juce::AudioParameterChoiceAttributes()
+                              .withAutomatable(isAutomatable)
+                              .withMeta(isMeta);
+        return std::make_unique<juce::AudioParameterChoice>(juce::ParameterID { id, 1 }, name, choices, defaultIndex, attributes);
+    };
+
     Layout layout;
     auto soloGroup = std::make_unique<juce::AudioProcessorParameterGroup>("monitor", "Monitor", " | ");
 
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
         soloGroup->addChild(boolParam(makeSoloParameterId(bandIndex),
-                                      "TLS / SOLO / BAND " + juce::String(static_cast<int>(bandIndex + 1)),
+                                      "TLS / BAND " + juce::String(static_cast<int>(bandIndex + 1)) + " / SOLO",
                                       false,
-                                      isHostEditableParameter));
+                                      false));
 
     layout.add(std::move(soloGroup));
 
@@ -204,6 +226,26 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
 
     fullbandGroup->addChild(std::move(fullbandCrossoverGroup));
 
+    auto fullbandListenGroup = std::make_unique<juce::AudioProcessorParameterGroup>("fullband_listen",
+                                                                                     "LISTEN",
+                                                                                     " | ");
+
+    for (const auto& entry : tlsWidebandListenOrder)
+    {
+        const auto listenIt = std::find_if(widebandListenSpecs.begin(), widebandListenSpecs.end(), [&entry] (const auto& spec)
+        {
+            return juce::String(spec.suffix) == entry.key;
+        });
+
+        if (listenIt != widebandListenSpecs.end())
+            fullbandListenGroup->addChild(boolParam(makeFullbandParameterId(listenIt->suffix),
+                                                    makeFullbandHostName(entry.block, entry.label),
+                                                    false,
+                                                    false));
+    }
+
+    fullbandGroup->addChild(std::move(fullbandListenGroup));
+
     layout.add(std::move(fullbandGroup));
 
     for (size_t bandIndex = 0; bandIndex < numBands; ++bandIndex)
@@ -226,7 +268,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
             const auto parameterName = makeBandHostName(bandIndex, entry.block, entry.label);
 
             if (it->type == ParameterType::boolean)
-                group->addChild(boolParam(parameterId, parameterName, it->defaultValue >= 0.5f, false));
+                group->addChild(boolParam(parameterId,
+                                          parameterName,
+                                          it->defaultValue >= 0.5f,
+                                          false));
+            else if (it->type == ParameterType::choice)
+                group->addChild(choiceParam(parameterId,
+                                            parameterName,
+                                            juce::StringArray { "LEFT", "RIGHT" },
+                                            juce::roundToInt(it->defaultValue),
+                                            false));
             else
                 group->addChild(floatParam(parameterId,
                                            parameterName,

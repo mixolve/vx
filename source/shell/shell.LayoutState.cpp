@@ -5,7 +5,7 @@
 #include <algorithm>
 
 
-void VxAudioProcessorEditor::updateSectionStates()
+void AvaAudioProcessorEditor::updateSectionStates()
 {
     constexpr auto globalControlsVisible = true;
 
@@ -63,10 +63,11 @@ void VxAudioProcessorEditor::updateSectionStates()
 
     auto setFftControlsVisible = [this, setComponentVisible] (const bool shouldShow)
     {
-        const auto phaseMode = fftDynamicModeButton != nullptr && fftDynamicModeButton->getToggleState();
+        const auto phaseMode = fftDynamicModeControl != nullptr
+            && fftDynamicModeControl->getSelectedChoiceIndex() == 1;
 
-        fftAnalyserViewport.setVisible(shouldShow);
         setComponentVisible(fftAnalyserComponent.get(), shouldShow);
+        setComponentVisible(fftAnalyserRangeControl.get(), shouldShow);
         setComponentVisible(fftAttackControl.get(), shouldShow);
         setComponentVisible(fftReleaseControl.get(), shouldShow);
         setComponentVisible(fftKneeControl.get(), shouldShow);
@@ -74,7 +75,7 @@ void VxAudioProcessorEditor::updateSectionStates()
         setComponentVisible(fftFloorControl.get(), shouldShow && phaseMode);
         setComponentVisible(fftGeneralProcessorHeader.get(), shouldShow);
         setComponentVisible(fftDspFftSizeControl.get(), shouldShow);
-        setComponentVisible(fftDspHopDivisorControl.get(), shouldShow);
+        setComponentVisible(fftDspOverlapControl.get(), shouldShow);
         setComponentVisible(fftDspSlopeControl.get(), shouldShow);
         setComponentVisible(fftPhaseImpactControl.get(), shouldShow && phaseMode);
         setComponentVisible(fftDeltaButton.get(), shouldShow);
@@ -83,26 +84,15 @@ void VxAudioProcessorEditor::updateSectionStates()
         setComponentVisible(fftDualMonoRightThresholdControl.get(), shouldShow && ! phaseMode);
         setComponentVisible(fftDualMonoRightAdaptiveControl.get(), shouldShow && ! phaseMode);
         setComponentVisible(fftDynamicProcessorHeader.get(), shouldShow);
-        setComponentVisible(fftDynamicModeButton.get(), shouldShow);
+        setComponentVisible(fftDynamicModeControl.get(), shouldShow);
         setComponentVisible(fftDualMonoLinkButton.get(), shouldShow && ! phaseMode);
-        setComponentVisible(fftAdaptiveSettingsButton.get(), shouldShow);
-        setComponentVisible(fftAdaptiveOffsetControl.get(), shouldShow && fftAdaptiveSettingsExpanded);
-        setComponentVisible(fftAdaptiveAttackControl.get(), shouldShow && fftAdaptiveSettingsExpanded);
-        setComponentVisible(fftAdaptiveHoldControl.get(), shouldShow && fftAdaptiveSettingsExpanded);
-        setComponentVisible(fftAdaptiveReleaseControl.get(), shouldShow && fftAdaptiveSettingsExpanded);
+        setComponentVisible(fftAdaptiveSettingsHeader.get(), shouldShow);
+        setComponentVisible(fftAdaptiveOffsetControl.get(), shouldShow);
+        setComponentVisible(fftAdaptiveAttackControl.get(), shouldShow);
+        setComponentVisible(fftAdaptiveHoldControl.get(), shouldShow);
+        setComponentVisible(fftAdaptiveReleaseControl.get(), shouldShow);
         setComponentVisible(fftDynamicBypassButton.get(), shouldShow);
-        setComponentVisible(fftAnalyserSettingsHeader.get(), shouldShow);
-        setComponentVisible(fftAnalyserFftSizeControl.get(), shouldShow);
-        setComponentVisible(fftAnalyserOverlapControl.get(), shouldShow);
-        setComponentVisible(fftAnalyserLeftControl.get(), shouldShow);
-        setComponentVisible(fftAnalyserRightControl.get(), shouldShow);
-        setComponentVisible(fftAnalyserRangeLowControl.get(), shouldShow);
-        setComponentVisible(fftAnalyserRangeHighControl.get(), shouldShow);
-        setComponentVisible(fftAnalyserSlopeControl.get(), shouldShow && ! phaseMode);
         setComponentVisible(fftAnalyserTimeControl.get(), shouldShow);
-
-        if (fftDynamicModeButton != nullptr)
-            fftDynamicModeButton->setButtonText(phaseMode ? "PHASE CORR" : "SPECTRAL");
 
         if (fftDualMonoLeftThresholdControl != nullptr)
             fftDualMonoLeftThresholdControl->setTitleText(phaseMode ? "THRESH" : "L.THRESH");
@@ -113,8 +103,6 @@ void VxAudioProcessorEditor::updateSectionStates()
         if (fftDualMonoRightAdaptiveControl != nullptr)
             fftDualMonoRightAdaptiveControl->setTitleText("R.ADAP");
 
-        if (fftAdaptiveSettingsButton != nullptr)
-            fftAdaptiveSettingsButton->setToggleState(fftAdaptiveSettingsExpanded, juce::dontSendNotification);
         if (fftAdaptiveOffsetControl != nullptr)
             fftAdaptiveOffsetControl->setTitleText("OFFSET");
 
@@ -147,10 +135,10 @@ void VxAudioProcessorEditor::updateSectionStates()
     {
         const auto module = audioProcessor.getActiveModule();
         const auto active = activeModule == module;
-        const auto shouldShow = module != VxAudioProcessor::ActiveModule::none;
+        const auto shouldShow = module != AvaAudioProcessor::ActiveModule::none;
 
         moduleTabButton->setVisible(shouldShow);
-        moduleTabButton->setButtonText(juce::String(VxAudioProcessor::stateIdForModule(module)).toUpperCase());
+        moduleTabButton->setButtonText(juce::String(AvaAudioProcessor::stateIdForModule(module)).toUpperCase());
         moduleTabButton->setToggleState(active, juce::dontSendNotification);
     }
 
@@ -160,7 +148,7 @@ void VxAudioProcessorEditor::updateSectionStates()
 
     if (moduleAddButton != nullptr)
     {
-        const auto noModuleLoaded = audioProcessor.getActiveModule() == VxAudioProcessor::ActiveModule::none;
+        const auto noModuleLoaded = audioProcessor.getActiveModule() == AvaAudioProcessor::ActiveModule::none;
         moduleAddButton->setVisible(noModuleLoaded && ! hostParametersExpanded);
         moduleAddButton->setEnabled(noModuleLoaded);
     }
@@ -177,9 +165,21 @@ void VxAudioProcessorEditor::updateSectionStates()
     if (abCompareButton != nullptr)
         abCompareButton->setVisible(globalControlsVisible);
 
+    for (auto& hostSlotMoveUpButton : hostSlotMoveUpButtons)
+        if (hostSlotMoveUpButton != nullptr)
+            hostSlotMoveUpButton->setVisible(hostParametersVisible);
+
+    for (auto& hostSlotNameField : hostSlotNameFields)
+        if (hostSlotNameField != nullptr)
+            hostSlotNameField->setVisible(hostParametersVisible);
+
     for (auto& hostSlotButton : hostSlotButtons)
         if (hostSlotButton != nullptr)
             hostSlotButton->setVisible(hostParametersVisible);
+
+    for (auto& hostSlotMoveDownButton : hostSlotMoveDownButtons)
+        if (hostSlotMoveDownButton != nullptr)
+            hostSlotMoveDownButton->setVisible(hostParametersVisible);
 
     if (tlsModuleEditor != nullptr)
         tlsModuleEditor->setVisible(tlsModuleLoaded);
@@ -235,27 +235,27 @@ void VxAudioProcessorEditor::updateSectionStates()
     {
         sortPlaceButton->setVisible(eqlModuleLoaded);
         sortPlaceButton->setEnabled(canSortFilters);
-        sortPlaceButton->setAlpha(canSortFilters ? 1.0f : 0.45f);
+        sortPlaceButton->setAlpha(1.0f);
     }
 
     if (sortFreqButton != nullptr)
     {
         sortFreqButton->setVisible(eqlModuleLoaded);
         sortFreqButton->setEnabled(canSortFilters);
-        sortFreqButton->setAlpha(canSortFilters ? 1.0f : 0.45f);
+        sortFreqButton->setAlpha(1.0f);
     }
 
     if (sortDuoButton != nullptr)
     {
         sortDuoButton->setVisible(eqlModuleLoaded);
         sortDuoButton->setEnabled(canSortFilters);
-        sortDuoButton->setAlpha(canSortFilters ? 1.0f : 0.45f);
+        sortDuoButton->setAlpha(1.0f);
     }
 
     filterViewport.setVisible(eqlModuleLoaded);
     setPresetsVisible(eqlModuleLoaded);
 
-    for (int filterIndex = 0; filterIndex < VxAudioProcessor::maxEqlFilterCount; ++filterIndex)
+    for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
     {
         auto* section = filterSections[static_cast<size_t>(filterIndex)].get();
 
@@ -280,10 +280,10 @@ void VxAudioProcessorEditor::updateSectionStates()
         section->updatePlaceChoicesForType(false);
         section->moveUpButton->setVisible(isActive);
         section->moveUpButton->setEnabled(canMoveUp);
-        section->moveUpButton->setAlpha(canMoveUp ? 1.0f : 0.45f);
+        section->moveUpButton->setAlpha(1.0f);
         section->moveDownButton->setVisible(isActive);
         section->moveDownButton->setEnabled(canMoveDown);
-        section->moveDownButton->setAlpha(canMoveDown ? 1.0f : 0.45f);
+        section->moveDownButton->setAlpha(1.0f);
         if (auto* eqlProcessor = getActiveEqlProcessor())
             section->header->setButtonText(eqlProcessor->getFilterHeaderText(filterIndex, orderPosition));
         else

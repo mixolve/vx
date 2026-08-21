@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-void VxAudioProcessorEditor::selectFilterSection(const int filterIndex)
+void AvaAudioProcessorEditor::selectFilterSection(const int filterIndex)
 {
     if (! eqlModuleLoaded)
         return;
@@ -32,7 +32,7 @@ void VxAudioProcessorEditor::selectFilterSection(const int filterIndex)
     refreshFftAnalyserResponse();
 }
 
-juce::Rectangle<int> VxAudioProcessorEditor::getFilterSectionBounds(const int filterIndex) const
+juce::Rectangle<int> AvaAudioProcessorEditor::getFilterSectionBounds(const int filterIndex) const
 {
     if (! juce::isPositiveAndBelow(filterIndex, getActiveFilterCount()))
         return {};
@@ -63,7 +63,7 @@ juce::Rectangle<int> VxAudioProcessorEditor::getFilterSectionBounds(const int fi
     return bounds;
 }
 
-void VxAudioProcessorEditor::moveFilterSection(const int sourceIndex, const int destinationIndex)
+void AvaAudioProcessorEditor::moveFilterSection(const int sourceIndex, const int destinationIndex)
 {
     if (sourceIndex == destinationIndex)
         return;
@@ -84,7 +84,7 @@ void VxAudioProcessorEditor::moveFilterSection(const int sourceIndex, const int 
     scheduleHistorySnapshot();
 }
 
-void VxAudioProcessorEditor::enforceSingleExpandedFilterSection(const int preferredFilterIndex)
+void AvaAudioProcessorEditor::enforceSingleExpandedFilterSection(const int preferredFilterIndex)
 {
     const auto activeCount = getActiveFilterCount();
     const auto targetFilterIndex = juce::isPositiveAndBelow(preferredFilterIndex, activeCount) ? preferredFilterIndex : -1;
@@ -100,7 +100,7 @@ void VxAudioProcessorEditor::enforceSingleExpandedFilterSection(const int prefer
     }
 }
 
-void VxAudioProcessorEditor::normalizeSlopeForType(const int filterIndex)
+void AvaAudioProcessorEditor::normalizeSlopeForType(const int filterIndex)
 {
     if (! juce::isPositiveAndBelow(filterIndex, static_cast<int>(filterSections.size())))
         return;
@@ -143,7 +143,7 @@ int sortPlaceFor(const int place) noexcept
 
 }
 
-void VxAudioProcessorEditor::sortFilterSectionsByPlace()
+void AvaAudioProcessorEditor::sortFilterSectionsByPlace()
 {
     const auto activeCount = getActiveFilterCount();
 
@@ -181,7 +181,7 @@ void VxAudioProcessorEditor::sortFilterSectionsByPlace()
     applyFilterSortOrder(orderedIndices);
 }
 
-void VxAudioProcessorEditor::sortFilterSectionsByFrequency()
+void AvaAudioProcessorEditor::sortFilterSectionsByFrequency()
 {
     const auto activeCount = getActiveFilterCount();
 
@@ -219,7 +219,7 @@ void VxAudioProcessorEditor::sortFilterSectionsByFrequency()
     applyFilterSortOrder(orderedIndices);
 }
 
-void VxAudioProcessorEditor::sortFilterSectionsByDuo()
+void AvaAudioProcessorEditor::sortFilterSectionsByDuo()
 {
     const auto activeCount = getActiveFilterCount();
 
@@ -260,7 +260,7 @@ void VxAudioProcessorEditor::sortFilterSectionsByDuo()
     applyFilterSortOrder(orderedIndices);
 }
 
-void VxAudioProcessorEditor::applyFilterSortOrder(const std::vector<int>& orderedIndices)
+void AvaAudioProcessorEditor::applyFilterSortOrder(const std::vector<int>& orderedIndices)
 {
     const auto activeCount = getActiveFilterCount();
 
@@ -276,7 +276,7 @@ void VxAudioProcessorEditor::applyFilterSortOrder(const std::vector<int>& ordere
     scheduleHistorySnapshot();
 }
 
-int VxAudioProcessorEditor::getFilterIndexForOrderPosition(const int orderIndex) const noexcept
+int AvaAudioProcessorEditor::getFilterIndexForOrderPosition(const int orderIndex) const noexcept
 {
     if (! juce::isPositiveAndBelow(orderIndex, getActiveFilterCount()))
         return -1;
@@ -287,7 +287,7 @@ int VxAudioProcessorEditor::getFilterIndexForOrderPosition(const int orderIndex)
     return filterDisplayOrder[static_cast<size_t>(orderIndex)];
 }
 
-int VxAudioProcessorEditor::getFilterOrderPositionForIndex(const int filterIndex) const noexcept
+int AvaAudioProcessorEditor::getFilterOrderPositionForIndex(const int filterIndex) const noexcept
 {
     const auto activeCount = getActiveFilterCount();
 

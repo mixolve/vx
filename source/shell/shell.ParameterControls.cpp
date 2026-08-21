@@ -6,19 +6,19 @@
 namespace
 {
 const juce::Colour parameterTitleFocusColour { 0xFF99CC99 };
-juce::Component::SafePointer<VxAudioProcessorEditor> focusedParameterOwner;
+juce::Component::SafePointer<AvaAudioProcessorEditor> focusedParameterOwner;
 BoxTextButton* focusedParameterTitleButton = nullptr;
 juce::Slider* focusedParameterValueSlider = nullptr;
 
-VxAudioProcessorEditor* findFocusOwner(juce::Component* component) noexcept
+AvaAudioProcessorEditor* findFocusOwner(juce::Component* component) noexcept
 {
     if (component == nullptr)
         return nullptr;
 
-    if (auto* editor = dynamic_cast<VxAudioProcessorEditor*>(component))
+    if (auto* editor = dynamic_cast<AvaAudioProcessorEditor*>(component))
         return editor;
 
-    return component->findParentComponentOfClass<VxAudioProcessorEditor>();
+    return component->findParentComponentOfClass<AvaAudioProcessorEditor>();
 }
 
 bool focusBelongsTo(juce::Component& owner) noexcept
@@ -90,7 +90,7 @@ bool assignParameterTitleToHostSlot(juce::Component& source,
     if (! modifiers.isCtrlDown() || parameter == nullptr)
         return false;
 
-    if (auto* owner = source.findParentComponentOfClass<VxAudioProcessorEditor>())
+    if (auto* owner = source.findParentComponentOfClass<AvaAudioProcessorEditor>())
     {
         return owner->handleHostSlotAssignRequest(parameterId,
                                                   titleButton != nullptr ? titleButton->getButtonText() : parameterId,
@@ -837,6 +837,9 @@ void ChoiceControl::setInteractionEnabled(const bool shouldEnable)
     comboBox.setEnabled(true);
     comboBox.setAlpha(1.0f);
     comboBox.setInterceptsMouseClicks(shouldEnable, shouldEnable);
+    const auto displayText = overrideText.isNotEmpty() ? overrideText : comboBox.getText();
+    comboBox.setColour(juce::ComboBox::textColourId,
+                       shouldEnable ? getDisplayTextColour(displayText) : uiGrey500);
 }
 
 void ChoiceControl::setOverrideText(const juce::String& text)
@@ -1109,16 +1112,50 @@ void LocalParameterControl::setValue(const double value, const bool sendNotifica
 
 void LocalParameterControl::setValueRange(const double minimum,
                                            const double maximum,
-                                           const double interval)
+                                           const double interval,
+                                           const bool reversed)
 {
     if (std::abs(slider.getMinimum() - minimum) <= 1.0e-9
         && std::abs(slider.getMaximum() - maximum) <= 1.0e-9
-        && std::abs(slider.getInterval() - interval) <= 1.0e-9)
+        && std::abs(slider.getInterval() - interval) <= 1.0e-9
+        && valueRangeReversed == reversed)
     {
         return;
     }
 
-    slider.setRange(minimum, maximum, interval);
+    valueRangeReversed = reversed;
+
+    if (! reversed)
+    {
+        slider.setRange(minimum, maximum, interval);
+        return;
+    }
+
+    juce::NormalisableRange<double> range {
+        minimum,
+        maximum,
+        [] (const double start, const double end, const double normalised)
+        {
+            return end - (normalised * (end - start));
+        },
+        [] (const double start, const double end, const double value)
+        {
+            return (end - juce::jlimit(start, end, value)) / (end - start);
+        },
+        [interval] (const double start, const double end, const double value)
+        {
+            const auto snapped = start + (std::round((value - start) / interval) * interval);
+            return juce::jlimit(start, end, snapped);
+        }
+    };
+    range.interval = interval;
+    slider.setNormalisableRange(range);
+}
+
+void LocalParameterControl::setDefaultValue(const double value)
+{
+    defaultValue = slider.getNormalisableRange().snapToLegalValue(value);
+    slider.setDoubleClickReturnValue(true, defaultValue);
 }
 
 void LocalParameterControl::setTitleText(const juce::String& text)
