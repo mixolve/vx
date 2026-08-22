@@ -113,78 +113,84 @@ public:
     void process(juce::AudioBuffer<float>& buffer, ProcessRange&& processRange)
     {
         const auto channelCount = juce::jmin(preparedChannels, buffer.getNumChannels());
-        const auto sampleCount = buffer.getNumSamples();
+        const auto totalSampleCount = buffer.getNumSamples();
 
-        if (channelCount <= 0 || sampleCount <= 0)
-            return;
-
-        jassert(sampleCount <= preparedBlockSize);
-
-        if (sampleCount > preparedBlockSize)
+        if (channelCount <= 0 || totalSampleCount <= 0)
             return;
 
         const auto activeRangeCount = activeSplitCount + 1;
 
-        for (size_t rangeIndex = 0; rangeIndex < activeRangeCount; ++rangeIndex)
-            rangeBuffers[rangeIndex].clear(0, 0, sampleCount);
-
-        const auto* inputLeft = buffer.getReadPointer(0);
-        const auto* inputRight = channelCount > 1 ? buffer.getReadPointer(1) : nullptr;
-
-        for (int sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex)
+        for (auto blockStart = 0; blockStart < totalSampleCount; blockStart += preparedBlockSize)
         {
-            const auto left = static_cast<double>(inputLeft[sampleIndex]);
-            const auto right = inputRight != nullptr ? static_cast<double>(inputRight[sampleIndex]) : left;
-            const auto ranges = splitter.processSample(left, right);
+            const auto sampleCount = juce::jmin(preparedBlockSize, totalSampleCount - blockStart);
 
             for (size_t rangeIndex = 0; rangeIndex < activeRangeCount; ++rangeIndex)
+                for (auto channel = 0; channel < channelCount; ++channel)
+                    rangeBuffers[rangeIndex].clear(channel, 0, sampleCount);
+
+            const auto* inputLeft = buffer.getReadPointer(0, blockStart);
+            const auto* inputRight = channelCount > 1 ? buffer.getReadPointer(1, blockStart) : nullptr;
+
+            for (int sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex)
             {
-                rangeBuffers[rangeIndex].setSample(0, sampleIndex, static_cast<float>(ranges[rangeIndex].left));
+                const auto left = static_cast<double>(inputLeft[sampleIndex]);
+                const auto right = inputRight != nullptr ? static_cast<double>(inputRight[sampleIndex]) : left;
+                const auto ranges = splitter.processSample(left, right);
 
-                if (channelCount > 1)
-                    rangeBuffers[rangeIndex].setSample(1, sampleIndex, static_cast<float>(ranges[rangeIndex].right));
-            }
-        }
-
-        for (size_t rangeIndex = 0; rangeIndex < activeRangeCount; ++rangeIndex)
-            processRange(rangeIndex, rangeBuffers[rangeIndex]);
-
-        for (int sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex)
-        {
-            auto sumLeft = 0.0f;
-            auto sumRight = 0.0f;
-
-            for (size_t rangeIndex = 0; rangeIndex < activeRangeCount; ++rangeIndex)
-            {
-                const auto compensationSamples = targetLatencySamples - rangeLatencies[rangeIndex];
-                auto readPosition = alignmentWritePosition - compensationSamples;
-
-                if (readPosition < 0)
-                    readPosition += alignmentBufferSize;
-
-                auto& leftAlignment = alignmentBuffers[rangeIndex][0];
-                leftAlignment[static_cast<size_t>(alignmentWritePosition)] = rangeBuffers[rangeIndex].getSample(0, sampleIndex);
-
-                if (! anySoloActive || soloMask[rangeIndex])
-                    sumLeft += leftAlignment[static_cast<size_t>(readPosition)];
-
-                if (channelCount > 1)
+                for (size_t rangeIndex = 0; rangeIndex < activeRangeCount; ++rangeIndex)
                 {
-                    auto& rightAlignment = alignmentBuffers[rangeIndex][1];
-                    rightAlignment[static_cast<size_t>(alignmentWritePosition)] = rangeBuffers[rangeIndex].getSample(1, sampleIndex);
+                    rangeBuffers[rangeIndex].setSample(0, sampleIndex, static_cast<float>(ranges[rangeIndex].left));
 
-                    if (! anySoloActive || soloMask[rangeIndex])
-                        sumRight += rightAlignment[static_cast<size_t>(readPosition)];
+                    if (channelCount > 1)
+                        rangeBuffers[rangeIndex].setSample(1, sampleIndex, static_cast<float>(ranges[rangeIndex].right));
                 }
             }
 
-            buffer.setSample(0, sampleIndex, sumLeft);
+            for (size_t rangeIndex = 0; rangeIndex < activeRangeCount; ++rangeIndex)
+            {
+                juce::AudioBuffer<float> rangeView(rangeBuffers[rangeIndex].getArrayOfWritePointers(),
+                                                   channelCount,
+                                                   sampleCount);
+                processRange(rangeIndex, rangeView);
+            }
 
-            if (channelCount > 1)
-                buffer.setSample(1, sampleIndex, sumRight);
+            for (int sampleIndex = 0; sampleIndex < sampleCount; ++sampleIndex)
+            {
+                auto sumLeft = 0.0f;
+                auto sumRight = 0.0f;
 
-            if (++alignmentWritePosition == alignmentBufferSize)
-                alignmentWritePosition = 0;
+                for (size_t rangeIndex = 0; rangeIndex < activeRangeCount; ++rangeIndex)
+                {
+                    const auto compensationSamples = targetLatencySamples - rangeLatencies[rangeIndex];
+                    auto readPosition = alignmentWritePosition - compensationSamples;
+
+                    if (readPosition < 0)
+                        readPosition += alignmentBufferSize;
+
+                    auto& leftAlignment = alignmentBuffers[rangeIndex][0];
+                    leftAlignment[static_cast<size_t>(alignmentWritePosition)] = rangeBuffers[rangeIndex].getSample(0, sampleIndex);
+
+                    if (! anySoloActive || soloMask[rangeIndex])
+                        sumLeft += leftAlignment[static_cast<size_t>(readPosition)];
+
+                    if (channelCount > 1)
+                    {
+                        auto& rightAlignment = alignmentBuffers[rangeIndex][1];
+                        rightAlignment[static_cast<size_t>(alignmentWritePosition)] = rangeBuffers[rangeIndex].getSample(1, sampleIndex);
+
+                        if (! anySoloActive || soloMask[rangeIndex])
+                            sumRight += rightAlignment[static_cast<size_t>(readPosition)];
+                    }
+                }
+
+                buffer.setSample(0, blockStart + sampleIndex, sumLeft);
+
+                if (channelCount > 1)
+                    buffer.setSample(1, blockStart + sampleIndex, sumRight);
+
+                if (++alignmentWritePosition == alignmentBufferSize)
+                    alignmentWritePosition = 0;
+            }
         }
     }
 
