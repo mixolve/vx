@@ -27,7 +27,13 @@ void AvaAudioProcessorEditor::layoutCrossoverSection(juce::Rectangle<int>& bound
     const auto reservedModuleButtonHeight = moduleAddButton != nullptr && moduleAddButton->isVisible()
         ? rowHeight + verticalGap
         : 0;
-    const auto availableHeight = juce::jmax(0, bounds.getHeight() - reservedModuleButtonHeight);
+    const auto reservedPotentiometerGap = editor->isCrossoverSettingsSelected()
+        ? viewportToPotentiometerGap
+        : 0;
+    const auto availableHeight = juce::jmax(0,
+                                            bounds.getHeight()
+                                                - reservedModuleButtonHeight
+                                                - reservedPotentiometerGap);
     const auto sectionHeight = juce::jmin(availableHeight, editor->getPreferredHeight());
     editor->setBounds(bounds.removeFromTop(sectionHeight));
     editor->setVisible(sectionHeight > 0);

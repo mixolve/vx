@@ -5,6 +5,14 @@
 
 namespace dyn::dsp
 {
+namespace
+{
+double levelToDb(const double level)
+{
+    return 20.0 * std::log10(std::max(level, epsilon));
+}
+} // namespace
+
 double DspCore::releaseTowards(ReleaseState& state,
                                const double current,
                                const double target,
@@ -66,6 +74,7 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
         posR,
         negR
     };
+    std::array<double, branchCount> effectiveThresholds {};
 
     for (size_t branchIndex = 0; branchIndex < branchCount; ++branchIndex)
     {
@@ -86,8 +95,33 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
                                                    derived.releaseCurve);
         }
 
+        const auto envelopeDb = levelToDb(envBase[branchIndex]);
+        auto& adaptiveReference = adaptiveReferenceDb[branchIndex];
+
+        if (envelopeDb >= adaptiveReference)
+        {
+            adaptiveReference = derived.adaptiveAttackCoefficient * adaptiveReference
+                + (1.0 - derived.adaptiveAttackCoefficient) * envelopeDb;
+            adaptiveHoldSamplesRemaining[branchIndex] = derived.adaptiveHoldSamples;
+        }
+        else if (adaptiveHoldSamplesRemaining[branchIndex] > 0)
+        {
+            --adaptiveHoldSamplesRemaining[branchIndex];
+        }
+        else
+        {
+            adaptiveReference = derived.adaptiveReleaseCoefficient * adaptiveReference
+                + (1.0 - derived.adaptiveReleaseCoefficient) * envelopeDb;
+        }
+
+        const auto adaptiveThresholdDb = juce::jlimit(-96.0, 12.0, adaptiveReference + derived.adaptiveOffsetDb);
+        const auto manualThresholdDb = levelToDb(derived.manualThresholds[branchIndex]);
+        const auto thresholdDb = manualThresholdDb
+            + (adaptiveThresholdDb - manualThresholdDb) * derived.adaptiveAmounts[branchIndex];
+        effectiveThresholds[branchIndex] = dbToAmp(thresholdDb);
+
         const auto targetBase = tensionTarget(envBase[branchIndex],
-                                              derived.thresholds[branchIndex],
+                                              effectiveThresholds[branchIndex],
                                               derived.tensionFloor,
                                               derived.tensionHysteresis,
                                               derived.tensions[branchIndex]);
@@ -104,12 +138,12 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
         dmBase[branchRightUp][static_cast<size_t>(bufPos)] + dmBase[branchRightDown][static_cast<size_t>(bufPos)]
     };
     const std::array<double, channelCount> cleanPositiveThresholds {
-        derived.thresholds[branchLeftUp],
-        derived.thresholds[branchRightUp]
+        effectiveThresholds[branchLeftUp],
+        effectiveThresholds[branchRightUp]
     };
     const std::array<double, channelCount> cleanNegativeThresholds {
-        derived.thresholds[branchLeftDown],
-        derived.thresholds[branchRightDown]
+        effectiveThresholds[branchLeftDown],
+        effectiveThresholds[branchRightDown]
     };
     const std::array<int, channelCount> cleanPositiveReleaseSamples {
         derived.releaseSamples[branchLeftUp],
@@ -159,9 +193,20 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
                 ? cleanPositiveThresholds[channelIndex]
                 : cleanNegativeThresholds[channelIndex];
             const auto gainReference = std::max(cleanHalfPeak[channelIndex], cleanEnvPeak[channelIndex]);
-            cleanGainState[channelIndex] = gainReference > epsilon
-                ? juce::jlimit(0.0, 1.0, threshold / gainReference)
-                : 1.0;
+            if (gainReference <= epsilon || gainReference <= threshold)
+            {
+                cleanGainState[channelIndex] = 1.0;
+            }
+            else if (derived.ratio >= 99.995)
+            {
+                cleanGainState[channelIndex] = juce::jlimit(0.0, 1.0, threshold / gainReference);
+            }
+            else
+            {
+                const auto reductionDb = (levelToDb(gainReference) - levelToDb(threshold))
+                    * (1.0 - 1.0 / derived.ratio);
+                cleanGainState[channelIndex] = dbToAmp(-reductionDb);
+            }
             cleanHalfPeak[channelIndex] = peakNow;
         }
         else
@@ -178,8 +223,9 @@ DspCore::StereoSample DspCore::processSample(const double leftInput, const doubl
     for (size_t branchIndex = 0; branchIndex < branchCount; ++branchIndex)
     {
         const auto delayedBase = dmBase[branchIndex][static_cast<size_t>(readPos)];
-        const auto clipped = derived.thresholds[branchIndex] > epsilon
-            ? derived.thresholds[branchIndex] * satShape(delayedBase / derived.thresholds[branchIndex], derived.clipKneeDb)
+        const auto threshold = effectiveThresholds[branchIndex];
+        const auto clipped = threshold > epsilon
+            ? threshold * satShape(delayedBase / threshold, derived.clipKneeDb)
             : satShape(delayedBase, derived.clipKneeDb);
 
         branchProcessed[branchIndex] = clipped;

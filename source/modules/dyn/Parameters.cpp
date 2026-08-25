@@ -20,28 +20,38 @@ struct ParameterOrderEntry
 
 inline constexpr auto dynCrossoverOrder = std::to_array<ParameterOrderEntry>({
     { "morph", "Morph" },
+    { "ratio", "Ratio" },
+    { "knee", "Knee" },
     { "peak_hold", "Peak Hold" },
     { "lookahead", "Lookahead" },
     { "tension_floor", "Tension Floor" },
     { "tension_hysteresis", "Tension Hysteresis" },
     { "release_form", "Release Form" },
     { "release_curve", "Release Curve" },
+    { "adaptive_offset", "Adaptive Offset" },
+    { "adaptive_attack", "Adaptive Attack" },
+    { "adaptive_hold", "Adaptive Hold" },
+    { "adaptive_release", "Adaptive Release" },
     { "linkUpDown", "Link UP/DN (Dual-Mono)" },
     { "linkLeftRight", "Link L/R (Stereo)" },
     { "linkOpposite", "Link Opp" },
     { "leftUpThreshold", "L.UP.THR" },
+    { "leftUpAdaptive", "L.UP.ADAP" },
     { "leftUpTension", "L.UP.TENS" },
     { "leftUpRelease", "L.UP.REL" },
     { "leftUpOutput", "L.UP.OUT" },
     { "leftDownThreshold", "L.DN.THR" },
+    { "leftDownAdaptive", "L.DN.ADAP" },
     { "leftDownTension", "L.DN.TENS" },
     { "leftDownRelease", "L.DN.REL" },
     { "leftDownOutput", "L.DN.OUT" },
     { "rightUpThreshold", "R.UP.THR" },
+    { "rightUpAdaptive", "R.UP.ADAP" },
     { "rightUpTension", "R.UP.TENS" },
     { "rightUpRelease", "R.UP.REL" },
     { "rightUpOutput", "R.UP.OUT" },
     { "rightDownThreshold", "R.DN.THR" },
+    { "rightDownAdaptive", "R.DN.ADAP" },
     { "rightDownTension", "R.DN.TENS" },
     { "rightDownRelease", "R.DN.REL" },
     { "rightDownOutput", "R.DN.OUT" },
@@ -86,6 +96,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                           const float defaultValue,
                           const juce::String& label,
                           const bool isAutomatable,
+                          const bool isRatio,
                           const bool isMeta = false) -> Parameter
     {
         auto range = juce::NormalisableRange<float> { min, max, step };
@@ -93,9 +104,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                               .withLabel(label)
                               .withAutomatable(isAutomatable)
                               .withMeta(isMeta)
-                              .withStringFromValueFunction([] (float value, int)
+                              .withStringFromValueFunction([isRatio] (float value, int)
                               {
-                                  return formatParameterValue(value);
+                                  return isRatio ? formatParameterValue(value) + ":1"
+                                                 : formatParameterValue(value);
                               })
                               .withValueFromStringFunction([] (const juce::String& text)
                               {
@@ -168,7 +180,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
                                            it->step,
                                            it->defaultValue,
                                            it->label,
-                                           false));
+                                           false,
+                                           juce::String(it->suffix) == "ratio"));
         }
 
         layout.add(std::move(group));

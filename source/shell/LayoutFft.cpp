@@ -28,7 +28,6 @@ void AvaAudioProcessorEditor::layoutFftModuleSections(juce::Rectangle<int>& boun
         || fftAdaptiveAttackControl == nullptr
         || fftAdaptiveHoldControl == nullptr
         || fftAdaptiveReleaseControl == nullptr
-        || fftDynamicBypassButton == nullptr
         || fftDeltaButton == nullptr)
     {
         return;
@@ -77,18 +76,7 @@ void AvaAudioProcessorEditor::layoutFftModuleSections(juce::Rectangle<int>& boun
     fixedButtonsBounds.removeFromLeft(editorInsetX);
     fixedButtonsBounds.removeFromRight(editorInsetX);
 
-    if (fftDynamicBypassButton->isVisible() && fftDeltaButton->isVisible())
-    {
-        auto bypassBounds = fixedButtonsBounds.removeFromLeft((fixedButtonsBounds.getWidth() - parameterGap) / 2);
-        fixedButtonsBounds.removeFromLeft(parameterGap);
-        fftDynamicBypassButton->setBounds(bypassBounds);
-        fftDeltaButton->setBounds(fixedButtonsBounds);
-    }
-    else
-    {
-        fftDynamicBypassButton->setBounds(fftDynamicBypassButton->isVisible() ? fixedButtonsBounds : juce::Rectangle<int>{});
-        fftDeltaButton->setBounds(fftDeltaButton->isVisible() ? fixedButtonsBounds : juce::Rectangle<int>{});
-    }
+    fftDeltaButton->setBounds(fftDeltaButton->isVisible() ? fixedButtonsBounds : juce::Rectangle<int>{});
 
     if (! viewportBounds.isEmpty())
         viewportBounds.removeFromBottom(verticalGap);
@@ -133,6 +121,9 @@ void AvaAudioProcessorEditor::layoutFftModuleSections(juce::Rectangle<int>& boun
     placeControl(mainBounds, *fftDualMonoRightThresholdControl);
     placeControl(mainBounds, *fftDualMonoRightAdaptiveControl);
     placeButton(mainBounds, *fftDualMonoLinkButton);
+
+    if (! mainBounds.isEmpty())
+        mainBounds.removeFromTop(verticalGap);
 
     placeButton(mainBounds, *fftAdaptiveSettingsHeader);
     placeControl(mainBounds, *fftAdaptiveOffsetControl);

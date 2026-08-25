@@ -4,6 +4,52 @@
 
 #include <memory>
 
+namespace
+{
+inline constexpr auto defaultPresetAttribute = "is_default";
+
+juce::String getStoredDefaultPresetName(const juce::XmlElement& presetsXml)
+{
+    for (auto* child : presetsXml.getChildIterator())
+    {
+        if (! child->hasTagName(presetTag) || ! child->getBoolAttribute(defaultPresetAttribute))
+            continue;
+
+        const auto presetName = child->getStringAttribute("name").trim();
+
+        if (presetName.isNotEmpty())
+            return presetName;
+    }
+
+    return {};
+}
+
+bool selectStoredDefaultPreset(juce::XmlElement& presetsXml, const juce::String& presetName)
+{
+    auto found = false;
+
+    for (auto* child : presetsXml.getChildIterator())
+    {
+        if (! child->hasTagName(presetTag))
+            continue;
+
+        const auto selected = child->getStringAttribute("name").trim().equalsIgnoreCase(presetName);
+
+        if (selected)
+        {
+            child->setAttribute(defaultPresetAttribute, true);
+            found = true;
+        }
+        else
+        {
+            child->removeAttribute(defaultPresetAttribute);
+        }
+    }
+
+    return found;
+}
+} // namespace
+
 namespace eql_presets
 {
 void ensureDefaultPresetExists(EqlModuleProcessor& processor)
@@ -26,6 +72,11 @@ juce::String EqlModuleProcessor::getDefaultFilterPresetName() const
 
     if (presetsXml == nullptr || ! presetsXml->hasTagName(filterPresetsRootTag))
         return {};
+
+    const auto storedDefault = getStoredDefaultPresetName(*presetsXml);
+
+    if (storedDefault.isNotEmpty() && findPresetElement(*presetsXml, storedDefault) != nullptr)
+        return storedDefault;
 
     const auto defaultSelected = parameters.state.getProperty(filterPresetDefaultSelectedStateKey).toString().trim();
 
@@ -100,11 +151,16 @@ bool EqlModuleProcessor::saveFilterPreset(const juce::String& presetName)
     if (presetsXml == nullptr || ! presetsXml->hasTagName(filterPresetsRootTag))
         presetsXml = createEmptyFilterPresetsXml();
 
+    const auto wasDefaultPreset = getDefaultFilterPresetName().equalsIgnoreCase(trimmedName);
+
     if (auto* existingPreset = findPresetElement(*presetsXml, trimmedName))
         presetsXml->removeChildElement(existingPreset, true);
 
     auto* presetElement = presetsXml->createNewChildElement(presetTag);
     presetElement->setAttribute("name", trimmedName);
+
+    if (wasDefaultPreset)
+        presetElement->setAttribute(defaultPresetAttribute, true);
 
     if (auto stateXml = createSerializableStateXml(*this))
         presetElement->addChildElement(stateXml.release());
@@ -130,12 +186,18 @@ bool EqlModuleProcessor::renameFilterPreset(const juce::String& sourcePresetName
     if (sourcePresetElement == nullptr)
         return false;
 
+    const auto renamedDefault = sourcePresetElement->getBoolAttribute(defaultPresetAttribute)
+        || getDefaultFilterPresetName().equalsIgnoreCase(sourcePresetName.trim());
     sourcePresetElement->setAttribute("name", newPresetName.trim());
 
     if (! writeFilterPresetsXml(*presetsXml))
         return false;
 
     parameters.state.setProperty(filterPresetLastSelectedStateKey, newPresetName.trim(), nullptr);
+
+    if (renamedDefault)
+        parameters.state.setProperty(filterPresetDefaultSelectedStateKey, newPresetName.trim(), nullptr);
+
     return true;
 }
 
@@ -148,7 +210,10 @@ bool EqlModuleProcessor::setDefaultFilterPreset(const juce::String& presetName)
 
     auto presetsXml = loadFilterPresetsXml();
 
-    if (presetsXml == nullptr || findPresetElement(*presetsXml, trimmedName) == nullptr)
+    if (presetsXml == nullptr || ! selectStoredDefaultPreset(*presetsXml, trimmedName))
+        return false;
+
+    if (! writeFilterPresetsXml(*presetsXml))
         return false;
 
     parameters.state.setProperty(filterPresetDefaultSelectedStateKey, trimmedName, nullptr);
@@ -241,11 +306,35 @@ bool EqlModuleProcessor::deleteFilterPreset(const juce::String& presetName)
     if (presetsXml == nullptr)
         return false;
 
-    if (auto* presetElement = findPresetElement(*presetsXml, trimmedName))
+    auto* presetElement = findPresetElement(*presetsXml, trimmedName);
+
+    if (presetElement == nullptr)
+        return false;
+
+    const auto removedDefault = presetElement->getBoolAttribute(defaultPresetAttribute)
+        || getDefaultFilterPresetName().equalsIgnoreCase(trimmedName);
+    presetsXml->removeChildElement(presetElement, true);
+
+    if (removedDefault)
     {
-        presetsXml->removeChildElement(presetElement, true);
-        return writeFilterPresetsXml(*presetsXml);
+        auto replacementDefault = juce::String {};
+
+        if (findPresetElement(*presetsXml, "default") != nullptr)
+            replacementDefault = "default";
+        else
+            for (auto* child : presetsXml->getChildIterator())
+                if (child->hasTagName(presetTag))
+                {
+                    replacementDefault = child->getStringAttribute("name").trim();
+                    break;
+                }
+
+        if (replacementDefault.isNotEmpty())
+        {
+            selectStoredDefaultPreset(*presetsXml, replacementDefault);
+            parameters.state.setProperty(filterPresetDefaultSelectedStateKey, replacementDefault, nullptr);
+        }
     }
 
-    return false;
+    return writeFilterPresetsXml(*presetsXml);
 }

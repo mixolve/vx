@@ -47,6 +47,7 @@ void drawNeutralPopupItem(juce::Graphics& g,
 CopyPasteTextEditor::CopyPasteTextEditor()
 {
     setLookAndFeel(&popupLookAndFeel);
+    setMouseCursor(juce::MouseCursor::NormalCursor);
 }
 
 CopyPasteTextEditor::~CopyPasteTextEditor()
@@ -314,6 +315,15 @@ void NoTickComboBox::mouseExit(const juce::MouseEvent&)
 
     pressHighlight = false;
     repaint();
+}
+
+void NoTickComboBox::resized()
+{
+    juce::ComboBox::resized();
+
+    for (int childIndex = 0; childIndex < getNumChildComponents(); ++childIndex)
+        if (auto* child = getChildComponent(childIndex))
+            child->setMouseCursor(juce::MouseCursor::NormalCursor);
 }
 
 void NoTickComboBox::setPopupMenuTextJustification(const juce::Justification justification) noexcept

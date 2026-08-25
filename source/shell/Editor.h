@@ -211,8 +211,6 @@ private:
     std::unique_ptr<ParameterControl> fftAdaptiveAttackControl;
     std::unique_ptr<ParameterControl> fftAdaptiveHoldControl;
     std::unique_ptr<ParameterControl> fftAdaptiveReleaseControl;
-    std::unique_ptr<BoxTextButton> fftDynamicBypassButton;
-    std::unique_ptr<ButtonAttachment> fftDynamicBypassAttachment;
     std::unique_ptr<ChoiceControl> fftDspOverlapControl;
     std::unique_ptr<LocalParameterControl> fftAnalyserRangeControl;
     std::unique_ptr<LocalParameterControl> fftAnalyserTimeControl;
@@ -229,6 +227,7 @@ private:
     std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::hostAutomationSlotCount> hostSlotButtons;
     std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::hostAutomationSlotCount> hostSlotMoveDownButtons;
     std::array<std::unique_ptr<FilterSection>, AvaAudioProcessor::maxEqlFilterCount> filterSections;
+    juce::AudioProcessorValueTreeState* boundEqlState = nullptr;
     juce::Viewport hostParametersViewport;
     ParameterFocusClearingComponent hostParametersContent;
     juce::Viewport filterViewport;

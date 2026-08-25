@@ -97,6 +97,8 @@ CrossoverModuleComponent::CrossoverModuleComponent(Config configIn)
 CrossoverModuleComponent::~CrossoverModuleComponent()
 {
     saveUiState();
+    if (pinnedTailComponent != nullptr)
+        removeChildComponent(pinnedTailComponent);
     pageViewport.setViewedComponent(nullptr, false);
 }
 
@@ -211,7 +213,17 @@ void CrossoverModuleComponent::resized()
             bounds.removeFromTop(verticalGap);
     }
 
+    updatePinnedTailComponent();
+    const auto pinnedTailHeight = getCurrentPinnedTailHeight();
+    auto pinnedTailBounds = bounds.removeFromBottom(pinnedTailHeight);
     pageViewport.setBounds(bounds);
+
+    if (pinnedTailComponent != nullptr)
+    {
+        pinnedTailComponent->setBounds(pinnedTailBounds);
+        if (auto* currentPage = getCurrentPageComponent())
+            currentPage->layoutPinnedTail();
+    }
     updatePageViewport();
     saveUiState();
 }
@@ -275,7 +287,9 @@ void CrossoverModuleComponent::refreshExternalState()
 
 int CrossoverModuleComponent::getPreferredHeight() const noexcept
 {
-    return (config.showCrossoverNavigation ? rowHeight + verticalGap : 0) + getCurrentPagePreferredHeight();
+    return (config.showCrossoverNavigation ? rowHeight + verticalGap : 0)
+        + getCurrentPagePreferredHeight()
+        + getCurrentPinnedTailHeight();
 }
 
 void CrossoverModuleComponent::setExternalCrossoverRange(const size_t rangeIndex)
@@ -359,6 +373,7 @@ void CrossoverModuleComponent::showCrossoverSettings()
     updatePageVisibility();
     syncMonitorParameters();
     saveUiState();
+    resized();
     notifyPageChanged();
     clearFocus();
 }
@@ -495,10 +510,34 @@ void CrossoverModuleComponent::updatePageVisibility()
     if (crossoverSettingsPage != nullptr)
         crossoverSettingsPage->setVisible(crossoverSettingsActive);
 
+    updatePinnedTailComponent();
     updatePageViewport();
 }
 
-juce::Component* CrossoverModuleComponent::getCurrentPageComponent() const noexcept
+void CrossoverModuleComponent::updatePinnedTailComponent()
+{
+    auto* currentPage = getCurrentPageComponent();
+    auto* nextPinnedTail = currentPage != nullptr ? currentPage->getPinnedTailComponent() : nullptr;
+
+    if (pinnedTailComponent != nextPinnedTail)
+    {
+        if (pinnedTailComponent != nullptr)
+        {
+            pinnedTailComponent->setVisible(false);
+            removeChildComponent(pinnedTailComponent);
+        }
+
+        pinnedTailComponent = nextPinnedTail;
+
+        if (pinnedTailComponent != nullptr)
+            addAndMakeVisible(*pinnedTailComponent);
+    }
+
+    if (pinnedTailComponent != nullptr)
+        pinnedTailComponent->setVisible(nextPinnedTail != nullptr);
+}
+
+CrossoverModulePage* CrossoverModuleComponent::getCurrentPageComponent() const noexcept
 {
     if (crossoverSettingsActive)
         return crossoverSettingsPage.get();
@@ -515,6 +554,14 @@ int CrossoverModuleComponent::getCurrentPagePreferredHeight() const noexcept
     return visibleRangeIndex < rangePages.size() && rangePages[visibleRangeIndex] != nullptr
         ? rangePages[visibleRangeIndex]->getPreferredHeight()
         : 0;
+}
+
+int CrossoverModuleComponent::getCurrentPinnedTailHeight() const noexcept
+{
+    if (auto* currentPage = getCurrentPageComponent())
+        return currentPage->getPinnedTailHeight();
+
+    return 0;
 }
 
 void CrossoverModuleComponent::updatePageViewport()

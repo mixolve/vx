@@ -300,22 +300,6 @@ void AvaAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeStat
                                                                         2);
         filterContent.addAndMakeVisible(*fftAdaptiveReleaseControl);
 
-        fftDynamicBypassButton = std::make_unique<BoxTextButton>(uiAccent);
-        fftDynamicBypassButton->setButtonText("BYPASS");
-        fftDynamicBypassButton->setTextJustification(juce::Justification::centred);
-        fftDynamicBypassButton->setClickingTogglesState(true);
-        fftDynamicBypassAttachment = std::make_unique<ButtonAttachment>(fftState,
-                                                                        FftModuleProcessor::paramDynamicBypassId,
-                                                                        *fftDynamicBypassButton);
-        assignFftButtonHostSlot(*fftDynamicBypassButton,
-                                FftModuleProcessor::paramDynamicBypassId,
-                                "BYPASS");
-        fftDynamicBypassButton->onClick = [this]
-        {
-            clearKeyboardFocus(*this);
-        };
-        addAndMakeVisible(*fftDynamicBypassButton);
-
         fftAnalyserRangeControl = std::make_unique<LocalParameterControl>("RANGE",
                                                                            2,
                                                                            -99.0,

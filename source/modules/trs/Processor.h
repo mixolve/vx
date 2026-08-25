@@ -25,9 +25,10 @@ public:
     inline static constexpr auto paramTimeReleaseCurveId = "rel_curve";
     inline static constexpr auto paramTimeReleaseModeId = "release_mode";
     inline static constexpr auto paramTimeReleaseSyncId = "release_sync";
-    inline static constexpr auto paramSensLevelId = "sens_lvl";
+    inline static constexpr auto paramSensThresholdId = "sens_thresh";
     inline static constexpr auto paramSensKneeId = "sens_knee";
     inline static constexpr auto paramSensRetriggerId = "sens_retr";
+    inline static constexpr auto paramSensOneShotId = "sens_one_shot";
     inline static constexpr auto paramLookaheadId = "lookahead";
 
     static constexpr size_t numRanges = ava::crossover::Splitter::numRanges;
@@ -74,6 +75,7 @@ private:
         std::atomic<float>* threshold = nullptr;
         std::atomic<float>* knee = nullptr;
         std::atomic<float>* retrigger = nullptr;
+        std::atomic<float>* oneShot = nullptr;
         std::atomic<float>* lookahead = nullptr;
     };
 

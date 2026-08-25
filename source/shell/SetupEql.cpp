@@ -5,6 +5,8 @@
 
 void AvaAudioProcessorEditor::setupEqlControls(juce::AudioProcessorValueTreeState& initialEqlState)
 {
+    boundEqlState = &initialEqlState;
+
     for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
     {
         auto section = std::make_unique<FilterSection>(initialEqlState, filterIndex);

@@ -117,7 +117,8 @@ void DspCore::updateDerivedParameters()
     derived.bodyReleaseCoefficient = makeReleaseCoefficient(juce::jmax(50.0f, holdMs + releaseMs), currentSampleRate);
     derived.normalizedReleaseCurve = juce::jlimit(-1.0f, 1.0f, parameters.releaseCurve * 0.01f);
     derived.holdSamples = juce::jmax(0, static_cast<int>(std::round(holdMs * 0.001 * currentSampleRate)));
-    derived.retriggerSamples = juce::jmax(0, static_cast<int>(std::round(parameters.retriggerMs * 0.001 * currentSampleRate)));
+    const auto retriggerMs = juce::jlimit(1.0f, 5000.0f, parameters.retriggerMs);
+    derived.retriggerSamples = juce::jmax(1, static_cast<int>(std::round(retriggerMs * 0.001 * currentSampleRate)));
     derived.releaseSamples = juce::jmax(1, static_cast<int>(std::round(releaseMs * 0.001 * currentSampleRate)));
     derived.latencySamples = juce::jlimit(0,
                                           getMaximumLatencySamples(currentSampleRate),
@@ -158,9 +159,10 @@ float DspCore::processDetectorSample(const float level) noexcept
     const auto aboveThreshold = thresholdAmount > 1.0e-4f;
     const auto thresholdRisingEdge = aboveThreshold && ! detector.wasAboveThreshold;
     const auto retriggerElapsed = detector.samplesSinceTrigger >= derived.holdSamples + derived.retriggerSamples;
-    const auto shouldTrigger = aboveThreshold
-        && retriggerElapsed
-        && (thresholdRisingEdge || onsetDb >= 6.0f || derived.retriggerSamples > 0);
+    const auto triggerCondition = parameters.oneShot
+        ? thresholdRisingEdge
+        : (thresholdRisingEdge || onsetDb >= 6.0f || derived.retriggerSamples > 0);
+    const auto shouldTrigger = aboveThreshold && retriggerElapsed && triggerCondition;
 
     if (shouldTrigger)
     {

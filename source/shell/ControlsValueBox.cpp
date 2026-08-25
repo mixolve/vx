@@ -107,18 +107,6 @@ void ValueBoxComponent::setCustomPromptAction(std::function<void()> action)
 
 void ValueBoxComponent::updateMouseCursor()
 {
-    if (interactionEnabled)
-    {
-        setMouseCursor(juce::MouseCursor::IBeamCursor);
-        return;
-    }
-
-    if (customPromptAction != nullptr)
-    {
-        setMouseCursor(juce::MouseCursor::PointingHandCursor);
-        return;
-    }
-
     setMouseCursor(juce::MouseCursor::NormalCursor);
 }
 

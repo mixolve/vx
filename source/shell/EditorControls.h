@@ -18,6 +18,7 @@ public:
     void mouseDrag(const juce::MouseEvent& event) override;
     void mouseUp(const juce::MouseEvent& event) override;
     void mouseExit(const juce::MouseEvent&) override;
+    void resized() override;
 
     void setPopupMenuTextJustification(juce::Justification justification) noexcept;
     juce::Justification getPopupMenuTextJustification() const noexcept;

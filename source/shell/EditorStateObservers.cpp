@@ -262,6 +262,7 @@ void AvaAudioProcessorEditor::clearModuleStateListeners()
 void AvaAudioProcessorEditor::detachModuleEditorBindings()
 {
     clearModuleStateListeners();
+    boundEqlState = nullptr;
 
     for (auto& section : filterSections)
         if (section != nullptr)
@@ -269,7 +270,6 @@ void AvaAudioProcessorEditor::detachModuleEditorBindings()
 
     fftDeltaAttachment.reset();
     fftDualMonoLinkAttachment.reset();
-    fftDynamicBypassAttachment.reset();
 
     if (fftAttackControl != nullptr) fftAttackControl->detach();
     if (fftReleaseControl != nullptr) fftReleaseControl->detach();

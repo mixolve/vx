@@ -26,7 +26,8 @@ public:
         float releaseCurve = 0.0f;
         float thresholdDb = -42.0f;
         float kneeDb = 0.0f;
-        float retriggerMs = 100.0f;
+        float retriggerMs = 1.0f;
+        bool oneShot = false;
         float lookaheadMs = 1.0f;
     };
 

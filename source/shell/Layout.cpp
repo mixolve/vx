@@ -303,7 +303,6 @@ void AvaAudioProcessorEditor::finalizeLayout() noexcept
     if (globalBypassButton != nullptr) globalBypassButton->toFront(false);
     if (moduleAddButton != nullptr) moduleAddButton->toFront(false);
     if (hostButton != nullptr) hostButton->toFront(false);
-    if (fftDynamicBypassButton != nullptr) fftDynamicBypassButton->toFront(false);
     if (fftDeltaButton != nullptr) fftDeltaButton->toFront(false);
     footerTab->toFront(false);
 

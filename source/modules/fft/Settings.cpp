@@ -28,8 +28,8 @@ FftModuleProcessor::CompressorSettings FftModuleProcessor::getCompressorSettings
     settings.floorDb = floorValue <= -100.0f
         ? -std::numeric_limits<float>::infinity()
         : floorValue;
-    settings.leftThresholdDb = juce::jlimit(-99.0f, 0.0f, dualMonoLeftThresholdParam != nullptr ? dualMonoLeftThresholdParam->load(std::memory_order_relaxed) : 0.0f);
-    settings.rightThresholdDb = juce::jlimit(-99.0f, 0.0f, dualMonoRightThresholdParam != nullptr ? dualMonoRightThresholdParam->load(std::memory_order_relaxed) : 0.0f);
+    settings.leftThresholdDb = juce::jlimit(-99.0f, 12.0f, dualMonoLeftThresholdParam != nullptr ? dualMonoLeftThresholdParam->load(std::memory_order_relaxed) : 0.0f);
+    settings.rightThresholdDb = juce::jlimit(-99.0f, 12.0f, dualMonoRightThresholdParam != nullptr ? dualMonoRightThresholdParam->load(std::memory_order_relaxed) : 0.0f);
     const auto phaseThreshold = juce::jlimit(0.0f,
                                              100.0f,
                                              phaseThresholdParam != nullptr

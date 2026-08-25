@@ -47,6 +47,7 @@ public:
         bool fixedOrder = false;
         bool toggleAccentVisible = true;
         bool auxiliaryToggleInverted = false;
+        bool showTimeModeButton = true;
         int topGapMultiplier = 1;
         int sourceRangeIndex = -1;
         int controlsInRow = 1;
@@ -126,10 +127,12 @@ private:
     bool isRangeSoloEnabled(size_t rangeIndex) const noexcept;
     void updateMonitorButtons();
     void updatePageVisibility();
+    void updatePinnedTailComponent();
     void scrollPageViewport(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel);
     void updatePageViewport();
-    juce::Component* getCurrentPageComponent() const noexcept;
+    CrossoverModulePage* getCurrentPageComponent() const noexcept;
     int getCurrentPagePreferredHeight() const noexcept;
+    int getCurrentPinnedTailHeight() const noexcept;
     size_t getActiveSplitCount() const;
     size_t getActiveRangeCount() const;
     bool constrainCrossoverFrequency(size_t crossoverIndex);
@@ -152,6 +155,7 @@ private:
     std::array<std::unique_ptr<CrossoverModulePage>, numRanges> rangePages;
     std::unique_ptr<CrossoverModulePage> crossoverSettingsPage;
     juce::Viewport pageViewport;
+    juce::Component* pinnedTailComponent = nullptr;
     bool uiStateLoaded = false;
     size_t visibleRangeIndex = 0;
     int restoredPageScrollY = 0;

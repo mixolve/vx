@@ -66,9 +66,10 @@ public:
             owner.valueTreeState.addParameterListener(soloParameterId, this);
         }
 
-        addControlSpecs(owner.config.rangeControls);
+        pinnedTail = std::make_unique<juce::Component>();
+        addControlSpecs(owner.config.rangeControls, *this);
         tailRowStart = rows.size();
-        addControlSpecs(owner.config.rangeTailControls);
+        addControlSpecs(owner.config.rangeTailControls, *pinnedTail);
         refreshSoloButtonState();
         updateTimeModeControls();
     }
@@ -97,11 +98,11 @@ public:
         if (owner.config.showModuleHeading)
             height += (height > 0 ? verticalGap : 0) + rowHeight;
 
-        for (size_t index = 0; index < rows.size();)
+        for (size_t index = 0; index < tailRowStart;)
         {
             const auto& row = rows[index];
             const auto controlsInRow = juce::jlimit<size_t>(1,
-                                                            rows.size() - index,
+                                                            tailRowStart - index,
                                                             static_cast<size_t>(juce::jmax(1, row->controlsInRow)));
             auto topGap = 0;
             auto preferredHeight = 0;
@@ -117,6 +118,79 @@ public:
         }
 
         return height + ((owner.config.showModuleHeading || ! rows.empty()) ? moduleContentBottomGap : 0);
+    }
+
+    juce::Component* getPinnedTailComponent() noexcept override
+    {
+        return pinnedTail.get();
+    }
+
+    int getPinnedTailHeight() const noexcept override
+    {
+        auto height = 0;
+
+        for (size_t index = tailRowStart; index < rows.size();)
+        {
+            const auto controlsInRow = juce::jlimit<size_t>(1,
+                                                            rows.size() - index,
+                                                            static_cast<size_t>(juce::jmax(1, rows[index]->controlsInRow)));
+            auto topGap = 0;
+            auto preferredHeight = 0;
+
+            for (size_t offset = 0; offset < controlsInRow; ++offset)
+            {
+                topGap = juce::jmax(topGap, rows[index + offset]->getTopGap());
+                preferredHeight = juce::jmax(preferredHeight, rows[index + offset]->getPreferredHeight());
+            }
+
+            height += topGap + preferredHeight;
+            index += controlsInRow;
+        }
+
+        return height;
+    }
+
+    void layoutPinnedTail() override
+    {
+        if (pinnedTail == nullptr)
+            return;
+
+        auto bounds = pinnedTail->getLocalBounds();
+
+        for (size_t index = tailRowStart; index < rows.size();)
+        {
+            auto& row = rows[index];
+            const auto controlsInRow = juce::jlimit<size_t>(1,
+                                                            rows.size() - index,
+                                                            static_cast<size_t>(juce::jmax(1, row->controlsInRow)));
+            auto topGap = 0;
+            auto preferredHeight = 0;
+
+            for (size_t offset = 0; offset < controlsInRow; ++offset)
+            {
+                topGap = juce::jmax(topGap, rows[index + offset]->getTopGap());
+                preferredHeight = juce::jmax(preferredHeight, rows[index + offset]->getPreferredHeight());
+            }
+
+            bounds.removeFromTop(juce::jmin(topGap, bounds.getHeight()));
+            auto controlBounds = bounds.removeFromTop(preferredHeight);
+            const auto availableWidth = juce::jmax(0,
+                                                   controlBounds.getWidth()
+                                                       - (parameterGap * static_cast<int>(controlsInRow - 1)));
+            const auto controlWidth = availableWidth / static_cast<int>(controlsInRow);
+
+            for (size_t offset = 0; offset < controlsInRow; ++offset)
+            {
+                const auto isLast = offset + 1 == controlsInRow;
+                rows[index + offset]->setBounds(controlBounds.removeFromLeft(isLast ? controlBounds.getWidth()
+                                                                                    : controlWidth));
+
+                if (! isLast)
+                    controlBounds.removeFromLeft(juce::jmin(parameterGap, controlBounds.getWidth()));
+            }
+
+            index += controlsInRow;
+        }
     }
 
     void resized() override
@@ -175,35 +249,7 @@ public:
             }
         };
 
-        auto tailHeight = 0;
-        for (size_t index = tailRowStart; index < rows.size();)
-        {
-            const auto controlsInRow = juce::jlimit<size_t>(1,
-                                                            rows.size() - index,
-                                                            static_cast<size_t>(juce::jmax(1, rows[index]->controlsInRow)));
-            auto topGap = 0;
-            auto preferredHeight = 0;
-
-            for (size_t offset = 0; offset < controlsInRow; ++offset)
-            {
-                topGap = juce::jmax(topGap, rows[index + offset]->getTopGap());
-                preferredHeight = juce::jmax(preferredHeight, rows[index + offset]->getPreferredHeight());
-            }
-
-            tailHeight += topGap + preferredHeight;
-            index += controlsInRow;
-        }
-
-        auto headerHeight = 0;
-        if (owner.config.showCrossoverSolo)
-            headerHeight += rowHeight;
-        if (owner.config.showModuleHeading)
-            headerHeight += (headerHeight > 0 ? verticalGap : 0) + rowHeight;
-        const auto bodyPreferredHeight = getPreferredHeight() - headerHeight - moduleContentBottomGap - tailHeight;
-        const auto tailTop = juce::jmax(bounds.getY() + bodyPreferredHeight,
-                                        bounds.getBottom() - tailHeight);
-        layoutRows(0, tailRowStart, bounds.withBottom(tailTop));
-        layoutRows(tailRowStart, rows.size(), bounds.withTop(tailTop));
+        layoutRows(0, tailRowStart, bounds);
     }
 
     void mouseDown(const juce::MouseEvent&) override
@@ -609,21 +655,24 @@ private:
             topGapMultiplier = spec.topGapMultiplier;
             addAndMakeVisible(*control);
 
-            modeButton = makeTimeModeButton();
-            modeButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+            if (spec.showTimeModeButton)
             {
-                return owner.assignButtonHostSlot(modeParameterIdToEdit,
-                                                  modeParameterIdToEdit,
-                                                  modeButton.get(),
-                                                  modifiers);
-            };
-            modeButton->onClick = [this]
-            {
-                owner.setParameterPlainValue(modeParameterIdToEdit, isHostSyncMode() ? 0.0f : 1.0f);
-                updateModeControl();
-                owner.clearFocus();
-            };
-            addAndMakeVisible(*modeButton);
+                modeButton = makeTimeModeButton();
+                modeButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+                {
+                    return owner.assignButtonHostSlot(modeParameterIdToEdit,
+                                                      modeParameterIdToEdit,
+                                                      modeButton.get(),
+                                                      modifiers);
+                };
+                modeButton->onClick = [this]
+                {
+                    owner.setParameterPlainValue(modeParameterIdToEdit, isHostSyncMode() ? 0.0f : 1.0f);
+                    updateModeControl();
+                    owner.clearFocus();
+                };
+                addAndMakeVisible(*modeButton);
+            }
             updateModeControl();
         }
 
@@ -637,25 +686,41 @@ private:
         void resized() override
         {
             auto bounds = getLocalBounds();
-            const auto labelZoneWidth = getScaledParameterNameWidth(bounds.getWidth());
-            const auto modeButtonWidth = juce::jmin(rowHeight, labelZoneWidth);
-            const auto titleWidth = juce::jmax(0, labelZoneWidth - modeButtonWidth - parameterGap);
-            const auto modeButtonX = bounds.getX() + titleWidth + parameterGap;
-
             if (control != nullptr)
             {
-                control->setTitleWidthOverride(titleWidth);
-                control->setValueLeadingInset(modeButtonWidth + parameterGap);
+                if (modeButton != nullptr)
+                {
+                    const auto labelZoneWidth = getScaledParameterNameWidth(bounds.getWidth());
+                    const auto modeButtonWidth = juce::jmin(rowHeight, labelZoneWidth);
+                    const auto titleWidth = juce::jmax(0, labelZoneWidth - modeButtonWidth - parameterGap);
+                    control->setTitleWidthOverride(titleWidth);
+                    control->setValueLeadingInset(modeButtonWidth + parameterGap);
+                    modeButton->setBounds(bounds.getX() + titleWidth + parameterGap,
+                                          bounds.getY(),
+                                          modeButtonWidth,
+                                          bounds.getHeight());
+                }
+                else
+                {
+                    control->setTitleWidthOverride(-1);
+                    control->setValueLeadingInset(0);
+                }
+
                 control->setBounds(bounds);
             }
-
-            if (modeButton != nullptr)
-                modeButton->setBounds(modeButtonX, bounds.getY(), modeButtonWidth, bounds.getHeight());
         }
 
         bool isHostSyncMode() const noexcept
         {
-            return readRawParameter(owner.valueTreeState, modeParameterIdToEdit, 0.0f) >= 0.5f;
+            return getTimeModeIndex() > 0;
+        }
+
+        int getTimeModeIndex() const noexcept
+        {
+            return juce::jmax(0,
+                              static_cast<int>(std::round(readRawParameter(owner.valueTreeState,
+                                                                            modeParameterIdToEdit,
+                                                                            0.0f))));
         }
 
         int getSyncChoiceIndex() const noexcept
@@ -673,11 +738,26 @@ private:
 
         juce::String getSyncChoiceText() const
         {
-            const auto choices = owner.config.getHostSyncChoices != nullptr
-                ? owner.config.getHostSyncChoices()
-                : juce::StringArray {};
+            const auto choices = getSyncChoices();
 
             return choices.isEmpty() ? juce::String {} : choices[getSyncChoiceIndex()];
+        }
+
+        juce::StringArray getSyncChoices() const
+        {
+            auto choices = owner.config.getHostSyncChoices != nullptr
+                ? owner.config.getHostSyncChoices()
+                : juce::StringArray {};
+            const auto typeIndex = getTimeModeIndex();
+
+            if (typeIndex == 2)
+                for (auto& choice : choices)
+                    choice << "T";
+            else if (typeIndex == 3)
+                for (auto& choice : choices)
+                    choice << ".";
+
+            return choices;
         }
 
         void showSyncPrompt()
@@ -685,9 +765,7 @@ private:
             if (owner.config.showChoicePrompt == nullptr || control == nullptr)
                 return;
 
-            const auto choices = owner.config.getHostSyncChoices != nullptr
-                ? owner.config.getHostSyncChoices()
-                : juce::StringArray {};
+            const auto choices = getSyncChoices();
 
             if (choices.isEmpty())
                 return;
@@ -713,12 +791,15 @@ private:
 
         void updateModeControl()
         {
-            if (control == nullptr || modeButton == nullptr)
+            if (control == nullptr)
                 return;
 
             const auto hostSync = isHostSyncMode();
-            modeButton->setButtonText(hostSync ? "T" : "M");
-            modeButton->setAlwaysAccentOutline(hostSync);
+            if (modeButton != nullptr)
+            {
+                modeButton->setButtonText(hostSync ? "T" : "M");
+                modeButton->setAlwaysAccentOutline(hostSync);
+            }
 
             if (hostSync)
             {
@@ -750,7 +831,7 @@ private:
         return owner.config.makeCrossoverRangeParameterId(sourceRange, spec.suffix);
     }
 
-    void addControlSpecs(const std::vector<CrossoverControlSpec>& specs)
+    void addControlSpecs(const std::vector<CrossoverControlSpec>& specs, juce::Component& parent)
     {
         for (const auto& spec : specs)
         {
@@ -758,7 +839,7 @@ private:
             {
                 auto row = std::make_unique<HeadingRow>(spec);
                 row->controlsInRow = spec.controlsInRow;
-                addAndMakeVisible(*row);
+                parent.addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
                 continue;
             }
@@ -767,7 +848,7 @@ private:
             {
                 auto row = std::make_unique<ToggleRow>(*this, owner, getCrossoverRangeParameterId(spec), spec);
                 row->controlsInRow = spec.controlsInRow;
-                addAndMakeVisible(*row);
+                parent.addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
                 continue;
             }
@@ -776,7 +857,7 @@ private:
             {
                 auto row = std::make_unique<ChoiceRow>(owner, getCrossoverRangeParameterId(spec), spec);
                 row->controlsInRow = spec.controlsInRow;
-                addAndMakeVisible(*row);
+                parent.addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
                 continue;
             }
@@ -785,7 +866,7 @@ private:
             {
                 auto row = std::make_unique<InactiveRow>(spec);
                 row->controlsInRow = spec.controlsInRow;
-                addAndMakeVisible(*row);
+                parent.addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
                 continue;
             }
@@ -801,7 +882,7 @@ private:
                 listenedParameterIds.push_back(syncId);
                 owner.valueTreeState.addParameterListener(modeId, this);
                 owner.valueTreeState.addParameterListener(syncId, this);
-                addAndMakeVisible(*row);
+                parent.addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
                 continue;
             }
@@ -816,7 +897,7 @@ private:
                 listenedParameterIds.push_back(flipId);
                 owner.valueTreeState.addParameterListener(degreeId, this);
                 owner.valueTreeState.addParameterListener(flipId, this);
-                addAndMakeVisible(*row);
+                parent.addAndMakeVisible(*row);
                 rows.push_back(std::move(row));
                 continue;
             }
@@ -858,7 +939,7 @@ private:
                 owner.valueTreeState.addParameterListener(row->orderParameterId, this);
             }
 
-            addAndMakeVisible(*row);
+            parent.addAndMakeVisible(*row);
             rows.push_back(std::move(row));
         }
 
@@ -992,6 +1073,7 @@ private:
     size_t rangeIndex = 0;
     BoxTextButton soloButton;
     BoxTextButton moduleHeading;
+    std::unique_ptr<juce::Component> pinnedTail;
     std::vector<std::unique_ptr<RowBase>> rows;
     size_t tailRowStart = 0;
     std::vector<juce::String> listenedParameterIds;

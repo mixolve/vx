@@ -114,7 +114,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
             parameterLayout.push_back(std::make_unique<juce::AudioParameterChoice>(
                 juce::ParameterID { paramDynamicModeId, 1 },
                 name,
-                juce::StringArray { "SPECTRAL", "PHASE CORR" },
+                juce::StringArray { "SPECTRAL", "PHASE-CORR" },
                 0,
                 juce::AudioParameterChoiceAttributes()));
             continue;
@@ -237,7 +237,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
             parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
                 juce::ParameterID { paramDualMonoLeftThresholdId, 1 },
                 name,
-                juce::NormalisableRange<float> { -99.0f, 0.0f, 0.01f },
+                juce::NormalisableRange<float> { -99.0f, 12.0f, 0.01f },
                 0.0f,
                 juce::AudioParameterFloatAttributes().withStringFromValueFunction(
                     [] (float value, int)
@@ -263,7 +263,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout FftModuleProcessor::createPa
             parameterLayout.push_back(std::make_unique<juce::AudioParameterFloat>(
                 juce::ParameterID { paramDualMonoRightThresholdId, 1 },
                 name,
-                juce::NormalisableRange<float> { -99.0f, 0.0f, 0.01f },
+                juce::NormalisableRange<float> { -99.0f, 12.0f, 0.01f },
                 0.0f,
                 juce::AudioParameterFloatAttributes().withStringFromValueFunction(
                     [] (float value, int)

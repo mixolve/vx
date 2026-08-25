@@ -43,6 +43,7 @@ void DynAudioProcessor::setStateInformation(const void* data, const int sizeInBy
                 if (effectiveLinkLrOn)
                 {
                     syncAllFieldParameters(rangeIndex, ParameterSlot::leftUpThreshold, ParameterSlot::leftDownThreshold, ParameterSlot::rightUpThreshold, ParameterSlot::rightDownThreshold);
+                    syncAllFieldParameters(rangeIndex, ParameterSlot::leftUpAdaptive, ParameterSlot::leftDownAdaptive, ParameterSlot::rightUpAdaptive, ParameterSlot::rightDownAdaptive);
                     syncAllFieldParameters(rangeIndex, ParameterSlot::leftUpTension, ParameterSlot::leftDownTension, ParameterSlot::rightUpTension, ParameterSlot::rightDownTension);
                     syncAllFieldParameters(rangeIndex, ParameterSlot::leftUpRelease, ParameterSlot::leftDownRelease, ParameterSlot::rightUpRelease, ParameterSlot::rightDownRelease);
                     syncAllFieldParameters(rangeIndex, ParameterSlot::leftUpOutput, ParameterSlot::leftDownOutput, ParameterSlot::rightUpOutput, ParameterSlot::rightDownOutput);
@@ -50,6 +51,7 @@ void DynAudioProcessor::setStateInformation(const void* data, const int sizeInBy
                 else if (effectiveLinkUpDnOn)
                 {
                     syncUpDownParameterPairs(rangeIndex, ParameterSlot::leftUpThreshold, ParameterSlot::leftDownThreshold, ParameterSlot::rightUpThreshold, ParameterSlot::rightDownThreshold);
+                    syncUpDownParameterPairs(rangeIndex, ParameterSlot::leftUpAdaptive, ParameterSlot::leftDownAdaptive, ParameterSlot::rightUpAdaptive, ParameterSlot::rightDownAdaptive);
                     syncUpDownParameterPairs(rangeIndex, ParameterSlot::leftUpTension, ParameterSlot::leftDownTension, ParameterSlot::rightUpTension, ParameterSlot::rightDownTension);
                     syncUpDownParameterPairs(rangeIndex, ParameterSlot::leftUpRelease, ParameterSlot::leftDownRelease, ParameterSlot::rightUpRelease, ParameterSlot::rightDownRelease);
                     syncUpDownParameterPairs(rangeIndex, ParameterSlot::leftUpOutput, ParameterSlot::leftDownOutput, ParameterSlot::rightUpOutput, ParameterSlot::rightDownOutput);
@@ -72,11 +74,17 @@ void DynAudioProcessor::setStateInformation(const void* data, const int sizeInBy
                 };
 
                 syncGlobalFromRange0(ParameterSlot::morph);
+                syncGlobalFromRange0(ParameterSlot::ratio);
+                syncGlobalFromRange0(ParameterSlot::knee);
                 syncGlobalFromRange0(ParameterSlot::peakHoldMs);
                 syncGlobalFromRange0(ParameterSlot::lookahead);
                 syncGlobalFromRange0(ParameterSlot::tensionFloor);
                 syncGlobalFromRange0(ParameterSlot::tensionHysteresis);
                 syncGlobalFromRange0(ParameterSlot::releaseForm);
+                syncGlobalFromRange0(ParameterSlot::adaptiveOffset);
+                syncGlobalFromRange0(ParameterSlot::adaptiveAttack);
+                syncGlobalFromRange0(ParameterSlot::adaptiveHold);
+                syncGlobalFromRange0(ParameterSlot::adaptiveRelease);
 
                 if (readRangeParameterValue(0, ParameterSlot::releaseForm) < 0.5f)
                 {

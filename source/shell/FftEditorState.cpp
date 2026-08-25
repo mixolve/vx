@@ -69,5 +69,5 @@ int AvaAudioProcessorEditor::getFftMainContentHeight() const
         ++visibleRows;
     }
 
-    return totalHeight + (verticalGap * juce::jmax(0, visibleRows - 1)) + (verticalGap * 2);
+    return totalHeight + (verticalGap * juce::jmax(0, visibleRows - 1)) + (verticalGap * 3);
 }

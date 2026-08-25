@@ -13,6 +13,9 @@ public:
 
     virtual void refreshExternalState() = 0;
     virtual int getPreferredHeight() const = 0;
+    virtual juce::Component* getPinnedTailComponent() noexcept { return nullptr; }
+    virtual int getPinnedTailHeight() const noexcept { return 0; }
+    virtual void layoutPinnedTail() {}
 };
 
 std::unique_ptr<CrossoverModulePage> makeCrossoverRangePage(CrossoverModuleComponent& owner,

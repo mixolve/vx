@@ -89,7 +89,6 @@ void AvaAudioProcessorEditor::updateSectionStates()
         setComponentVisible(fftAdaptiveAttackControl.get(), shouldShow);
         setComponentVisible(fftAdaptiveHoldControl.get(), shouldShow);
         setComponentVisible(fftAdaptiveReleaseControl.get(), shouldShow);
-        setComponentVisible(fftDynamicBypassButton.get(), shouldShow);
         setComponentVisible(fftAnalyserTimeControl.get(), shouldShow);
 
         if (fftDualMonoLeftThresholdControl != nullptr)

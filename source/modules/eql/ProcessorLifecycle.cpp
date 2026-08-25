@@ -1,5 +1,4 @@
-#include "ProcessorSupport.h"
-#include "PresetManagement.h"
+#include "Processor.h"
 
 EqlModuleProcessor::EqlModuleProcessor()
     : parameters(parameterHost, nullptr, "eql_state", createParameterLayout())
@@ -16,8 +15,6 @@ EqlModuleProcessor::EqlModuleProcessor()
     }
 
     setParameterListenersEnabled(true);
-
-    eql_presets::ensureDefaultPresetExists(*this);
 }
 
 EqlModuleProcessor::~EqlModuleProcessor()

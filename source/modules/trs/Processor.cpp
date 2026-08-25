@@ -20,21 +20,27 @@ inline constexpr auto trsCrossoverOrder = std::to_array<ParameterOrderEntry>({
     { TrsModuleProcessor::paramTransGainId, "TRANSIENT / GAIN" },
     { TrsModuleProcessor::paramSusGainId, "SUSTAIN / GAIN" },
     { TrsModuleProcessor::paramTimeHoldId, "HOLD" },
-    { TrsModuleProcessor::paramTimeHoldModeId, "HOLD MODE" },
+    { TrsModuleProcessor::paramTimeHoldModeId, "HOLD-TYPE" },
     { TrsModuleProcessor::paramTimeHoldSyncId, "HOLD SYNC" },
     { TrsModuleProcessor::paramTimeReleaseId, "RELEASE" },
-    { TrsModuleProcessor::paramTimeReleaseModeId, "RELEASE MODE" },
+    { TrsModuleProcessor::paramTimeReleaseModeId, "REL-TYPE" },
     { TrsModuleProcessor::paramTimeReleaseSyncId, "RELEASE SYNC" },
     { TrsModuleProcessor::paramTimeReleaseCurveId, "REL-CURVE" },
-    { TrsModuleProcessor::paramSensLevelId, "SENS.LVL" },
+    { TrsModuleProcessor::paramSensThresholdId, "SENS.THRESH" },
     { TrsModuleProcessor::paramSensKneeId, "SENS.KNEE" },
-    { TrsModuleProcessor::paramSensRetriggerId, "SENS.RETR" },
+    { TrsModuleProcessor::paramSensRetriggerId, "SENS.RETRIGGER" },
+    { TrsModuleProcessor::paramSensOneShotId, "SENS.ONE-SHOT" },
     { TrsModuleProcessor::paramLookaheadId, "LOOKAHEAD" },
 });
 
 constexpr auto gainMinDb = -48.0f;
 constexpr auto gainMaxDb = 48.0f;
 constexpr std::array<int, 9> hostSyncDenominators { 1, 2, 4, 8, 16, 32, 64, 128, 256 };
+
+juce::String formatGainValue(const float value)
+{
+    return juce::String::formatted("%.2f dB", static_cast<double>(value));
+}
 
 juce::String formatDecibelValue(const float value)
 {
@@ -43,7 +49,7 @@ juce::String formatDecibelValue(const float value)
 
 juce::String formatTimeValue(const float value)
 {
-    return juce::String::formatted("%.0f ms", static_cast<double>(value));
+    return juce::String::formatted("%.2f ms", static_cast<double>(value));
 }
 
 juce::String formatLookaheadValue(const float value)
@@ -53,7 +59,7 @@ juce::String formatLookaheadValue(const float value)
 
 juce::String formatCurveValue(const float value)
 {
-    return juce::String::formatted("%.0f", static_cast<double>(value));
+    return juce::String::formatted("%.2f", static_cast<double>(value));
 }
 
 float getParameterValue(const std::atomic<float>* parameter, const float fallback) noexcept
@@ -66,12 +72,20 @@ bool isEnabled(const std::atomic<float>* parameter) noexcept
     return getParameterValue(parameter, 0.0f) >= 0.5f;
 }
 
-float getHostSyncMilliseconds(const int choiceIndex, const double bpm) noexcept
+float getHostSyncMilliseconds(const int choiceIndex, const double bpm, const int typeIndex) noexcept
 {
     const auto safeBpm = bpm > 0.0 ? bpm : 120.0;
     const auto safeIndex = juce::jlimit(0, static_cast<int>(hostSyncDenominators.size()) - 1, choiceIndex);
     const auto denominator = hostSyncDenominators[static_cast<size_t>(safeIndex)];
-    return static_cast<float>((60000.0 / safeBpm) * (4.0 / static_cast<double>(denominator)));
+    const auto baseMilliseconds = static_cast<float>((60000.0 / safeBpm) * (4.0 / static_cast<double>(denominator)));
+
+    if (typeIndex == 2)
+        return baseMilliseconds * (2.0f / 3.0f);
+
+    if (typeIndex == 3)
+        return baseMilliseconds * 1.5f;
+
+    return baseMilliseconds;
 }
 } // namespace
 
@@ -205,7 +219,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrsModuleProcessor::createPa
     using Layout = juce::AudioProcessorValueTreeState::ParameterLayout;
     using Parameter = std::unique_ptr<juce::RangedAudioParameter>;
 
-    const juce::StringArray timeModeChoices { "M", "T" };
+    const juce::StringArray timeModeChoices { "MS", "NOTE", "NOTE TRIPLET", "NOTE DOTTED" };
 
     auto boolParam = [] (const juce::String& id,
                          const juce::String& name,
@@ -279,7 +293,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrsModuleProcessor::createPa
                                                name,
                                                juce::NormalisableRange<float> { gainMinDb, gainMaxDb, 0.01f },
                                                0.0f,
-                                               [] (float value, int) { return formatDecibelValue(value); }));
+                                               [] (float value, int) { return formatGainValue(value); }));
                 continue;
             }
 
@@ -325,7 +339,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrsModuleProcessor::createPa
                 continue;
             }
 
-            if (key == paramSensLevelId)
+            if (key == paramSensThresholdId)
             {
                 crossoverGroup->addChild(floatParam(id,
                                                name,
@@ -349,9 +363,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout TrsModuleProcessor::createPa
             {
                 crossoverGroup->addChild(floatParam(id,
                                                name,
-                                               juce::NormalisableRange<float> { 0.0f, 250.0f, 1.0f },
-                                               100.0f,
+                                               juce::NormalisableRange<float> { 1.0f, 5000.0f, 0.01f },
+                                               1.0f,
                                                [] (float value, int) { return formatTimeValue(value); }));
+                continue;
+            }
+
+            if (key == paramSensOneShotId)
+            {
+                crossoverGroup->addChild(boolParam(id, name, false));
                 continue;
             }
 
@@ -387,9 +407,10 @@ void TrsModuleProcessor::cacheParameterPointers()
         crossover.releaseCurve = parameters.getRawParameterValue(makeCrossoverRangeParameterId(rangeIndex, paramTimeReleaseCurveId));
         crossover.releaseMode = parameters.getRawParameterValue(makeCrossoverRangeParameterId(rangeIndex, paramTimeReleaseModeId));
         crossover.releaseSync = parameters.getRawParameterValue(makeCrossoverRangeParameterId(rangeIndex, paramTimeReleaseSyncId));
-        crossover.threshold = parameters.getRawParameterValue(makeCrossoverRangeParameterId(rangeIndex, paramSensLevelId));
+        crossover.threshold = parameters.getRawParameterValue(makeCrossoverRangeParameterId(rangeIndex, paramSensThresholdId));
         crossover.knee = parameters.getRawParameterValue(makeCrossoverRangeParameterId(rangeIndex, paramSensKneeId));
         crossover.retrigger = parameters.getRawParameterValue(makeCrossoverRangeParameterId(rangeIndex, paramSensRetriggerId));
+        crossover.oneShot = parameters.getRawParameterValue(makeCrossoverRangeParameterId(rangeIndex, paramSensOneShotId));
         crossover.lookahead = parameters.getRawParameterValue(makeCrossoverRangeParameterId(rangeIndex, paramLookaheadId));
     }
 
@@ -399,8 +420,10 @@ trs::dsp::DspCore::Parameters TrsModuleProcessor::readCrossoverRangeParameters(c
 {
     const auto& crossover = rawRangeParameters[juce::jmin(rangeIndex, numRanges - 1)];
     const auto hostBpm = getHostBpm();
-    const auto holdHostSync = getParameterValue(crossover.holdMode, 0.0f) >= 0.5f;
-    const auto releaseHostSync = getParameterValue(crossover.releaseMode, 0.0f) >= 0.5f;
+    const auto holdType = static_cast<int>(std::round(getParameterValue(crossover.holdMode, 0.0f)));
+    const auto releaseType = static_cast<int>(std::round(getParameterValue(crossover.releaseMode, 0.0f)));
+    const auto holdHostSync = holdType > 0;
+    const auto releaseHostSync = releaseType > 0;
     const auto holdSyncIndex = static_cast<int>(std::round(getParameterValue(crossover.holdSync,
                                                                               static_cast<float>(getDefaultHostSyncChoiceIndex()))));
     const auto releaseSyncIndex = static_cast<int>(std::round(getParameterValue(crossover.releaseSync,
@@ -411,14 +434,15 @@ trs::dsp::DspCore::Parameters TrsModuleProcessor::readCrossoverRangeParameters(c
     result.sustainEnabled = isEnabled(crossover.sustainOn);
     result.transGainDb = juce::jlimit(gainMinDb, gainMaxDb, getParameterValue(crossover.transGain, 0.0f));
     result.sustainGainDb = juce::jlimit(gainMinDb, gainMaxDb, getParameterValue(crossover.sustainGain, 0.0f));
-    result.holdMs = holdHostSync ? getHostSyncMilliseconds(holdSyncIndex, hostBpm)
+    result.holdMs = holdHostSync ? getHostSyncMilliseconds(holdSyncIndex, hostBpm, holdType)
                                  : juce::jlimit(0.0f, 200.0f, getParameterValue(crossover.hold, 0.0f));
-    result.releaseMs = releaseHostSync ? getHostSyncMilliseconds(releaseSyncIndex, hostBpm)
+    result.releaseMs = releaseHostSync ? getHostSyncMilliseconds(releaseSyncIndex, hostBpm, releaseType)
                                        : juce::jlimit(1.0f, 500.0f, getParameterValue(crossover.release, 10.0f));
     result.releaseCurve = juce::jlimit(-100.0f, 100.0f, getParameterValue(crossover.releaseCurve, 0.0f));
     result.thresholdDb = juce::jlimit(-48.0f, 0.0f, getParameterValue(crossover.threshold, -48.0f));
     result.kneeDb = juce::jlimit(0.0f, 24.0f, getParameterValue(crossover.knee, 0.0f));
-    result.retriggerMs = juce::jlimit(0.0f, 250.0f, getParameterValue(crossover.retrigger, 100.0f));
+    result.retriggerMs = juce::jlimit(1.0f, 5000.0f, getParameterValue(crossover.retrigger, 1.0f));
+    result.oneShot = isEnabled(crossover.oneShot);
     result.lookaheadMs = juce::jlimit(0.0f, 20.0f, getParameterValue(crossover.lookahead, 1.0f));
     return result;
 }

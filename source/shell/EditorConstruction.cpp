@@ -369,7 +369,6 @@ AvaAudioProcessorEditor::AvaAudioProcessorEditor(AvaAudioProcessor& processorToE
 
     startTimerHz(60);
     registerParameterListeners();
-    rebindActiveModuleEditors();
 
     ensureModuleTitle();
     updateSectionStates();

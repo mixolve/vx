@@ -110,16 +110,16 @@ void DynAudioProcessor::parameterChanged(const juce::String& parameterID, float)
 
     const auto branchIndexFromSlot = [] (const ParameterSlot slot) -> int
     {
-        if (slot == ParameterSlot::leftUpThreshold || slot == ParameterSlot::leftUpTension || slot == ParameterSlot::leftUpRelease || slot == ParameterSlot::leftUpOutput)
+        if (slot == ParameterSlot::leftUpThreshold || slot == ParameterSlot::leftUpAdaptive || slot == ParameterSlot::leftUpTension || slot == ParameterSlot::leftUpRelease || slot == ParameterSlot::leftUpOutput)
             return 0;
 
-        if (slot == ParameterSlot::leftDownThreshold || slot == ParameterSlot::leftDownTension || slot == ParameterSlot::leftDownRelease || slot == ParameterSlot::leftDownOutput)
+        if (slot == ParameterSlot::leftDownThreshold || slot == ParameterSlot::leftDownAdaptive || slot == ParameterSlot::leftDownTension || slot == ParameterSlot::leftDownRelease || slot == ParameterSlot::leftDownOutput)
             return 1;
 
-        if (slot == ParameterSlot::rightUpThreshold || slot == ParameterSlot::rightUpTension || slot == ParameterSlot::rightUpRelease || slot == ParameterSlot::rightUpOutput)
+        if (slot == ParameterSlot::rightUpThreshold || slot == ParameterSlot::rightUpAdaptive || slot == ParameterSlot::rightUpTension || slot == ParameterSlot::rightUpRelease || slot == ParameterSlot::rightUpOutput)
             return 2;
 
-        if (slot == ParameterSlot::rightDownThreshold || slot == ParameterSlot::rightDownTension || slot == ParameterSlot::rightDownRelease || slot == ParameterSlot::rightDownOutput)
+        if (slot == ParameterSlot::rightDownThreshold || slot == ParameterSlot::rightDownAdaptive || slot == ParameterSlot::rightDownTension || slot == ParameterSlot::rightDownRelease || slot == ParameterSlot::rightDownOutput)
             return 3;
 
         return -1;
@@ -129,6 +129,9 @@ void DynAudioProcessor::parameterChanged(const juce::String& parameterID, float)
     {
         if (slot == ParameterSlot::leftUpThreshold || slot == ParameterSlot::leftDownThreshold || slot == ParameterSlot::rightUpThreshold || slot == ParameterSlot::rightDownThreshold)
             return { ParameterSlot::leftUpThreshold, ParameterSlot::leftDownThreshold, ParameterSlot::rightUpThreshold, ParameterSlot::rightDownThreshold };
+
+        if (slot == ParameterSlot::leftUpAdaptive || slot == ParameterSlot::leftDownAdaptive || slot == ParameterSlot::rightUpAdaptive || slot == ParameterSlot::rightDownAdaptive)
+            return { ParameterSlot::leftUpAdaptive, ParameterSlot::leftDownAdaptive, ParameterSlot::rightUpAdaptive, ParameterSlot::rightDownAdaptive };
 
         if (slot == ParameterSlot::leftUpTension || slot == ParameterSlot::leftDownTension || slot == ParameterSlot::rightUpTension || slot == ParameterSlot::rightDownTension)
             return { ParameterSlot::leftUpTension, ParameterSlot::leftDownTension, ParameterSlot::rightUpTension, ParameterSlot::rightDownTension };
@@ -219,12 +222,18 @@ void DynAudioProcessor::parameterChanged(const juce::String& parameterID, float)
         const auto isGlobalMainSlot = [] (const ParameterSlot slotToCheck)
         {
             return slotToCheck == ParameterSlot::morph
+                || slotToCheck == ParameterSlot::ratio
+                || slotToCheck == ParameterSlot::knee
                 || slotToCheck == ParameterSlot::peakHoldMs
                 || slotToCheck == ParameterSlot::lookahead
                 || slotToCheck == ParameterSlot::tensionFloor
                 || slotToCheck == ParameterSlot::tensionHysteresis
                 || slotToCheck == ParameterSlot::releaseForm
-                || slotToCheck == ParameterSlot::releaseCurve;
+                || slotToCheck == ParameterSlot::releaseCurve
+                || slotToCheck == ParameterSlot::adaptiveOffset
+                || slotToCheck == ParameterSlot::adaptiveAttack
+                || slotToCheck == ParameterSlot::adaptiveHold
+                || slotToCheck == ParameterSlot::adaptiveRelease;
         };
 
         if (isGlobalMainSlot(sourceSlot))
@@ -269,6 +278,7 @@ void DynAudioProcessor::parameterChanged(const juce::String& parameterID, float)
         if (sourceSlot == ParameterSlot::linkLeftRight && linkLeftRightActive)
         {
             syncAllFieldParameters(rangeIndex, ParameterSlot::leftUpThreshold, ParameterSlot::leftDownThreshold, ParameterSlot::rightUpThreshold, ParameterSlot::rightDownThreshold);
+            syncAllFieldParameters(rangeIndex, ParameterSlot::leftUpAdaptive, ParameterSlot::leftDownAdaptive, ParameterSlot::rightUpAdaptive, ParameterSlot::rightDownAdaptive);
             syncAllFieldParameters(rangeIndex, ParameterSlot::leftUpTension, ParameterSlot::leftDownTension, ParameterSlot::rightUpTension, ParameterSlot::rightDownTension);
             syncAllFieldParameters(rangeIndex, ParameterSlot::leftUpRelease, ParameterSlot::leftDownRelease, ParameterSlot::rightUpRelease, ParameterSlot::rightDownRelease);
             syncAllFieldParameters(rangeIndex, ParameterSlot::leftUpOutput, ParameterSlot::leftDownOutput, ParameterSlot::rightUpOutput, ParameterSlot::rightDownOutput);
@@ -278,6 +288,7 @@ void DynAudioProcessor::parameterChanged(const juce::String& parameterID, float)
         if (sourceSlot == ParameterSlot::linkUpDown && linkUpDownActive)
         {
             syncUpDownParameterPairs(rangeIndex, ParameterSlot::leftUpThreshold, ParameterSlot::leftDownThreshold, ParameterSlot::rightUpThreshold, ParameterSlot::rightDownThreshold);
+            syncUpDownParameterPairs(rangeIndex, ParameterSlot::leftUpAdaptive, ParameterSlot::leftDownAdaptive, ParameterSlot::rightUpAdaptive, ParameterSlot::rightDownAdaptive);
             syncUpDownParameterPairs(rangeIndex, ParameterSlot::leftUpTension, ParameterSlot::leftDownTension, ParameterSlot::rightUpTension, ParameterSlot::rightDownTension);
             syncUpDownParameterPairs(rangeIndex, ParameterSlot::leftUpRelease, ParameterSlot::leftDownRelease, ParameterSlot::rightUpRelease, ParameterSlot::rightDownRelease);
             syncUpDownParameterPairs(rangeIndex, ParameterSlot::leftUpOutput, ParameterSlot::leftDownOutput, ParameterSlot::rightUpOutput, ParameterSlot::rightDownOutput);
@@ -310,7 +321,7 @@ void DynAudioProcessor::parameterChanged(const juce::String& parameterID, float)
                     if (thresholdParam == nullptr)
                         continue;
 
-                    const auto compensatedOut = juce::jlimit(-48.0f, 48.0f, -thresholdParam->load(std::memory_order_relaxed));
+                    const auto compensatedOut = juce::jlimit(-96.0f, 96.0f, -thresholdParam->load(std::memory_order_relaxed));
                     const auto outSlot = outSlotForThresholdSlot(thresholdSlot);
 
                     if (outSlot.has_value())

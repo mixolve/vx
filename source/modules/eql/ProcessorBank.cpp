@@ -1,4 +1,5 @@
 #include "ProcessorBank.h"
+#include "PresetManagement.h"
 
 #include <algorithm>
 
@@ -39,6 +40,9 @@ ava::modules::ProcessorRangeBank<EqlModuleProcessor>::RangeLatencies EqlProcesso
 
 void EqlProcessorBank::loadInitialFilterPreset()
 {
+    if (auto* primaryProcessor = ranges.getProcessor(0))
+        eql_presets::ensureDefaultPresetExists(*primaryProcessor);
+
     ranges.forEachProcessor([] (EqlModuleProcessor& processor)
     {
         processor.loadInitialFilterPreset();

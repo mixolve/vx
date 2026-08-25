@@ -64,10 +64,6 @@ void AvaAudioProcessorEditor::rebindActiveModuleEditors()
             fftDualMonoLinkAttachment = std::make_unique<ButtonAttachment>(fftState,
                                                                            FftModuleProcessor::paramDualMonoLinkId,
                                                                            *fftDualMonoLinkButton);
-        if (fftDynamicBypassButton != nullptr)
-            fftDynamicBypassAttachment = std::make_unique<ButtonAttachment>(fftState,
-                                                                            FftModuleProcessor::paramDynamicBypassId,
-                                                                            *fftDynamicBypassButton);
     };
 
     auto rebuildFftAnalyser = [this] (FftModuleProcessor& fftProcessor)
@@ -88,11 +84,13 @@ void AvaAudioProcessorEditor::rebindActiveModuleEditors()
             {
                 setupEqlControls(eqlState);
             }
-            else
+            else if (boundEqlState != &eqlState)
             {
                 for (auto& section : filterSections)
                     if (section != nullptr)
                         section->rebind(eqlState);
+
+                boundEqlState = &eqlState;
             }
 
             refreshFilterPresetList(eqlProcessor->getLastFilterPresetName());

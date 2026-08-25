@@ -38,6 +38,8 @@ void DspCore::clearState()
     cleanHoldSamples = { 0, 0 };
     baseReleaseStates = {};
     cleanReleaseStates = {};
+    adaptiveReferenceDb = { -96.0, -96.0, -96.0, -96.0 };
+    adaptiveHoldSamplesRemaining = { 0, 0, 0, 0 };
     bufPos = 0;
     bufPosDry = 0;
 }
@@ -46,10 +48,14 @@ void DspCore::updateDerivedParameters()
 {
     const auto sampleRate = std::max(1.0, currentSampleRate);
 
-    derived.thresholds[branchLeftUp] = dbToAmp(roundToParameterStep(parameters.leftUpThreshold));
-    derived.thresholds[branchLeftDown] = dbToAmp(roundToParameterStep(parameters.leftDownThreshold));
-    derived.thresholds[branchRightUp] = dbToAmp(roundToParameterStep(parameters.rightUpThreshold));
-    derived.thresholds[branchRightDown] = dbToAmp(roundToParameterStep(parameters.rightDownThreshold));
+    derived.manualThresholds[branchLeftUp] = dbToAmp(roundToParameterStep(parameters.leftUpThreshold));
+    derived.manualThresholds[branchLeftDown] = dbToAmp(roundToParameterStep(parameters.leftDownThreshold));
+    derived.manualThresholds[branchRightUp] = dbToAmp(roundToParameterStep(parameters.rightUpThreshold));
+    derived.manualThresholds[branchRightDown] = dbToAmp(roundToParameterStep(parameters.rightDownThreshold));
+    derived.adaptiveAmounts[branchLeftUp] = roundToParameterStep(parameters.leftUpAdaptive) * 0.01;
+    derived.adaptiveAmounts[branchLeftDown] = roundToParameterStep(parameters.leftDownAdaptive) * 0.01;
+    derived.adaptiveAmounts[branchRightUp] = roundToParameterStep(parameters.rightUpAdaptive) * 0.01;
+    derived.adaptiveAmounts[branchRightDown] = roundToParameterStep(parameters.rightDownAdaptive) * 0.01;
 
     derived.tensions[branchLeftUp] = roundToParameterStep(parameters.leftUpTension);
     derived.tensions[branchLeftDown] = roundToParameterStep(parameters.leftDownTension);
@@ -76,7 +82,8 @@ void DspCore::updateDerivedParameters()
     derived.branchOutGains[branchRightDown] = dbToAmp(roundToParameterStep(parameters.rightDownOutput));
 
     derived.morph = roundToParameterStep(parameters.morph) * 0.01;
-    derived.clipKneeDb = 0.0;
+    derived.ratio = juce::jlimit(1.0, 100.0, roundToParameterStep(parameters.ratio));
+    derived.clipKneeDb = juce::jlimit(0.0, 24.0, roundToParameterStep(parameters.knee));
 
     const auto lookaheadSamples = static_cast<int>(std::round(
         std::max(0.0, roundToParameterStep(parameters.lookaheadMs)) * 0.001 * sampleRate));
@@ -85,6 +92,15 @@ void DspCore::updateDerivedParameters()
     derived.tensionHysteresis = roundToParameterStep(parameters.tensionHysteresis) * 0.01;
     derived.releaseLogarithmic = parameters.releaseForm == 1;
     derived.releaseCurve = derived.releaseLogarithmic ? roundToParameterStep(parameters.releaseCurve) * 0.01 : 0.0;
+    derived.adaptiveOffsetDb = roundToParameterStep(parameters.adaptiveOffset);
+    const auto smoothingCoefficient = [&toReleaseSamples] (const double milliseconds)
+    {
+        const auto samples = toReleaseSamples(milliseconds);
+        return samples <= 0 ? 0.0 : std::exp(-1.0 / static_cast<double>(samples));
+    };
+    derived.adaptiveAttackCoefficient = smoothingCoefficient(roundToParameterStep(parameters.adaptiveAttack));
+    derived.adaptiveReleaseCoefficient = smoothingCoefficient(roundToParameterStep(parameters.adaptiveRelease));
+    derived.adaptiveHoldSamples = toReleaseSamples(roundToParameterStep(parameters.adaptiveHold));
     derived.delta = parameters.delta;
 
     derived.lookaheadSamples = juce::jlimit(

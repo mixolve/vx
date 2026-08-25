@@ -122,16 +122,18 @@ CrossoverControlSpec timeControl(const char* suffix,
                             const char* label,
                             const char* modeSuffix,
                             const char* syncSuffix,
-                            const int topGapMultiplier = 1)
+                            const int topGapMultiplier = 1,
+                            const bool showModeButton = true)
 {
     CrossoverControlSpec spec;
     spec.kind = ControlKind::time;
     spec.suffix = suffix;
     spec.label = label;
-    spec.decimals = 0;
+    spec.decimals = 2;
     spec.modeSuffix = modeSuffix;
     spec.syncSuffix = syncSuffix;
     spec.topGapMultiplier = topGapMultiplier;
+    spec.showTimeModeButton = showModeButton;
     return spec;
 }
 } // namespace
@@ -254,29 +256,40 @@ CrossoverModuleComponent::Config makeDynCrossoverConfig(DynAudioProcessor& proce
     config.rangeControls = {
         headingControl("GENERAL", 1),
         parameterControl("morph", "MORPH", 2, 0),
+        parameterControl("ratio", "RATIO", 2, 0),
+        parameterControl("knee", "KNEE", 2, 0),
         parameterControl("peak_hold", "PEAK-HOLD", 2, 0),
         parameterControl("lookahead", "LOOKAHEAD", 2, 0),
         parameterControl("tension_floor", "TEN-FLOOR", 2, 0),
         parameterControl("tension_hysteresis", "TEN-HYST", 2, 0),
         choiceControl("release_form", "REL-FORM", 0),
         parameterControl("release_curve", "REL-CURVE", 2, 0, 1, "release_form"),
+        headingControl("ADAP SETTINGS", 2),
+        parameterControl("adaptive_offset", "OFFSET", 2),
+        parameterControl("adaptive_attack", "ATTACK", 2),
+        parameterControl("adaptive_hold", "HOLD", 2),
+        parameterControl("adaptive_release", "RELEASE", 2),
         headingControl("LINKING", 2),
         toggleControl("linkUpDown", "UPDN (DUAL-MONO)"),
         toggleControl("linkLeftRight", "LR (STEREO)"),
         toggleControl("linkOpposite", "OPP"),
         parameterControl("leftUpThreshold", "L.UP.THR", 2, -1, 2),
+        parameterControl("leftUpAdaptive", "L.UP.ADAP", 2),
         parameterControl("leftUpTension", "L.UP.TENS", 2),
         parameterControl("leftUpRelease", "L.UP.REL", 2),
         parameterControl("leftUpOutput", "L.UP.OUT", 2),
         parameterControl("leftDownThreshold", "L.DN.THR", 2),
+        parameterControl("leftDownAdaptive", "L.DN.ADAP", 2),
         parameterControl("leftDownTension", "L.DN.TENS", 2),
         parameterControl("leftDownRelease", "L.DN.REL", 2),
         parameterControl("leftDownOutput", "L.DN.OUT", 2),
         parameterControl("rightUpThreshold", "R.UP.THR", 2),
+        parameterControl("rightUpAdaptive", "R.UP.ADAP", 2),
         parameterControl("rightUpTension", "R.UP.TENS", 2),
         parameterControl("rightUpRelease", "R.UP.REL", 2),
         parameterControl("rightUpOutput", "R.UP.OUT", 2),
         parameterControl("rightDownThreshold", "R.DN.THR", 2),
+        parameterControl("rightDownAdaptive", "R.DN.ADAP", 2),
         parameterControl("rightDownTension", "R.DN.TENS", 2),
         parameterControl("rightDownRelease", "R.DN.REL", 2),
         parameterControl("rightDownOutput", "R.DN.OUT", 2),
@@ -306,7 +319,7 @@ CrossoverModuleComponent::Config makeTrsCrossoverConfig(TrsModuleProcessor& proc
         headingControl("TRANSIENT", 1),
         parameterToggleControl(TrsModuleProcessor::paramTransGainId,
                                "GAIN",
-                               1,
+                               2,
                                TrsModuleProcessor::paramTransOnId,
                                "MUTE",
                                "",
@@ -316,7 +329,7 @@ CrossoverModuleComponent::Config makeTrsCrossoverConfig(TrsModuleProcessor& proc
         headingControl("SUSTAIN", 2),
         parameterToggleControl(TrsModuleProcessor::paramSusGainId,
                                "GAIN",
-                               1,
+                               2,
                                TrsModuleProcessor::paramSusOnId,
                                "MUTE",
                                "",
@@ -327,17 +340,23 @@ CrossoverModuleComponent::Config makeTrsCrossoverConfig(TrsModuleProcessor& proc
                     "HOLD",
                     TrsModuleProcessor::paramTimeHoldModeId,
                     TrsModuleProcessor::paramTimeHoldSyncId,
-                    2),
+                    2,
+                    false),
+        choiceControl(TrsModuleProcessor::paramTimeHoldModeId, "HOLD-TYPE"),
         timeControl(TrsModuleProcessor::paramTimeReleaseId,
                     "RELEASE",
                     TrsModuleProcessor::paramTimeReleaseModeId,
-                    TrsModuleProcessor::paramTimeReleaseSyncId),
-        parameterControl(TrsModuleProcessor::paramTimeReleaseCurveId, "REL-CURVE", 0),
+                    TrsModuleProcessor::paramTimeReleaseSyncId,
+                    1,
+                    false),
+        choiceControl(TrsModuleProcessor::paramTimeReleaseModeId, "REL-TYPE"),
+        parameterControl(TrsModuleProcessor::paramTimeReleaseCurveId, "REL-CURVE", 2),
         parameterControl(TrsModuleProcessor::paramLookaheadId, "LOOKAHEAD", 2),
         headingControl("SENSITIVITY", 2),
-        parameterControl(TrsModuleProcessor::paramSensLevelId, "LVL", 2),
+        parameterControl(TrsModuleProcessor::paramSensThresholdId, "THRESH", 2),
         parameterControl(TrsModuleProcessor::paramSensKneeId, "KNEE", 2),
-        parameterControl(TrsModuleProcessor::paramSensRetriggerId, "RETR", 0),
+        parameterControl(TrsModuleProcessor::paramSensRetriggerId, "RETRIGGER", 2),
+        toggleControl(TrsModuleProcessor::paramSensOneShotId, "ONE-SHOT"),
     };
     config.getHostSyncChoices = []
     {
