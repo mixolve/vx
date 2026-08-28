@@ -16,6 +16,17 @@ void EqlModuleProcessor::prepareToPlay(const double sampleRate, const int sample
     placeWorkBuffer.setSize(1, juce::jmax(1, samplesPerBlock));
     placeAuxBuffer.setSize(preparedNumChannels, juce::jmax(1, samplesPerBlock));
 
+    for (int filterIndex = 0; filterIndex < maxFilterCount; ++filterIndex)
+    {
+        const auto arrayIndex = static_cast<size_t>(filterIndex);
+        const auto gainDb = filterGainParams[arrayIndex] != nullptr
+            ? juce::jlimit(-48.0f, 48.0f, filterGainParams[arrayIndex]->load(std::memory_order_relaxed))
+            : 0.0f;
+        filterGainSmoothers[arrayIndex].reset(sampleRate, 0.10);
+        filterGainSmoothers[arrayIndex].setCurrentAndTargetValue(gainDb);
+        effectiveFilterGainDb[arrayIndex] = gainDb;
+    }
+
     resetFilters();
     markEqlFiltersDirty();
     updateFilters();
@@ -30,6 +41,43 @@ void EqlModuleProcessor::releaseResources()
 
     resetFilters();
     currentSampleRate = 0.0;
+}
+
+bool EqlModuleProcessor::updateSmoothedFilterGains(const int samplesPerBlock) noexcept
+{
+    auto changed = false;
+
+    for (int filterIndex = 0; filterIndex < maxFilterCount; ++filterIndex)
+    {
+        const auto arrayIndex = static_cast<size_t>(filterIndex);
+        const auto targetGainDb = filterGainParams[arrayIndex] != nullptr
+            ? juce::jlimit(-48.0f, 48.0f, filterGainParams[arrayIndex]->load(std::memory_order_relaxed))
+            : 0.0f;
+        const auto placeChoice = filterPlaceParams[arrayIndex] != nullptr
+            ? juce::jlimit(0,
+                           7,
+                           static_cast<int>(std::lround(filterPlaceParams[arrayIndex]->load(std::memory_order_relaxed))))
+            : 0;
+
+        if (isPhasePlaceChoice(placeChoice))
+        {
+            filterGainSmoothers[arrayIndex].setCurrentAndTargetValue(targetGainDb);
+            effectiveFilterGainDb[arrayIndex] = targetGainDb;
+            continue;
+        }
+
+        auto& smoother = filterGainSmoothers[arrayIndex];
+        smoother.setTargetValue(targetGainDb);
+        const auto nextGainDb = smoother.skip(juce::jmax(1, samplesPerBlock));
+
+        if (std::abs(nextGainDb - effectiveFilterGainDb[arrayIndex]) > 1.0e-5f)
+        {
+            effectiveFilterGainDb[arrayIndex] = nextGainDb;
+            changed = true;
+        }
+    }
+
+    return changed;
 }
 
 void EqlModuleProcessor::resetProcessingState() noexcept
@@ -83,7 +131,10 @@ void EqlModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
     placeWorkBuffer.setSize(1, processSamples, false, false, true);
     placeAuxBuffer.setSize(processChannels, processSamples, false, false, true);
 
-    if (eqlFiltersDirty.exchange(false, std::memory_order_acq_rel))
+    const auto gainSmoothingChanged = updateSmoothedFilterGains(processSamples);
+    const auto filtersDirty = eqlFiltersDirty.exchange(false, std::memory_order_acq_rel);
+
+    if (gainSmoothingChanged || filtersDirty)
         updateFilters();
 
     const auto filterCount = getActiveFilterCount();
@@ -230,11 +281,7 @@ void EqlModuleProcessor::processBlock(juce::AudioBuffer<float>& buffer)
 
         if (isVolumeFilterType(filterType))
         {
-            const auto gainDb = filterGainParams[filterArrayIndex] != nullptr
-                ? juce::jlimit(-48.0f,
-                               48.0f,
-                               filterGainParams[filterArrayIndex]->load(std::memory_order_relaxed))
-                : 0.0f;
+            const auto gainDb = effectiveFilterGainDb[filterArrayIndex];
 
             if (std::abs(gainDb) < 1.0e-6f)
                 return;

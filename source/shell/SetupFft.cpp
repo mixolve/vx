@@ -75,27 +75,6 @@ void AvaAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeStat
             scheduleHistorySnapshot();
         };
 
-        const auto assignFftButtonHostSlot = [this] (BoxTextButton& button,
-                                                     juce::String parameterId,
-                                                     juce::String parameterName)
-        {
-            auto targetParameterId = std::move(parameterId);
-            auto targetParameterName = std::move(parameterName);
-
-            button.onClickWithModifiers = [this,
-                                           assignedParameterId = std::move(targetParameterId),
-                                           assignedParameterName = std::move(targetParameterName)] (const juce::ModifierKeys& modifiers)
-            {
-                if (! modifiers.isCtrlDown())
-                    return false;
-
-                if (auto* parameter = findHostAssignableParameter(assignedParameterId))
-                    return handleHostSlotAssignRequest(assignedParameterId, assignedParameterName, parameter->getValue());
-
-                return false;
-            };
-        };
-
         const auto configureSectionHeader = [] (BoxTextButton& header, const juce::String& text)
         {
             header.setButtonText(text);
@@ -227,7 +206,11 @@ void AvaAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeStat
         fftDeltaAttachment = std::make_unique<ButtonAttachment>(fftState,
                                                                 FftModuleProcessor::paramDeltaId,
                                                                 *fftDeltaButton);
-        assignFftButtonHostSlot(*fftDeltaButton, FftModuleProcessor::paramDeltaId, "DELTA");
+        fftDeltaButton->setLongPressPromptActions({}, [this]
+        {
+            if (auto* parameter = findHostAssignableParameter(FftModuleProcessor::paramDeltaId))
+                handleHostSlotAssignRequest(FftModuleProcessor::paramDeltaId, "DELTA", parameter->getValue());
+        });
         fftDeltaButton->onClick = [this]
         {
             clearKeyboardFocus(*this);
@@ -265,7 +248,13 @@ void AvaAudioProcessorEditor::setupFftControls(juce::AudioProcessorValueTreeStat
         fftDualMonoLinkAttachment = std::make_unique<ButtonAttachment>(fftState,
                                                                        FftModuleProcessor::paramDualMonoLinkId,
                                                                        *fftDualMonoLinkButton);
-        assignFftButtonHostSlot(*fftDualMonoLinkButton, FftModuleProcessor::paramDualMonoLinkId, "LINK-LR");
+        fftDualMonoLinkButton->setLongPressPromptActions({}, [this]
+        {
+            if (auto* parameter = findHostAssignableParameter(FftModuleProcessor::paramDualMonoLinkId))
+                handleHostSlotAssignRequest(FftModuleProcessor::paramDualMonoLinkId,
+                                            "LINK-LR",
+                                            parameter->getValue());
+        });
         fftDualMonoLinkButton->onClick = [this]
         {
             clearKeyboardFocus(*this);

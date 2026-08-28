@@ -22,6 +22,5 @@ bool canUseFocusedPotentiometer(juce::RangedAudioParameter* parameter,
 bool assignTitleToHostSlot(juce::Component& source,
                            BoxTextButton* titleButton,
                            const juce::String& parameterId,
-                           juce::RangedAudioParameter* parameter,
-                           const juce::ModifierKeys& modifiers);
+                           juce::RangedAudioParameter* parameter);
 }

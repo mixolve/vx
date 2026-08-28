@@ -97,6 +97,8 @@ CrossoverModuleComponent::CrossoverModuleComponent(Config configIn)
 CrossoverModuleComponent::~CrossoverModuleComponent()
 {
     saveUiState();
+    if (pinnedHeaderComponent != nullptr)
+        removeChildComponent(pinnedHeaderComponent);
     if (pinnedTailComponent != nullptr)
         removeChildComponent(pinnedTailComponent);
     pageViewport.setViewedComponent(nullptr, false);
@@ -213,6 +215,16 @@ void CrossoverModuleComponent::resized()
             bounds.removeFromTop(verticalGap);
     }
 
+    updatePinnedHeaderComponent();
+    const auto pinnedHeaderHeight = getCurrentPinnedHeaderHeight();
+    auto pinnedHeaderBounds = bounds.removeFromTop(pinnedHeaderHeight);
+
+    if (pinnedHeaderComponent != nullptr)
+        pinnedHeaderComponent->setBounds(pinnedHeaderBounds);
+
+    if (pinnedHeaderHeight > 0 && ! bounds.isEmpty())
+        bounds.removeFromTop(verticalGap);
+
     updatePinnedTailComponent();
     const auto pinnedTailHeight = getCurrentPinnedTailHeight();
     auto pinnedTailBounds = bounds.removeFromBottom(pinnedTailHeight);
@@ -256,11 +268,7 @@ void CrossoverModuleComponent::scrollPageViewport(const juce::MouseEvent& event,
 
 juce::Rectangle<int> CrossoverModuleComponent::getContentBounds() const noexcept
 {
-    auto bounds = getLocalBounds();
-    const auto editorInsetX = getEditorInsetX(bounds.getWidth());
-    bounds.removeFromLeft(editorInsetX);
-    bounds.removeFromRight(editorInsetX);
-    return bounds;
+    return getLocalBounds();
 }
 
 void CrossoverModuleComponent::refreshCurrentPageLayout()
@@ -287,7 +295,10 @@ void CrossoverModuleComponent::refreshExternalState()
 
 int CrossoverModuleComponent::getPreferredHeight() const noexcept
 {
+    const auto pinnedHeaderHeight = getCurrentPinnedHeaderHeight();
+
     return (config.showCrossoverNavigation ? rowHeight + verticalGap : 0)
+        + (pinnedHeaderHeight > 0 ? pinnedHeaderHeight + verticalGap : 0)
         + getCurrentPagePreferredHeight()
         + getCurrentPinnedTailHeight();
 }
@@ -510,8 +521,32 @@ void CrossoverModuleComponent::updatePageVisibility()
     if (crossoverSettingsPage != nullptr)
         crossoverSettingsPage->setVisible(crossoverSettingsActive);
 
+    updatePinnedHeaderComponent();
     updatePinnedTailComponent();
     updatePageViewport();
+}
+
+void CrossoverModuleComponent::updatePinnedHeaderComponent()
+{
+    auto* currentPage = getCurrentPageComponent();
+    auto* nextPinnedHeader = currentPage != nullptr ? currentPage->getPinnedHeaderComponent() : nullptr;
+
+    if (pinnedHeaderComponent != nextPinnedHeader)
+    {
+        if (pinnedHeaderComponent != nullptr)
+        {
+            pinnedHeaderComponent->setVisible(false);
+            removeChildComponent(pinnedHeaderComponent);
+        }
+
+        pinnedHeaderComponent = nextPinnedHeader;
+
+        if (pinnedHeaderComponent != nullptr)
+            addAndMakeVisible(*pinnedHeaderComponent);
+    }
+
+    if (pinnedHeaderComponent != nullptr)
+        pinnedHeaderComponent->setVisible(nextPinnedHeader != nullptr);
 }
 
 void CrossoverModuleComponent::updatePinnedTailComponent()
@@ -554,6 +589,14 @@ int CrossoverModuleComponent::getCurrentPagePreferredHeight() const noexcept
     return visibleRangeIndex < rangePages.size() && rangePages[visibleRangeIndex] != nullptr
         ? rangePages[visibleRangeIndex]->getPreferredHeight()
         : 0;
+}
+
+int CrossoverModuleComponent::getCurrentPinnedHeaderHeight() const noexcept
+{
+    if (auto* currentPage = getCurrentPageComponent())
+        return currentPage->getPinnedHeaderHeight();
+
+    return 0;
 }
 
 int CrossoverModuleComponent::getCurrentPinnedTailHeight() const noexcept
@@ -707,12 +750,11 @@ bool CrossoverModuleComponent::setParameterNormalisedValue(juce::RangedAudioPara
     return true;
 }
 
-bool CrossoverModuleComponent::assignButtonHostSlot(const juce::String& parameterId,
-                                                    const juce::String& fallbackName,
-                                                    const BoxTextButton* button,
-                                                    const juce::ModifierKeys& modifiers)
+bool CrossoverModuleComponent::assignButtonToHostSlot(const juce::String& parameterId,
+                                                       const juce::String& fallbackName,
+                                                       const BoxTextButton* button)
 {
-    if (! modifiers.isCtrlDown() || config.assignHostSlot == nullptr)
+    if (config.assignHostSlot == nullptr)
         return false;
 
     if (auto* parameter = valueTreeState.getParameter(parameterId))

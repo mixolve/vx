@@ -27,8 +27,7 @@ std::unique_ptr<PromptComponent> makeChoicePrompt(juce::Rectangle<int> anchorBou
                                                   juce::Justification itemJustification,
                                                   std::function<void(int)> onSelect,
                                                   std::function<void()> onDismiss,
-                                                  std::function<void()> onClose,
-                                                  juce::StringArray itemTooltips);
+                                                  std::function<void()> onClose);
 
 std::unique_ptr<PromptComponent> makeInfoPrompt(juce::String markdownText,
                                                 std::function<void()> onClose);

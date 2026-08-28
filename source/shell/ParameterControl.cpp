@@ -89,10 +89,9 @@ bool parameter_control_support::canUseFocusedPotentiometer(
 bool parameter_control_support::assignTitleToHostSlot(juce::Component& source,
                                                       BoxTextButton* titleButton,
                                                       const juce::String& parameterId,
-                                                      juce::RangedAudioParameter* parameter,
-                                                      const juce::ModifierKeys& modifiers)
+                                                      juce::RangedAudioParameter* parameter)
 {
-    if (! modifiers.isCtrlDown() || parameter == nullptr)
+    if (parameter == nullptr)
         return false;
 
     if (auto* owner = source.findParentComponentOfClass<AvaAudioProcessorEditor>())
@@ -167,10 +166,6 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     titleButton->setButtonText(titleText);
     titleButton->setTextJustification(juce::Justification::centredLeft);
     titleButton->setClearsParameterFocusOnMouseDown(false);
-    titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
-    {
-        return parameter_control_support::assignTitleToHostSlot(*this, titleButton.get(), parameterId, parameter, modifiers);
-    };
     titleButton->onClick = [this]
     {
         if (parameter_control_support::isTitleButtonFocused(titleButton.get(), &slider))
@@ -190,7 +185,7 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
 
         clearKeyboardFocus(*this);
     };
-    titleButton->setLongPressAction([this]
+    titleButton->setLongPressPromptActions([this]
     {
         if (! interactionEnabled)
         {
@@ -209,6 +204,10 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
                             juce::sendNotificationSync);
         }
 
+        clearKeyboardFocus(*this);
+    }, [this]
+    {
+        parameter_control_support::assignTitleToHostSlot(*this, titleButton.get(), parameterId, parameter);
         clearKeyboardFocus(*this);
     });
 
@@ -252,7 +251,6 @@ ParameterControl::ParameterControl(juce::AudioProcessorValueTreeState& state,
     };
 
     if (parameter != nullptr)
-        slider.setDoubleClickReturnValue(true, parameter->convertFrom0to1(parameter->getDefaultValue()));
 
     attachment = std::make_unique<Attachment>(state, parameterIdIn, slider);
     valueBox = std::make_unique<ValueBoxComponent>(slider);
@@ -335,7 +333,6 @@ void ParameterControl::rebind(juce::AudioProcessorValueTreeState& state,
                                       static_cast<double>(range.interval),
                                       static_cast<double>(range.skew),
                                       range.symmetricSkew });
-        slider.setDoubleClickReturnValue(true, parameter->convertFrom0to1(parameter->getDefaultValue()));
     }
 
     if (! parameter_control_support::canUseFocusedPotentiometer(parameter, valueClickAction))
@@ -487,10 +484,10 @@ juce::Rectangle<int> ParameterControl::getValueBounds() const noexcept
     return valueBox != nullptr ? valueBox->getBounds() : juce::Rectangle<int>();
 }
 
-void ParameterControl::setTitleLongPressAction(std::function<void()> action, const int delayMs)
+void ParameterControl::setTitleMoveArmedAction(std::function<void()> action)
 {
     if (titleButton != nullptr)
-        titleButton->setLongPressAction(std::move(action), delayMs);
+        titleButton->onMoveArmed = std::move(action);
 }
 
 void ParameterControl::resized()

@@ -244,7 +244,6 @@ AvaAudioProcessorEditor::AvaAudioProcessorEditor(AvaAudioProcessor& processorToE
 #endif
     setWantsKeyboardFocus(true);
     setMouseClickGrabsKeyboardFocus(false);
-    tooltipWindow = std::make_unique<DelayedTooltipWindow>(this, 1500);
     hostParametersViewport.setViewedComponent(&hostParametersContent, false);
     hostParametersViewport.setScrollBarsShown(false, true);
     hostParametersViewport.setScrollOnDragMode(juce::Viewport::ScrollOnDragMode::all);
@@ -295,15 +294,12 @@ AvaAudioProcessorEditor::AvaAudioProcessorEditor(AvaAudioProcessor& processorToE
     addAndMakeVisible(*focusedParameterControl);
 
 #if ! JUCE_IOS
-    horizontalResizeHandle = std::make_unique<EdgeResizeHandle>(*this, EdgeResizeHandle::Axis::horizontal);
     verticalResizeHandle = std::make_unique<EdgeResizeHandle>(*this, EdgeResizeHandle::Axis::vertical);
-    addAndMakeVisible(*horizontalResizeHandle);
     addAndMakeVisible(*verticalResizeHandle);
 #endif
 
     clipButton = std::make_unique<BoxTextButton>(uiClip);
     clipButton->setButtonText("C");
-    clipButton->setTooltip("CLIP INDICATOR");
     clipButton->setTextJustification(juce::Justification::centred);
     clipButton->setClickingTogglesState(false);
     clipButton->setFillVisible(false);
@@ -312,7 +308,6 @@ AvaAudioProcessorEditor::AvaAudioProcessorEditor(AvaAudioProcessor& processorToE
 
     hostButton = std::make_unique<BoxTextButton>(uiAccent);
     hostButton->setButtonText("H");
-    hostButton->setTooltip("CLICK: HOST PARAMETERS -- LONG PRESS: TURN ON/OFF HINTS");
     hostButton->setTextJustification(juce::Justification::centred);
     hostButton->setClickingTogglesState(true);
     hostButton->setToggleAccentVisible(true);
@@ -324,7 +319,7 @@ AvaAudioProcessorEditor::AvaAudioProcessorEditor(AvaAudioProcessor& processorToE
     addAndMakeVisible(*hostButton);
 
     moduleAddButton = std::make_unique<BoxTextButton>(uiClip);
-    moduleAddButton->setButtonText("ADD MODULE");
+    moduleAddButton->setButtonText("ADD-MODULE");
     moduleAddButton->setTextJustification(juce::Justification::centred);
     moduleAddButton->onClick = [this]
     {
@@ -358,8 +353,7 @@ AvaAudioProcessorEditor::AvaAudioProcessorEditor(AvaAudioProcessor& processorToE
     restoreEditorStateFromValueTree();
 
     footerTab = std::make_unique<BoxTextButton>(uiGrey500);
-    footerTab->setButtonText("AVA by MIXOLVE");
-    footerTab->setTooltip("ABOUT");
+    footerTab->setButtonText("MIXOLVE");
     footerTab->onClick = [this]
     {
         showInfoPrompt(shell_setup_support::getMixolveInfoMarkdown());
@@ -372,7 +366,6 @@ AvaAudioProcessorEditor::AvaAudioProcessorEditor(AvaAudioProcessor& processorToE
 
     ensureModuleTitle();
     updateSectionStates();
-    updateTooltipTogglePrompt();
     setResizeLimits(minimumEditorWidth, minimumEditorHeight, maximumEditorWidth, maximumEditorHeight);
 
     const auto restoredEditorSize = getRestoredEditorSize();

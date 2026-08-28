@@ -44,6 +44,22 @@ ValueBoxComponent::~ValueBoxComponent()
     stopGlobalEditTracking();
 }
 
+void ValueBoxComponent::scheduleMarqueeRepaint()
+{
+    if (marqueeRepaintPending || ! isShowing())
+        return;
+
+    marqueeRepaintPending = true;
+    juce::Timer::callAfterDelay(16, [safeThis = juce::Component::SafePointer<ValueBoxComponent>(this)]
+    {
+        if (safeThis == nullptr)
+            return;
+
+        safeThis->marqueeRepaintPending = false;
+        safeThis->repaint();
+    });
+}
+
 void ValueBoxComponent::setInteractionEnabled(const bool shouldEnable)
 {
     if (interactionEnabled == shouldEnable)
@@ -135,11 +151,14 @@ void ValueBoxComponent::paint(juce::Graphics& g)
 
     g.setColour(interactionEnabled ? getDisplayTextColour(displayText) : uiGrey500);
     g.setFont(makeUiFont());
-    g.drawFittedText(displayText,
-                     getLocalBounds().reduced(4, 0),
-                     juce::Justification::centred,
-                     1,
-                     1.0f);
+    if (drawLoopingText(g,
+                        displayText,
+                        getLocalBounds().reduced(uiGap, 0),
+                        makeUiFont(),
+                        juce::Justification::centred))
+    {
+        scheduleMarqueeRepaint();
+    }
 }
 
 void ValueBoxComponent::resized()
@@ -219,7 +238,7 @@ void ValueBoxComponent::mouseUp(const juce::MouseEvent& event)
 
     const auto shouldOpenPrompt = contains(event.getPosition())
         && ! dragDetected
-        && (! event.mods.isPopupMenu() || event.mods.isCtrlDown());
+        && ! event.mods.isPopupMenu();
 
     pointerDown = false;
     dragDetected = false;

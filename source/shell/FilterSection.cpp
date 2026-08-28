@@ -51,10 +51,10 @@ AvaAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueT
     header->setButtonText({});
     header->setTextJustification(juce::Justification::centred);
     header->setEqlFilterHeaderColouringEnabled(true);
-    header->setClickingTogglesState(true);
+    header->setClickingTogglesState(false);
     header->setToggleAccentVisible(true);
-    header->setDisclosureArrowVisible(false);
     header->setCancelClickOnLeave(true);
+
 
     bypassButton->setButtonText("B");
     bypassButton->setTextJustification(juce::Justification::centred);
@@ -64,26 +64,20 @@ AvaAudioProcessorEditor::FilterSection::FilterSection(juce::AudioProcessorValueT
         state,
         EqlModuleProcessor::getFilterBypassParamId(filterIndexIn),
         *bypassButton);
-    bypassButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+    bypassButton->setLongPressPromptActions({}, [this]
     {
-        if (! modifiers.isCtrlDown())
-            return false;
-
         auto* editor = bypassButton != nullptr
             ? bypassButton->findParentComponentOfClass<AvaAudioProcessorEditor>()
             : nullptr;
 
         if (editor == nullptr)
-            return false;
+            return;
 
         const auto parameterId = EqlModuleProcessor::getFilterBypassParamId(filterIndex);
 
         if (auto* parameter = editor->findHostAssignableParameter(parameterId))
-            return editor->handleHostSlotAssignRequest(parameterId, "B", parameter->getValue());
-
-        return false;
-    };
-
+            editor->handleHostSlotAssignRequest(parameterId, "B", parameter->getValue());
+    });
     lastFilterType = getFilterType();
     slopeControl->setChoices(getBellSlopeDisplayChoicesForType(lastFilterType));
     slopeControl->setChoiceEnabled(0, lastFilterType != FilterType::bell);

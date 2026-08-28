@@ -156,6 +156,7 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     void setParameterListenersEnabled(bool enabled);
+    bool updateSmoothedFilterGains(int samplesPerBlock) noexcept;
     FilterType getFilterTypeForSection(size_t filterIndex) const noexcept;
     bool filterDesignMatches(size_t filterIndex,
                              bool active,
@@ -214,6 +215,8 @@ private:
     std::array<juce::AudioParameterChoice*, maxFilterCount> filterSlopeChoiceParams {};
     std::array<std::atomic<float>*, maxFilterCount> filterGainParams {};
     std::array<std::atomic<float>*, maxFilterCount> filterBypassParams {};
+    std::array<juce::SmoothedValue<float>, maxFilterCount> filterGainSmoothers {};
+    std::array<float, maxFilterCount> effectiveFilterGainDb {};
     std::array<std::array<BellOrderFilter, maxBellOrder>, maxFilterCount> bellOrderFilters;
     std::array<std::array<BiquadCascade, maxShelfOrder>, maxFilterCount> shelfOrderFilters;
     std::array<BiquadCascade, maxFilterCount> tiltFilters;

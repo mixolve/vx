@@ -51,7 +51,6 @@ AvaAudioProcessorEditor::~AvaAudioProcessorEditor()
     unregisterParameterListeners();
     storeEditorStateToValueTree();
     stopTimer();
-    tooltipWindow.reset();
     setLookAndFeel(nullptr);
 }
 

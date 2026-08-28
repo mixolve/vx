@@ -33,11 +33,11 @@ public:
         if (bounds.getWidth() <= 0.0f || bounds.getHeight() <= 0.0f)
             return;
 
-        paintReduction(g, bounds, leftReductionData, phaseCorrMode ? analyserPhaseColour : analyserLeftColour,
+        paintReduction(g, bounds, leftReductionData, analyserPhaseColour,
                        juce::jmax(0.01f, -reductionDisplayFloor));
 
         if (! phaseCorrMode)
-            paintReduction(g, bounds, rightReductionData, analyserRightColour,
+            paintReduction(g, bounds, rightReductionData, analyserPhaseColour,
                            juce::jmax(0.01f, -reductionDisplayFloor));
     }
 

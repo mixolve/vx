@@ -73,10 +73,12 @@ public:
         bool startOnCrossoverSettings = false;
         bool showCrossoverControls = true;
         bool showModuleHeading = true;
+        bool pinModuleHeading = false;
         bool showCrossoverNavigation = true;
         bool showCrossoverSolo = true;
         juce::String crossoverSettingsHeading;
         std::function<void()> onPageChanged;
+        std::function<void()> onModuleCloseRequest;
         std::function<juce::StringArray()> getHostSyncChoices;
         std::function<int()> getDefaultHostSyncChoiceIndex;
         std::function<void(const juce::Rectangle<int>&,
@@ -127,11 +129,13 @@ private:
     bool isRangeSoloEnabled(size_t rangeIndex) const noexcept;
     void updateMonitorButtons();
     void updatePageVisibility();
+    void updatePinnedHeaderComponent();
     void updatePinnedTailComponent();
     void scrollPageViewport(const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel);
     void updatePageViewport();
     CrossoverModulePage* getCurrentPageComponent() const noexcept;
     int getCurrentPagePreferredHeight() const noexcept;
+    int getCurrentPinnedHeaderHeight() const noexcept;
     int getCurrentPinnedTailHeight() const noexcept;
     size_t getActiveSplitCount() const;
     size_t getActiveRangeCount() const;
@@ -140,10 +144,9 @@ private:
     bool swapParameterPlainValues(const juce::String& firstParameterId,
                                   const juce::String& secondParameterId);
     bool setParameterNormalisedValue(juce::RangedAudioParameter& parameter, float normalisedValue);
-    bool assignButtonHostSlot(const juce::String& parameterId,
-                              const juce::String& fallbackName,
-                              const BoxTextButton* button,
-                              const juce::ModifierKeys& modifiers);
+    bool assignButtonToHostSlot(const juce::String& parameterId,
+                                const juce::String& fallbackName,
+                                const BoxTextButton* button);
     void clearFocus();
     void notifyPageChanged();
 
@@ -155,6 +158,7 @@ private:
     std::array<std::unique_ptr<CrossoverModulePage>, numRanges> rangePages;
     std::unique_ptr<CrossoverModulePage> crossoverSettingsPage;
     juce::Viewport pageViewport;
+    juce::Component* pinnedHeaderComponent = nullptr;
     juce::Component* pinnedTailComponent = nullptr;
     bool uiStateLoaded = false;
     size_t visibleRangeIndex = 0;

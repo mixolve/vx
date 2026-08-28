@@ -9,6 +9,31 @@ void AvaAudioProcessorEditor::setupEqlControls(juce::AudioProcessorValueTreeStat
 
     for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
     {
+        auto orderLabel = std::make_unique<BoxTextButton>(uiGrey500);
+        orderLabel->setButtonText(juce::String::formatted("%02d", filterIndex + 1));
+        orderLabel->setTextJustification(juce::Justification::centred);
+        orderLabel->setFillVisible(false);
+        orderLabel->setPressFillEnabled(false);
+        orderLabel->onClick = [this, filterIndex]
+        {
+            if (! juce::isPositiveAndBelow(filterMoveSourceIndex, getActiveFilterCount()))
+                return;
+
+            const auto sourceIndex = filterMoveSourceIndex;
+            filterMoveSourceIndex = -1;
+
+            for (const auto& label : filterOrderLabels)
+                if (label != nullptr)
+                    label->setDragTargetOutlineVisible(false);
+
+            moveFilterSectionTo(sourceIndex, filterIndex);
+
+            if (auto* label = filterOrderLabels[static_cast<size_t>(filterIndex)].get())
+                label->flashConfirmationOutline();
+
+            clearKeyboardFocus(*this);
+        };
+
         auto section = std::make_unique<FilterSection>(initialEqlState, filterIndex);
         for (const auto filterType : AvaAudioProcessor::filterTypePresetOrder)
         {
@@ -151,12 +176,7 @@ void AvaAudioProcessorEditor::setupEqlControls(juce::AudioProcessorValueTreeStat
             resized();
             clearKeyboardFocus(*this);
         };
-        section->bypassButton->onClick = [this]
-        {
-            updateSectionStates();
-            clearKeyboardFocus(*this);
-        };
-        section->bypassButton->setLongPressAction([this, filterIndex]
+        section->header->setLongPressPromptActions([this, filterIndex]
         {
             const juce::ScopedValueSetter<bool> suppressHandlers(suppressFilterSectionValueChangeHandlers, true);
             auto* eqlProcessor = getActiveEqlProcessor();
@@ -166,16 +186,32 @@ void AvaAudioProcessorEditor::setupEqlControls(juce::AudioProcessorValueTreeStat
             {
                 removeFilterSectionStoredValues(filterIndex, previousCount);
                 enforceSingleExpandedFilterSection();
-
                 storeEditorStateToValueTree();
-
                 updateSectionStates();
                 resized();
             }
 
             clearKeyboardFocus(*this);
-        }, 500, "D");
+        }, {}, "D?");
+        section->header->onMoveArmed = [this, filterIndex]
+        {
+            const auto sourceOrderPosition = getFilterOrderPositionForIndex(filterIndex);
 
+            if (sourceOrderPosition < 0)
+                return;
+
+            filterMoveSourceIndex = filterIndex;
+
+            for (const auto& label : filterOrderLabels)
+                if (label != nullptr)
+                    label->setDragTargetOutlineVisible(label.get() == filterOrderLabels[static_cast<size_t>(sourceOrderPosition)].get());
+        };
+        section->bypassButton->onClick = [this]
+        {
+            updateSectionStates();
+            clearKeyboardFocus(*this);
+        };
+        filterContent.addAndMakeVisible(*orderLabel);
         filterContent.addAndMakeVisible(*section->header);
         filterContent.addAndMakeVisible(*section->typeControl);
         filterContent.addAndMakeVisible(*section->placeControl);
@@ -184,6 +220,7 @@ void AvaAudioProcessorEditor::setupEqlControls(juce::AudioProcessorValueTreeStat
         filterContent.addAndMakeVisible(*section->slopeControl);
         filterContent.addAndMakeVisible(*section->gainControl);
         filterContent.addAndMakeVisible(*section->bypassButton);
+        filterOrderLabels[static_cast<size_t>(filterIndex)] = std::move(orderLabel);
         filterSections[static_cast<size_t>(filterIndex)] = std::move(section);
 
         normalizeSlopeForType(filterIndex);
@@ -191,7 +228,6 @@ void AvaAudioProcessorEditor::setupEqlControls(juce::AudioProcessorValueTreeStat
 
     addFilterButton = std::make_unique<BoxTextButton>(uiGrey500);
     addFilterButton->setButtonText("AD");
-    addFilterButton->setTooltip("ADD FILTER");
     addFilterButton->onClick = [this]
     {
         const juce::ScopedValueSetter<bool> suppressHandlers(suppressFilterSectionValueChangeHandlers, true);

@@ -52,10 +52,10 @@ public:
         textEditor.selectAll();
     }
 
-    void paint(juce::Graphics& g) override
+    void paint(juce::Graphics& graphics) override
     {
-        g.setColour(juce::Colours::black.withAlpha(0.55f));
-        g.fillAll();
+        graphics.setColour(uiPopup);
+        graphics.fillAll();
     }
 
     void resized() override
@@ -77,8 +77,8 @@ public:
 
         const auto visibleBounds = getVisibleBounds();
         const auto editorInsetX = getEditorInsetX(getWidth());
-        const auto editorInsetTop = juce::roundToInt(static_cast<float>(juce::jmax(0, visibleBounds.getHeight())) * editorInsetTopRatio);
-        const auto editorInsetBottom = juce::roundToInt(static_cast<float>(juce::jmax(0, visibleBounds.getHeight())) * editorInsetBottomRatio);
+        const auto editorInsetTop = getEditorInsetTop(visibleBounds.getHeight());
+        const auto editorInsetBottom = getEditorInsetBottom(visibleBounds.getHeight());
         const auto promptWidth = juce::jmax(0, getWidth() - editorInsetX * 2);
         const auto promptHeight = juce::jmin(promptEditorHeight, juce::jmax(0, visibleBounds.getHeight() - editorInsetTop - editorInsetBottom));
 
@@ -114,16 +114,19 @@ private:
             return;
 
         closePending = true;
+        auto deferredCloseCallback = std::move(onClose);
+        onClose = {};
 
         if (onDismiss != nullptr)
             onDismiss();
 
-        juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<FloatingTextPrompt>(this)]
+        juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<FloatingTextPrompt>(this),
+                                         callback = std::move(deferredCloseCallback)]() mutable
                                         {
-                                            if (safeThis == nullptr || safeThis->onClose == nullptr)
+                                            if (safeThis == nullptr || callback == nullptr)
                                                 return;
 
-                                            safeThis->onClose();
+                                            callback();
                                         });
     }
 

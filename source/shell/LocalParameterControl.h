@@ -31,7 +31,6 @@ public:
     void setValueClickAction(std::function<void()> action);
     juce::Rectangle<int> getValueBounds() const noexcept;
     void setTitleMouseEnabled(bool shouldEnable);
-    void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);
     void resized() override;
 
     std::function<void()> onValueChanged;

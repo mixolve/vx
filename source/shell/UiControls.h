@@ -89,6 +89,7 @@ private:
     void hideEditor(bool discard);
     void startGlobalEditTracking();
     void stopGlobalEditTracking();
+    void scheduleMarqueeRepaint();
 
     juce::Slider& slider;
     bool isTrackingGlobalClicks = false;
@@ -102,18 +103,12 @@ private:
     juce::Colour highlightColour = uiAccent;
     std::function<void()> customPromptAction;
     std::unique_ptr<juce::TextEditor> editor;
+    bool marqueeRepaintPending = false;
 };
 
 class BoxTextButton final : public juce::TextButton, private juce::Timer
 {
 public:
-    enum class ArrowDirection
-    {
-        none,
-        up,
-        down
-    };
-
     explicit BoxTextButton(juce::Colour accent);
     ~BoxTextButton() override;
 
@@ -124,15 +119,23 @@ public:
     void setFillVisible(bool shouldShow) noexcept;
     void setDividerLineVisible(bool shouldShow) noexcept;
     void setTextJustification(juce::Justification justification) noexcept;
-    void setArrowDirection(ArrowDirection direction) noexcept;
-    void setDisclosureArrowVisible(bool shouldShow) noexcept;
     void setBorderVisible(bool shouldShow) noexcept;
     void setEqlFilterHeaderColouringEnabled(bool shouldEnable) noexcept;
-    void setABCompareHighlightIndex(int highlightedIndex) noexcept;
     void setCancelClickOnLeave(bool shouldEnable) noexcept;
+    void setHorizontalBidirectionalArrowVisible(bool shouldShow) noexcept;
     void setTextColourOverride(juce::Colour colour);
     void clearTextColourOverride();
     void setLongPressAction(std::function<void()> action, int delayMs = 500, juce::String promptText = "RESET?");
+    void setLongPressPromptActions(std::function<void()> resetAction,
+                                   std::function<void()> hostAction = {},
+                                   juce::String primaryPromptText = "R?");
+    void setDragTargetOutlineVisible(bool shouldShow) noexcept;
+    void flashConfirmationOutline();
+
+    std::function<void(juce::Point<int>)> onDragDrop;
+    std::function<void(juce::Point<int>)> onDragMove;
+    std::function<void()> onDragEnd;
+    std::function<void()> onMoveArmed;
 
     void paintButton(juce::Graphics& graphics, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
     void enablementChanged() override;
@@ -141,9 +144,9 @@ public:
     void mouseUp(const juce::MouseEvent& event) override;
     void mouseExit(const juce::MouseEvent&) override;
 
-    std::function<bool(const juce::ModifierKeys&)> onClickWithModifiers;
-
 private:
+    class PromptDismissListener;
+
     juce::Colour accentColour;
     bool alwaysAccentOutline = false;
     bool toggleAccentVisible = true;
@@ -157,13 +160,12 @@ private:
     bool cancelClickOnLeave = false;
     bool pressCanceled = false;
     juce::Justification textJustification = juce::Justification::centred;
-    ArrowDirection arrowDirection = ArrowDirection::none;
-    bool disclosureArrowVisible = false;
     bool borderVisible = true;
     bool eqlFilterHeaderColouringEnabled = false;
-    int abCompareHighlightIndex = -1;
+    bool horizontalBidirectionalArrowVisible = false;
     bool hasTextColourOverride = false;
     juce::Colour textColourOverride;
+    bool dragTargetOutlineVisible = false;
     bool confirmationFlashActive = false;
     std::function<void()> longPressAction;
     int longPressDelayMs = 500;
@@ -171,7 +173,25 @@ private:
     bool longPressArmed = false;
     juce::String longPressOriginalText;
     juce::String longPressPromptText = "RESET?";
+    bool dragHoldEligible = false;
+    bool dragHoldArmed = false;
+    std::function<void()> longPressResetAction;
+    std::function<void()> longPressHostAction;
+    juce::String longPressPrimaryPromptText = "R?";
+    std::unique_ptr<PromptDismissListener> promptDismissListener;
+    bool actionPromptActive = false;
+    bool actionPromptGlobalListenerActive = false;
+    bool consumeNextMouseUp = false;
+    int actionPromptPressedIndex = -1;
+    bool moveOnNextDrag = false;
+    juce::String moveArmedOriginalText;
+    juce::String actionPromptOriginalText;
+    bool marqueeRepaintPending = false;
 
-    void flashConfirmationOutline();
+    void showActionPrompt();
+    void dismissActionPrompt();
+    int getActionPromptCount() const noexcept;
+    int getActionPromptHitIndex(juce::Point<int> position) const noexcept;
+    void scheduleMarqueeRepaint();
     void timerCallback() override;
 };

@@ -8,13 +8,7 @@ void AvaAudioProcessorEditor::layoutNoModuleState(juce::Rectangle<int>& bounds)
     if (moduleAddButton == nullptr || ! moduleAddButton->isVisible())
         return;
 
-    const auto footerWidth = footerTab != nullptr && ! footerTab->getBounds().isEmpty()
-        ? footerTab->getWidth()
-        : bounds.getWidth();
-    const auto buttonWidth = juce::jmin(bounds.getWidth(), footerWidth);
-    auto buttonBounds = juce::Rectangle<int>(buttonWidth, rowHeight);
-    buttonBounds.setCentre(bounds.getCentre());
-    moduleAddButton->setBounds(buttonBounds);
+    moduleAddButton->setBounds(bounds.removeFromTop(rowHeight));
 }
 
 void AvaAudioProcessorEditor::layoutCrossoverSection(juce::Rectangle<int>& bounds)

@@ -15,21 +15,21 @@ struct ParameterOrderEntry
 };
 
 inline constexpr auto trsCrossoverOrder = std::to_array<ParameterOrderEntry>({
-    { TrsModuleProcessor::paramTransOnId, "TRANSIENT / ENABLE" },
-    { TrsModuleProcessor::paramSusOnId, "SUSTAIN / ENABLE" },
+    { TrsModuleProcessor::paramTransOnId, "TRANSIENT / MUTE" },
+    { TrsModuleProcessor::paramSusOnId, "SUSTAIN / MUTE" },
     { TrsModuleProcessor::paramTransGainId, "TRANSIENT / GAIN" },
     { TrsModuleProcessor::paramSusGainId, "SUSTAIN / GAIN" },
     { TrsModuleProcessor::paramTimeHoldId, "HOLD" },
     { TrsModuleProcessor::paramTimeHoldModeId, "HOLD-TYPE" },
-    { TrsModuleProcessor::paramTimeHoldSyncId, "HOLD SYNC" },
+    { TrsModuleProcessor::paramTimeHoldSyncId, "HOLD" },
     { TrsModuleProcessor::paramTimeReleaseId, "RELEASE" },
     { TrsModuleProcessor::paramTimeReleaseModeId, "REL-TYPE" },
-    { TrsModuleProcessor::paramTimeReleaseSyncId, "RELEASE SYNC" },
+    { TrsModuleProcessor::paramTimeReleaseSyncId, "RELEASE" },
     { TrsModuleProcessor::paramTimeReleaseCurveId, "REL-CURVE" },
-    { TrsModuleProcessor::paramSensThresholdId, "SENS.THRESH" },
-    { TrsModuleProcessor::paramSensKneeId, "SENS.KNEE" },
-    { TrsModuleProcessor::paramSensRetriggerId, "SENS.RETRIGGER" },
-    { TrsModuleProcessor::paramSensOneShotId, "SENS.ONE-SHOT" },
+    { TrsModuleProcessor::paramSensThresholdId, "THRESH" },
+    { TrsModuleProcessor::paramSensKneeId, "KNEE" },
+    { TrsModuleProcessor::paramSensRetriggerId, "RETRIGGER" },
+    { TrsModuleProcessor::paramSensOneShotId, "ONE-SHOT" },
     { TrsModuleProcessor::paramLookaheadId, "LOOKAHEAD" },
 });
 

@@ -255,6 +255,31 @@ void AvaAudioProcessorEditor::applyFilterSortOrder(const std::vector<int>& order
     scheduleHistorySnapshot();
 }
 
+void AvaAudioProcessorEditor::moveFilterSectionTo(const int filterIndex, const int destinationOrderPosition)
+{
+    const auto activeCount = getActiveFilterCount();
+    const auto sourceOrderPosition = getFilterOrderPositionForIndex(filterIndex);
+
+    if (activeCount <= 1 || ! juce::isPositiveAndBelow(sourceOrderPosition, activeCount))
+        return;
+
+    const auto destination = juce::jlimit(0, activeCount - 1, destinationOrderPosition);
+
+    if (sourceOrderPosition == destination)
+        return;
+
+    std::vector<int> orderedIndices;
+    orderedIndices.reserve(static_cast<size_t>(activeCount));
+
+    for (int orderPosition = 0; orderPosition < activeCount; ++orderPosition)
+        orderedIndices.push_back(filterDisplayOrder[static_cast<size_t>(orderPosition)]);
+
+    const auto movedFilterIndex = orderedIndices[static_cast<size_t>(sourceOrderPosition)];
+    orderedIndices.erase(orderedIndices.begin() + sourceOrderPosition);
+    orderedIndices.insert(orderedIndices.begin() + destination, movedFilterIndex);
+    applyFilterSortOrder(orderedIndices);
+}
+
 int AvaAudioProcessorEditor::getFilterIndexForOrderPosition(const int orderIndex) const noexcept
 {
     if (! juce::isPositiveAndBelow(orderIndex, getActiveFilterCount()))

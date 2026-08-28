@@ -54,6 +54,44 @@ void AvaAudioProcessorEditor::syncHostSlotAssignmentValue(const int slotIndex, c
 
 void AvaAudioProcessorEditor::parameterChanged(const juce::String& parameterID, float newValue)
 {
+    auto eqlPlaceFilterIndex = -1;
+
+    for (int filterIndex = 0; filterIndex < EqlModuleProcessor::maxFilterCount; ++filterIndex)
+    {
+        if (parameterID == EqlModuleProcessor::getFilterPlaceParamId(filterIndex))
+        {
+            eqlPlaceFilterIndex = filterIndex;
+            break;
+        }
+    }
+
+    if (eqlPlaceFilterIndex >= 0)
+    {
+        juce::MessageManager::callAsync([safeEditor = juce::Component::SafePointer<AvaAudioProcessorEditor>(this),
+                                         eqlPlaceFilterIndex]
+        {
+            if (safeEditor == nullptr || ! safeEditor->eqlModuleLoaded)
+                return;
+
+            const auto displayIndex = safeEditor->getFilterOrderPositionForIndex(eqlPlaceFilterIndex);
+
+            if (! juce::isPositiveAndBelow(eqlPlaceFilterIndex,
+                                           static_cast<int>(safeEditor->filterSections.size()))
+                || displayIndex < 0)
+            {
+                return;
+            }
+
+            auto* section = safeEditor->filterSections[static_cast<size_t>(eqlPlaceFilterIndex)].get();
+            auto* processor = safeEditor->getActiveEqlProcessor();
+
+            if (section == nullptr || processor == nullptr || section->header == nullptr)
+                return;
+
+            section->header->setButtonText(processor->getFilterHeaderText(eqlPlaceFilterIndex, displayIndex));
+        });
+    }
+
     if (parameterID == FftModuleProcessor::paramDynamicModeId)
     {
         juce::Component::SafePointer<AvaAudioProcessorEditor> safeEditor(this);
@@ -81,7 +119,6 @@ void AvaAudioProcessorEditor::parameterChanged(const juce::String& parameterID, 
 
             if (parameterID == slotParameterId)
             {
-                syncHostSlotAssignmentValue(slotIndex, newValue);
                 scheduleHistorySnapshot();
                 return;
             }
@@ -120,13 +157,39 @@ void AvaAudioProcessorEditor::resyncEditorFromProcessorState()
     repaint();
 }
 
+void AvaAudioProcessorEditor::scheduleProcessorStateResync()
+{
+    if (auto* messageManager = juce::MessageManager::getInstanceWithoutCreating();
+        messageManager != nullptr && messageManager->isThisTheMessageThread())
+    {
+        processorStateResyncPending.store(false);
+        resyncEditorFromProcessorState();
+        return;
+    }
+
+    if (processorStateResyncPending.exchange(true))
+        return;
+
+    const auto scheduled = juce::MessageManager::callAsync(
+        [safeEditor = juce::Component::SafePointer<AvaAudioProcessorEditor>(this)]
+        {
+            if (safeEditor == nullptr || ! safeEditor->processorStateResyncPending.exchange(false))
+                return;
+
+            safeEditor->resyncEditorFromProcessorState();
+        });
+
+    if (! scheduled)
+        processorStateResyncPending.store(false);
+}
+
 void AvaAudioProcessorEditor::valueTreePropertyChanged(juce::ValueTree& treeWhosePropertyHasChanged,
                                                        const juce::Identifier& property)
 {
     if (treeWhosePropertyHasChanged == valueTreeState.state
         && property == juce::Identifier(AvaAudioProcessor::activeModuleStateKey)
         && ! suppressProcessorStateResync)
-        resyncEditorFromProcessorState();
+        scheduleProcessorStateResync();
 
     scheduleHistorySnapshot();
 }
@@ -134,15 +197,20 @@ void AvaAudioProcessorEditor::valueTreePropertyChanged(juce::ValueTree& treeWhos
 void AvaAudioProcessorEditor::valueTreeRedirected(juce::ValueTree& treeWhichHasBeenChanged)
 {
     if (treeWhichHasBeenChanged == valueTreeState.state)
-        resyncEditorFromProcessorState();
+        scheduleProcessorStateResync();
 
     scheduleHistorySnapshot();
 }
 
 void AvaAudioProcessorEditor::registerParameterListeners()
 {
-    for (int slotIndex = 0; slotIndex < AvaAudioProcessor::hostAutomationSlotCount; ++slotIndex)
-        valueTreeState.addParameterListener(AvaAudioProcessor::getHostSlotParameterId(slotIndex), this);
+    for (const auto parameterState : valueTreeState.state)
+    {
+        const auto parameterId = parameterState.getProperty("id").toString();
+
+        if (parameterId.isNotEmpty())
+            valueTreeState.addParameterListener(parameterId, this);
+    }
 
     if (! shellStateListenerRegistered)
     {
@@ -175,8 +243,13 @@ void AvaAudioProcessorEditor::registerObservedModuleParameterListeners(juce::Aud
 
 void AvaAudioProcessorEditor::unregisterParameterListeners()
 {
-    for (int slotIndex = 0; slotIndex < AvaAudioProcessor::hostAutomationSlotCount; ++slotIndex)
-        valueTreeState.removeParameterListener(AvaAudioProcessor::getHostSlotParameterId(slotIndex), this);
+    for (const auto parameterState : valueTreeState.state)
+    {
+        const auto parameterId = parameterState.getProperty("id").toString();
+
+        if (parameterId.isNotEmpty())
+            valueTreeState.removeParameterListener(parameterId, this);
+    }
 
     if (shellStateListenerRegistered)
     {

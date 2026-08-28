@@ -109,6 +109,7 @@ public:
     const juce::AudioProcessorValueTreeState& getValueTreeState() const noexcept;
     static juce::String getHostSlotParameterId(int slotIndex);
     static juce::String getHostSlotLetterLabel(int slotIndex);
+    static juce::String getHostSlotTargetStateKey(int slotIndex);
     static juce::String getCrossoverParameterId(const char* suffix);
     static juce::String getCrossoverSoloParameterId(size_t rangeIndex);
     ava::crossover::Settings getCrossoverSettings() const noexcept;
@@ -162,6 +163,8 @@ private:
     static constexpr size_t maxSupportedChannels = 2;
 
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    juce::RangedAudioParameter* findHostSlotTarget(const juce::String& parameterId) noexcept;
+    void applyHostSlotValue(int slotIndex, float normalizedValue) noexcept;
     bool createModuleInstance(ActiveModule module);
     void resetModuleProcessors() noexcept;
     static ActiveModule moduleFromStateId(const juce::String& moduleId);

@@ -10,7 +10,6 @@
 
 class BoxTextButton;
 class ChoiceControl;
-class DelayedTooltipWindow;
 class LocalChoiceControl;
 class LocalParameterControl;
 class ParameterControl;
@@ -51,7 +50,6 @@ private:
     struct FilterSection;
 
     void toggleHostParametersSection();
-    void updateTooltipTogglePrompt();
     void showModulePicker();
     void closeActiveModule();
     void loadEqlModule();
@@ -86,8 +84,7 @@ public:
                           juce::Justification itemJustification,
                           std::function<void(int)> onSelect,
                           std::function<void()> onClose = {},
-                          std::function<void()> onDismiss = {},
-                          juce::StringArray itemTooltips = {});
+                          std::function<void()> onDismiss = {});
     juce::Rectangle<int> getInfoPromptAnchorBounds() const noexcept;
     juce::Rectangle<int> getInfoPromptVisibleBounds() const noexcept;
 private:
@@ -107,6 +104,7 @@ private:
     void refreshABCompareButton();
     void refreshEqlFilterSectionsFromProcessor();
     void applyFilterSortOrder(const std::vector<int>& orderedIndices);
+    void moveFilterSectionTo(int filterIndex, int destinationOrderPosition);
     void enforceSingleExpandedFilterSection(int preferredFilterIndex = -1);
     void restoreEditorStateFromValueTree();
     void storeEditorStateToValueTree() noexcept;
@@ -125,6 +123,7 @@ private:
     void valueTreePropertyChanged(juce::ValueTree& treeWhosePropertyHasChanged,
                                   const juce::Identifier& property) override;
     void valueTreeRedirected(juce::ValueTree& treeWhichHasBeenChanged) override;
+    void scheduleProcessorStateResync();
     void resyncEditorFromProcessorState();
     void registerParameterListeners();
     void unregisterParameterListeners();
@@ -153,17 +152,16 @@ private:
     int getFftMainContentHeight() const;
     int getActiveFilterCount() const noexcept;
     void resetAnalyserPanelBounds();
-    void layoutGlobalControlsSection(juce::Rectangle<int>& bounds, int editorInsetX);
-    void layoutFooter(juce::Rectangle<int>& bounds, int editorInsetX);
+    void layoutGlobalControlsSection(juce::Rectangle<int>& bounds);
+    void layoutFooter(juce::Rectangle<int>& bounds);
     void layoutCrossoverSection(juce::Rectangle<int>& bounds);
-    void layoutModuleTitle(juce::Rectangle<int>& bounds, int editorInsetX);
+    void layoutModuleTitle(juce::Rectangle<int>& bounds);
     void finalizeLayout() noexcept;
     void layoutNoModuleState(juce::Rectangle<int>& bounds);
     void layoutModuleEditorContent(juce::Rectangle<int>& bounds);
-    void layoutFftModuleSections(juce::Rectangle<int>& bounds, int editorInsetX);
-    void layoutEqlModuleSections(juce::Rectangle<int>& bounds, int editorInsetX);
+    void layoutFftModuleSections(juce::Rectangle<int>& bounds);
+    void layoutEqlModuleSections(juce::Rectangle<int>& bounds);
     void ensureModuleTitle();
-    void updateTooltipBoundsConstraint() noexcept;
     void clearHostSlot(int slotIndex);
     void moveHostSlotAssignment(int slotIndex, int direction);
     void refreshHostSlotButtons();
@@ -179,7 +177,6 @@ private:
     std::vector<juce::ValueTree> observedModuleStates;
     std::vector<ObservedModuleParameterListeners> observedModuleParameterListeners;
     std::unique_ptr<AvaLookAndFeel> lookAndFeel;
-    std::unique_ptr<DelayedTooltipWindow> tooltipWindow;
     std::unique_ptr<BoxTextButton> clipButton;
     std::unique_ptr<BoxTextButton> hostButton;
     std::unique_ptr<BoxTextButton> moduleAddButton;
@@ -218,14 +215,15 @@ private:
     std::unique_ptr<ButtonAttachment> globalBypassAttachment;
     std::unique_ptr<BoxTextButton> undoButton;
     std::unique_ptr<BoxTextButton> redoButton;
-    std::unique_ptr<BoxTextButton> abCompareButton;
+    std::unique_ptr<BoxTextButton> abSlotAButton;
+    std::unique_ptr<BoxTextButton> abSwitchButton;
+    std::unique_ptr<BoxTextButton> abSlotBButton;
     std::unique_ptr<BoxTextButton> sortPlaceButton;
     std::unique_ptr<BoxTextButton> sortFreqButton;
     std::unique_ptr<BoxTextButton> sortDuoButton;
-    std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::hostAutomationSlotCount> hostSlotMoveUpButtons;
     std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::hostAutomationSlotCount> hostSlotNameFields;
     std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::hostAutomationSlotCount> hostSlotButtons;
-    std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::hostAutomationSlotCount> hostSlotMoveDownButtons;
+    std::array<std::unique_ptr<BoxTextButton>, AvaAudioProcessor::maxEqlFilterCount> filterOrderLabels;
     std::array<std::unique_ptr<FilterSection>, AvaAudioProcessor::maxEqlFilterCount> filterSections;
     juce::AudioProcessorValueTreeState* boundEqlState = nullptr;
     juce::Viewport hostParametersViewport;
@@ -247,7 +245,6 @@ private:
     bool dynModuleLoaded = false;
     bool trsModuleLoaded = false;
     bool hostParametersExpanded = false;
-    bool tooltipsEnabled = true;
     std::vector<int> filterDisplayOrder;
     bool suppressFilterSectionValueChangeHandlers = false;
     bool suppressFftAnalyserControlChangeHandlers = false;
@@ -257,6 +254,7 @@ private:
     bool suppressEditorSizeStateSave = true;
     bool suppressHistorySnapshots = false;
     bool shellStateListenerRegistered = false;
+    std::atomic<bool> processorStateResyncPending { false };
     juce::MemoryBlock committedHistorySnapshot;
     std::vector<juce::MemoryBlock> undoHistory;
     std::vector<juce::MemoryBlock> redoHistory;
@@ -271,6 +269,8 @@ private:
         juce::String parameterName;
     };
     std::array<HostSlotAssignment, AvaAudioProcessor::hostAutomationSlotCount> hostSlotAssignments;
+    int hostSlotMoveSourceIndex = -1;
+    int filterMoveSourceIndex = -1;
 
     int getFilterIndexForOrderPosition(int orderIndex) const noexcept;
     int getFilterOrderPositionForIndex(int filterIndex) const noexcept;

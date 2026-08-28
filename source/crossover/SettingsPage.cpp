@@ -45,16 +45,13 @@ public:
         autoSoloButton = makeTextButton("AUTO-SOLO");
         autoSoloButton->setClickingTogglesState(true);
         autoSoloButton->setToggleState(owner.autoSoloEnabled, juce::dontSendNotification);
-        autoSoloButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+        autoSoloButton->setLongPressPromptActions({}, [this]
         {
-            if (owner.config.makeCrossoverParameterId == nullptr)
-                return false;
-
-            return owner.assignButtonHostSlot(owner.config.makeCrossoverParameterId("autoSolo"),
-                                              "AUTO-SOLO",
-                                              autoSoloButton.get(),
-                                              modifiers);
-        };
+            if (owner.config.makeCrossoverParameterId != nullptr)
+                owner.assignButtonToHostSlot(owner.config.makeCrossoverParameterId("autoSolo"),
+                                             "AUTO-SOLO",
+                                             autoSoloButton.get());
+        });
         autoSoloButton->onClick = [this]
         {
             if (! isAutoSoloAvailable())
@@ -127,13 +124,10 @@ public:
             globalListenAttachments[index] = std::make_unique<ButtonAttachment>(owner.valueTreeState,
                                                                                    parameterId,
                                                                                    *button);
-            button->onClickWithModifiers = [this, index, parameterId] (const juce::ModifierKeys& modifiers)
+            button->setLongPressPromptActions({}, [this, index, parameterId]
             {
-                return owner.assignButtonHostSlot(parameterId,
-                                                  globalListenLabels[index],
-                                                  nullptr,
-                                                  modifiers);
-            };
+                owner.assignButtonToHostSlot(parameterId, globalListenLabels[index], nullptr);
+            });
             button->onClick = [this, index]
             {
                 if (globalListenButtons[index] != nullptr && globalListenButtons[index]->getToggleState())

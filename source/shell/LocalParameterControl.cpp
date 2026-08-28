@@ -44,7 +44,7 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
 
         clearKeyboardFocus(*this);
     };
-    titleButton->setLongPressAction([this]
+    titleButton->setLongPressPromptActions([this]
     {
         if (! interactionEnabled)
         {
@@ -69,7 +69,6 @@ LocalParameterControl::LocalParameterControl(const juce::String& titleText,
     if (skewCentre > 0.0)
         range.setSkewForCentre(skewCentre);
     slider.setNormalisableRange(range);
-    slider.setDoubleClickReturnValue(true, defaultValue);
     slider.setValue(defaultValue, juce::dontSendNotification);
     slider.textFromValueFunction = [this] (const double value)
     {
@@ -203,7 +202,6 @@ void LocalParameterControl::setValueRange(const double minimum,
 void LocalParameterControl::setDefaultValue(const double value)
 {
     defaultValue = slider.getNormalisableRange().snapToLegalValue(value);
-    slider.setDoubleClickReturnValue(true, defaultValue);
 }
 
 void LocalParameterControl::setTitleText(const juce::String& text)
@@ -274,12 +272,6 @@ void LocalParameterControl::setTitleMouseEnabled(const bool shouldEnable)
 {
     if (titleButton != nullptr)
         titleButton->setInterceptsMouseClicks(shouldEnable, shouldEnable);
-}
-
-void LocalParameterControl::setTitleLongPressAction(std::function<void()> action, const int delayMs)
-{
-    if (titleButton != nullptr)
-        titleButton->setLongPressAction(std::move(action), delayMs);
 }
 
 void LocalParameterControl::resized()

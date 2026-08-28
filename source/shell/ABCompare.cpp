@@ -118,12 +118,11 @@ void AvaAudioProcessorEditor::copyCurrentABStateToOtherSlot()
 
 void AvaAudioProcessorEditor::refreshABCompareButton()
 {
-    if (abCompareButton == nullptr)
+    if (abSlotAButton == nullptr || abSwitchButton == nullptr || abSlotBButton == nullptr)
         return;
 
     const auto activeABSlot = audioProcessor.getABCompareActiveSlot();
-    abCompareButton->setToggleState(false, juce::dontSendNotification);
-    abCompareButton->setButtonText("AB");
-    abCompareButton->setABCompareHighlightIndex(activeABSlot);
-    abCompareButton->setTooltip(activeABSlot == 0 ? "A/B COMPARE: A" : "A/B COMPARE: B");
+    abSlotAButton->setToggleState(activeABSlot == 0, juce::dontSendNotification);
+    abSlotBButton->setToggleState(activeABSlot == 1, juce::dontSendNotification);
+    abSwitchButton->setButtonText({});
 }

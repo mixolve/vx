@@ -17,15 +17,19 @@ void AvaAudioProcessorEditor::showTextPrompt(const juce::String& currentText,
                                  std::move(onCommit),
                                  anchorBounds,
                                  std::move(onDismiss),
-                                 [this, closeCallback = std::move(onClose)]
+                                 [safeEditor = juce::Component::SafePointer<AvaAudioProcessorEditor>(this),
+                                  closeCallback = std::move(onClose)]
                                  {
-                                     const auto closePreservedFilterScrollY = filterViewport.getViewPositionY();
-                                     dismissTextPrompt();
+                                     if (safeEditor == nullptr)
+                                         return;
 
-                                     if (filterViewport.isVisible())
+                                     const auto closePreservedFilterScrollY = safeEditor->filterViewport.getViewPositionY();
+                                     safeEditor->dismissTextPrompt();
+
+                                     if (safeEditor->filterViewport.isVisible())
                                      {
-                                         const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
-                                         filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedFilterScrollY));
+                                         const auto maxOffset = juce::jmax(0, safeEditor->getActiveFilterContentHeight() - safeEditor->filterViewport.getHeight());
+                                         safeEditor->filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedFilterScrollY));
                                      }
 
                                      if (closeCallback)
@@ -65,8 +69,7 @@ void AvaAudioProcessorEditor::showChoicePrompt(const juce::Rectangle<int>& ancho
                                                const juce::Justification itemJustification,
                                                std::function<void(int)> onSelect,
                                                std::function<void()> onClose,
-                                               std::function<void()> onDismiss,
-                                               juce::StringArray itemTooltips)
+                                               std::function<void()> onDismiss)
 {
     const auto preservedFilterScrollY = filterViewport.getViewPositionY();
     dismissTextPrompt();
@@ -78,21 +81,24 @@ void AvaAudioProcessorEditor::showChoicePrompt(const juce::Rectangle<int>& ancho
                                    itemJustification,
                                    std::move(onSelect),
                                    std::move(onDismiss),
-                                   [this, closeCallback = std::move(onClose)]
+                                   [safeEditor = juce::Component::SafePointer<AvaAudioProcessorEditor>(this),
+                                    closeCallback = std::move(onClose)]
                                    {
-                                       const auto closePreservedFilterScrollY = filterViewport.getViewPositionY();
-                                       dismissTextPrompt();
+                                       if (safeEditor == nullptr)
+                                           return;
 
-                                       if (filterViewport.isVisible())
+                                       const auto closePreservedFilterScrollY = safeEditor->filterViewport.getViewPositionY();
+                                       safeEditor->dismissTextPrompt();
+
+                                       if (safeEditor->filterViewport.isVisible())
                                        {
-                                           const auto maxOffset = juce::jmax(0, getActiveFilterContentHeight() - filterViewport.getHeight());
-                                           filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedFilterScrollY));
+                                           const auto maxOffset = juce::jmax(0, safeEditor->getActiveFilterContentHeight() - safeEditor->filterViewport.getHeight());
+                                           safeEditor->filterViewport.setViewPosition(0, juce::jlimit(0, maxOffset, closePreservedFilterScrollY));
                                        }
 
                                        if (closeCallback)
                                            closeCallback();
-                                   },
-                                   std::move(itemTooltips));
+                                   });
     auto* promptComponent = prompt.get();
     textPromptOverlay = std::move(prompt);
     addAndMakeVisible(*textPromptOverlay);
@@ -112,9 +118,10 @@ void AvaAudioProcessorEditor::showInfoPrompt(const juce::String& markdownText)
     dismissTextPrompt();
 
     auto prompt = makeInfoPrompt(markdownText,
-                                 [this]
+                                 [safeEditor = juce::Component::SafePointer<AvaAudioProcessorEditor>(this)]
                                  {
-                                     dismissTextPrompt();
+                                     if (safeEditor != nullptr)
+                                         safeEditor->dismissTextPrompt();
                                  });
     auto* promptComponent = prompt.get();
     textPromptOverlay = std::move(prompt);

@@ -187,6 +187,16 @@ void AvaAudioProcessor::clearActiveModuleStateListeners()
 
 void AvaAudioProcessor::parameterChanged(const juce::String& parameterID, const float newValue)
 {
+    for (int slotIndex = 0; slotIndex < hostAutomationSlotCount; ++slotIndex)
+    {
+        if (parameterID == getHostSlotParameterId(slotIndex))
+        {
+            applyHostSlotValue(slotIndex, newValue);
+            notifyHostOfStateChange();
+            return;
+        }
+    }
+
     if (parameterID == paramCrossoverActiveSplitCountId)
     {
         const auto splitCount = juce::jlimit(0, 5, juce::roundToInt(newValue));

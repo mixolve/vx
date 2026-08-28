@@ -1,8 +1,15 @@
 #include "EditorControls.h"
 #include "EditorFilterSection.h"
 #include "EditorPresetSections.h"
+#include "../modules/dyn/Processor.h"
+#include "../modules/eql/Processor.h"
+#include "../modules/fft/Processor.h"
+#include "../modules/tls/Processor.h"
+#include "../modules/trs/Processor.h"
 
+#include <algorithm>
 #include <utility>
+#include <vector>
 
 void AvaAudioProcessorEditor::showModulePicker()
 {
@@ -23,20 +30,22 @@ void AvaAudioProcessorEditor::showModulePicker()
                      -1,
                      { canLoadModule, canLoadModule, canLoadModule, canLoadModule, canLoadModule },
                      juce::Justification::centred,
-                       [this] (const int selectedIndex)
+                       [safeEditor = juce::Component::SafePointer<AvaAudioProcessorEditor>(this)] (const int selectedIndex)
                        {
+                           if (safeEditor == nullptr)
+                               return;
+
                            if (selectedIndex == 0)
-                               loadTlsModule();
+                               safeEditor->loadTlsModule();
                            else if (selectedIndex == 1)
-                               loadEqlModule();
+                               safeEditor->loadEqlModule();
                            else if (selectedIndex == 2)
-                               loadFftModule();
+                               safeEditor->loadFftModule();
                            else if (selectedIndex == 3)
-                               loadDynModule();
+                               safeEditor->loadDynModule();
                            else if (selectedIndex == 4)
-                               loadTrsModule();
-                     },
-                     {},
+                               safeEditor->loadTrsModule();
+                       },
                      {},
                      {});
 }
@@ -46,6 +55,36 @@ void AvaAudioProcessorEditor::closeActiveModule()
     if (audioProcessor.getActiveModule() == AvaAudioProcessor::ActiveModule::none)
         return;
 
+    hostSlotMoveSourceIndex = -1;
+    for (const auto& field : hostSlotNameFields)
+        if (field != nullptr)
+            field->setDragTargetOutlineVisible(false);
+
+    std::vector<juce::String> closingModuleParameterIds;
+    const auto collectParameterIds = [&closingModuleParameterIds] (const auto* processor)
+    {
+        if (processor == nullptr)
+            return;
+
+        for (const auto parameterState : processor->getValueTreeState().state)
+        {
+            const auto parameterId = parameterState.getProperty("id").toString();
+
+            if (parameterId.isNotEmpty())
+                closingModuleParameterIds.push_back(parameterId);
+        }
+    };
+
+    switch (audioProcessor.getActiveModule())
+    {
+        case AvaAudioProcessor::ActiveModule::eql: collectParameterIds(audioProcessor.getEqlModuleProcessor()); break;
+        case AvaAudioProcessor::ActiveModule::fft: collectParameterIds(audioProcessor.getFftModuleProcessor()); break;
+        case AvaAudioProcessor::ActiveModule::tls: collectParameterIds(audioProcessor.getTlsModuleProcessor()); break;
+        case AvaAudioProcessor::ActiveModule::dyn: collectParameterIds(audioProcessor.getDynModuleProcessor()); break;
+        case AvaAudioProcessor::ActiveModule::trs: collectParameterIds(audioProcessor.getTrsModuleProcessor()); break;
+        case AvaAudioProcessor::ActiveModule::none: break;
+    }
+
     detachModuleEditorBindings();
 
     if (! audioProcessor.clearLoadedModule())
@@ -53,9 +92,17 @@ void AvaAudioProcessorEditor::closeActiveModule()
 
     setLoadedModuleFlags(AvaAudioProcessor::ActiveModule::none);
 
-    hostParametersExpanded = false;
     for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
-        clearHostSlot(slotIndex);
+    {
+        const auto& assignment = hostSlotAssignments[static_cast<size_t>(slotIndex)];
+
+        if (std::find(closingModuleParameterIds.begin(),
+                      closingModuleParameterIds.end(),
+                      assignment.parameterId) != closingModuleParameterIds.end())
+        {
+            clearHostSlot(slotIndex);
+        }
+    }
 
     filterViewport.setVisible(false);
     filterViewport.setBounds({});
@@ -189,10 +236,19 @@ void AvaAudioProcessorEditor::ensureModuleTitle()
     {
         moduleTitle = std::make_unique<BoxTextButton>(uiGrey500);
         moduleTitle->setTextJustification(juce::Justification::centred);
-        moduleTitle->setFillVisible(false);
         moduleTitle->setAlwaysAccentOutline(false);
         moduleTitle->setToggleAccentVisible(false);
-        moduleTitle->setInterceptsMouseClicks(false, false);
+        moduleTitle->setLongPressAction([this]
+        {
+            juce::MessageManager::callAsync([safeEditor = juce::Component::SafePointer<AvaAudioProcessorEditor>(this)]
+            {
+                if (safeEditor == nullptr)
+                    return;
+
+                safeEditor->closeActiveModule();
+                clearKeyboardFocus(*safeEditor);
+            });
+        }, 500, "CLOSE?");
         addAndMakeVisible(*moduleTitle);
     }
 }

@@ -62,7 +62,7 @@ void AvaAudioProcessorEditor::setupPresetControls()
                                                    : juce::Rectangle<int>();
 
         if (! promptBounds.isEmpty())
-            promptBounds.setY(juce::roundToInt(static_cast<float>(getHeight()) * editorInsetTopRatio));
+            promptBounds.setY(getEditorInsetTop(getHeight()));
 
         showTextPrompt(currentName,
                        [this, currentName] (const juce::String& newName)

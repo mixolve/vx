@@ -117,7 +117,7 @@ juce::String filterPlaceDisplayPrefix(const int choiceIndex)
 
 }
 
-juce::String EqlModuleProcessor::getFilterHeaderText(const int filterIndex, const int displayIndex) const noexcept
+juce::String EqlModuleProcessor::getFilterHeaderText(const int filterIndex, const int) const noexcept
 {
     if (! juce::isPositiveAndBelow(filterIndex, static_cast<int>(filterTypeParams.size())))
         return {};
@@ -133,15 +133,13 @@ juce::String EqlModuleProcessor::getFilterHeaderText(const int filterIndex, cons
 
     if (filterType == FilterType::volume)
     {
-        return juce::String::formatted("%02d-%s-%s",
-                                       displayIndex + 1,
+        return juce::String::formatted("%s-%s",
                                        filterTypeDisplayPrefix(filterType).toRawUTF8(),
                                        filterPlaceDisplayPrefix(placeChoice).toRawUTF8())
             + "-00000";
     }
 
-    return juce::String::formatted("%02d-%s-%s-%05d",
-                                   displayIndex + 1,
+    return juce::String::formatted("%s-%s-%05d",
                                    filterTypeDisplayPrefix(filterType).toRawUTF8(),
                                    filterPlaceDisplayPrefix(placeChoice).toRawUTF8(),
                                    static_cast<int>(std::lround(frequency)));

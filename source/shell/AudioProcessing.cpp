@@ -200,6 +200,60 @@ void AvaAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
         globalClipIndicator.store(clipped ? 1.0f : 0.0f, std::memory_order_relaxed);
     };
 
+    const auto readGlobalListen = [this] (const char* suffix)
+    {
+        if (const auto* value = parameters.getRawParameterValue(getCrossoverParameterId(suffix)))
+            return value->load(std::memory_order_relaxed) >= 0.5f;
+
+        return false;
+    };
+
+    const auto applyGlobalListen = [&buffer,
+                                    listenLc = readGlobalListen("listenLc"),
+                                    listenRc = readGlobalListen("listenRc"),
+                                    listenMc = readGlobalListen("listenMc"),
+                                    listenSc = readGlobalListen("listenSc"),
+                                    listenLl = readGlobalListen("listenLl"),
+                                    listenRr = readGlobalListen("listenRr"),
+                                    listenSs = readGlobalListen("listenSs")]
+    {
+        if (! (listenLc || listenRc || listenMc || listenSc || listenLl || listenRr || listenSs)
+            || buffer.getNumChannels() < 2)
+            return;
+
+        for (int sampleIndex = 0; sampleIndex < buffer.getNumSamples(); ++sampleIndex)
+        {
+            const auto left = buffer.getSample(0, sampleIndex);
+            const auto right = buffer.getSample(1, sampleIndex);
+            const auto mid = 0.5f * (left + right);
+            const auto side = 0.5f * (left - right);
+
+            if (listenLc)
+                buffer.setSample(1, sampleIndex, left);
+            else if (listenRc)
+                buffer.setSample(0, sampleIndex, right);
+            else if (listenMc)
+            {
+                buffer.setSample(0, sampleIndex, mid);
+                buffer.setSample(1, sampleIndex, mid);
+            }
+            else if (listenSc)
+            {
+                buffer.setSample(0, sampleIndex, side);
+                buffer.setSample(1, sampleIndex, side);
+            }
+            else if (listenLl)
+                buffer.setSample(1, sampleIndex, 0.0f);
+            else if (listenRr)
+                buffer.setSample(0, sampleIndex, 0.0f);
+            else if (listenSs)
+            {
+                buffer.setSample(0, sampleIndex, side);
+                buffer.setSample(1, sampleIndex, -side);
+            }
+        }
+    };
+
     const auto globalBypassActive = globalBypassParam != nullptr
         && globalBypassParam->load(std::memory_order_relaxed) >= 0.5f;
 
@@ -212,13 +266,9 @@ void AvaAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
         return;
     }
 
-    if (active == ActiveModule::none)
-    {
-        applyGlobalOutputStage();
-        return;
-    }
-
-    auto availableRangeCount = size_t { 1 };
+    auto availableRangeCount = active == ActiveModule::none
+        ? ava::crossover::BufferRouter::numRanges
+        : size_t { 1 };
     ava::crossover::BufferRouter::RangeLatencies rangeLatencies {};
 
     switch (active)
@@ -312,6 +362,7 @@ void AvaAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::Mid
         }
     });
 
+    applyGlobalListen();
     applyGlobalOutputStage();
     updateShellLatency();
 }

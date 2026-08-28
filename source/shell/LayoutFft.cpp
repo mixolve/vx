@@ -2,7 +2,7 @@
 #include "UiConstants.h"
 #include "EditorPresetSections.h"
 
-void AvaAudioProcessorEditor::layoutFftModuleSections(juce::Rectangle<int>& bounds, const int editorInsetX)
+void AvaAudioProcessorEditor::layoutFftModuleSections(juce::Rectangle<int>& bounds)
 {
     if (fftAttackControl == nullptr
         || fftReleaseControl == nullptr
@@ -33,7 +33,7 @@ void AvaAudioProcessorEditor::layoutFftModuleSections(juce::Rectangle<int>& boun
         return;
     }
 
-    auto placeControl = [editorInsetX] (juce::Rectangle<int>& area, auto& control)
+    auto placeControl = [] (juce::Rectangle<int>& area, auto& control)
     {
         if (! control.isVisible())
         {
@@ -42,15 +42,13 @@ void AvaAudioProcessorEditor::layoutFftModuleSections(juce::Rectangle<int>& boun
         }
 
         auto controlBounds = area.removeFromTop(control.getPreferredHeight());
-        controlBounds.removeFromLeft(editorInsetX);
-        controlBounds.removeFromRight(editorInsetX);
         control.setBounds(controlBounds);
 
         if (! area.isEmpty())
             area.removeFromTop(verticalGap);
     };
 
-    auto placeButton = [editorInsetX] (juce::Rectangle<int>& area, BoxTextButton& button)
+    auto placeButton = [] (juce::Rectangle<int>& area, BoxTextButton& button)
     {
         if (! button.isVisible())
         {
@@ -59,8 +57,6 @@ void AvaAudioProcessorEditor::layoutFftModuleSections(juce::Rectangle<int>& boun
         }
 
         auto buttonBounds = area.removeFromTop(rowHeight);
-        buttonBounds.removeFromLeft(editorInsetX);
-        buttonBounds.removeFromRight(editorInsetX);
         button.setBounds(buttonBounds);
 
         if (! area.isEmpty())
@@ -73,8 +69,6 @@ void AvaAudioProcessorEditor::layoutFftModuleSections(juce::Rectangle<int>& boun
         viewportBounds.removeFromBottom(viewportToPotentiometerGap);
 
     auto fixedButtonsBounds = viewportBounds.removeFromBottom(rowHeight);
-    fixedButtonsBounds.removeFromLeft(editorInsetX);
-    fixedButtonsBounds.removeFromRight(editorInsetX);
 
     fftDeltaButton->setBounds(fftDeltaButton->isVisible() ? fixedButtonsBounds : juce::Rectangle<int>{});
 
@@ -82,8 +76,6 @@ void AvaAudioProcessorEditor::layoutFftModuleSections(juce::Rectangle<int>& boun
         viewportBounds.removeFromBottom(verticalGap);
 
     auto analyserBounds = viewportBounds.removeFromTop(fftInlineAnalyserHeight);
-    analyserBounds.removeFromLeft(editorInsetX);
-    analyserBounds.removeFromRight(editorInsetX);
 
     if (fftAnalyserComponent != nullptr)
         fftAnalyserComponent->setBounds(analyserBounds);

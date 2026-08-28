@@ -30,16 +30,11 @@ public:
         soloButton.setButtonText("SOLO");
         soloButton.setTextJustification(juce::Justification::centred);
         soloButton.setClickingTogglesState(false);
-        soloButton.onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+        soloButton.setLongPressPromptActions({}, [this]
         {
-            if (owner.config.makeCrossoverSoloParameterId == nullptr)
-                return false;
-
-            return owner.assignButtonHostSlot(owner.config.makeCrossoverSoloParameterId(rangeIndex),
-                                              "SOLO",
-                                              &soloButton,
-                                              modifiers);
-        };
+            if (owner.config.makeCrossoverSoloParameterId != nullptr)
+                owner.assignButtonToHostSlot(owner.config.makeCrossoverSoloParameterId(rangeIndex), "SOLO", &soloButton);
+        });
         soloButton.onClick = [this]
         {
             owner.toggleManualSolo(rangeIndex);
@@ -52,10 +47,13 @@ public:
         {
             moduleHeading.setButtonText(owner.config.moduleKey.toUpperCase());
             moduleHeading.setTextJustification(juce::Justification::centred);
-            moduleHeading.setFillVisible(false);
             moduleHeading.setAlwaysAccentOutline(false);
             moduleHeading.setToggleAccentVisible(false);
-            moduleHeading.setInterceptsMouseClicks(false, false);
+            moduleHeading.setLongPressAction([this]
+            {
+                if (owner.config.onModuleCloseRequest != nullptr)
+                    owner.config.onModuleCloseRequest();
+            }, 500, "CLOSE?");
             addAndMakeVisible(moduleHeading);
         }
 
@@ -92,10 +90,11 @@ public:
     int getPreferredHeight() const override
     {
         auto height = 0;
+        const auto moduleHeadingIsPinned = owner.config.showModuleHeading && owner.config.pinModuleHeading;
 
         if (owner.config.showCrossoverSolo)
             height += rowHeight;
-        if (owner.config.showModuleHeading)
+        if (owner.config.showModuleHeading && ! moduleHeadingIsPinned)
             height += (height > 0 ? verticalGap : 0) + rowHeight;
 
         for (size_t index = 0; index < tailRowStart;)
@@ -117,7 +116,19 @@ public:
             index += controlsInRow;
         }
 
-        return height + ((owner.config.showModuleHeading || ! rows.empty()) ? moduleContentBottomGap : 0);
+        return height + ((! moduleHeadingIsPinned && owner.config.showModuleHeading) || ! rows.empty()
+                             ? moduleContentBottomGap
+                             : 0);
+    }
+
+    juce::Component* getPinnedHeaderComponent() noexcept override
+    {
+        return owner.config.showModuleHeading && owner.config.pinModuleHeading ? &moduleHeading : nullptr;
+    }
+
+    int getPinnedHeaderHeight() const noexcept override
+    {
+        return owner.config.showModuleHeading && owner.config.pinModuleHeading ? rowHeight : 0;
     }
 
     juce::Component* getPinnedTailComponent() noexcept override
@@ -199,7 +210,7 @@ public:
         if (owner.config.showCrossoverSolo)
             soloButton.setBounds(bounds.removeFromTop(rowHeight));
 
-        if (owner.config.showModuleHeading)
+        if (owner.config.showModuleHeading && ! owner.config.pinModuleHeading)
         {
             if (owner.config.showCrossoverSolo && ! bounds.isEmpty())
                 bounds.removeFromTop(verticalGap);
@@ -309,25 +320,20 @@ private:
 
             if (reorderGroup.isNotEmpty())
             {
-                moveUpButton = makeTextButton({});
-                moveUpButton->setArrowDirection(BoxTextButton::ArrowDirection::up);
-                moveUpButton->setCancelClickOnLeave(true);
-                moveUpButton->onClick = [this]
+                if (owner.config.moduleKey == "tls" && reorderGroup == "gain")
                 {
-                    page.moveReorderRow(*this, -1);
-                    owner.clearFocus();
-                };
-                addAndMakeVisible(*moveUpButton);
+                    orderLabel = makeTextButton("00", uiGrey500);
+                    orderLabel->setFillVisible(false);
+                    orderLabel->setPressFillEnabled(false);
+                    addAndMakeVisible(*orderLabel);
+                    refreshOrderLabel();
 
-                moveDownButton = makeTextButton({});
-                moveDownButton->setArrowDirection(BoxTextButton::ArrowDirection::down);
-                moveDownButton->setCancelClickOnLeave(true);
-                moveDownButton->onClick = [this]
-                {
-                    page.moveReorderRow(*this, 1);
-                    owner.clearFocus();
-                };
-                addAndMakeVisible(*moveDownButton);
+                    if (! fixedOrder)
+                    {
+                        orderLabel->onClick = [this] { page.applyReorderMove(*this); };
+                        control->setTitleMoveArmedAction([this] { page.armReorderMove(*this); });
+                    }
+                }
             }
 
             if (auxiliaryToggleId.isNotEmpty())
@@ -342,13 +348,11 @@ private:
                                                                                     auxiliaryToggleId,
                                                                                     *auxiliaryToggle);
 
-                auxiliaryToggle->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+                auxiliaryToggle->setLongPressPromptActions({}, [this]
                 {
-                    return owner.assignButtonHostSlot(auxiliaryToggleId,
-                                                      auxiliaryToggleId,
-                                                      auxiliaryToggle.get(),
-                                                      modifiers);
-                };
+                    owner.assignButtonToHostSlot(auxiliaryToggleId, auxiliaryToggleId, auxiliaryToggle.get());
+                });
+
                 auxiliaryToggle->onClick = [this]
                 {
                     if (auxiliaryToggleInverted)
@@ -369,12 +373,10 @@ private:
 
             auto bounds = getLocalBounds();
 
-            if (moveUpButton != nullptr && moveDownButton != nullptr)
+            if (orderLabel != nullptr)
             {
-                moveUpButton->setBounds(bounds.removeFromLeft(rowHeight));
+                orderLabel->setBounds(bounds.removeFromLeft(42));
                 bounds.removeFromLeft(juce::jmin(parameterGap, bounds.getWidth()));
-                moveDownButton->setBounds(bounds.removeFromRight(rowHeight));
-                bounds.removeFromRight(juce::jmin(parameterGap, bounds.getWidth()));
             }
 
             if (auxiliaryToggle == nullptr)
@@ -401,22 +403,20 @@ private:
             if (control != nullptr && enabledWhenId.isNotEmpty())
                 control->setInteractionEnabled(readRawParameter(owner.valueTreeState, enabledWhenId, 0.0f) >= 0.5f);
 
-            if (moveUpButton == nullptr || moveDownButton == nullptr)
+            refreshOrderLabel();
+
+        }
+
+        void refreshOrderLabel()
+        {
+            if (orderLabel == nullptr)
                 return;
 
-            const auto order = orderParameterId.isNotEmpty()
-                ? juce::roundToInt(readRawParameter(owner.valueTreeState, orderParameterId, 0.0f))
-                : -1;
-            const auto canMoveUp = ! fixedOrder && order > 0;
-            const auto canMoveDown = ! fixedOrder && order >= 0 && order < 3;
-            moveUpButton->setEnabled(canMoveUp);
-            moveUpButton->setAlpha(1.0f);
-            moveUpButton->setPressFillEnabled(canMoveUp);
-            moveUpButton->setInterceptsMouseClicks(canMoveUp, canMoveUp);
-            moveDownButton->setEnabled(canMoveDown);
-            moveDownButton->setAlpha(1.0f);
-            moveDownButton->setPressFillEnabled(canMoveDown);
-            moveDownButton->setInterceptsMouseClicks(canMoveDown, canMoveDown);
+            const auto position = fixedOrder ? 1
+                                             : juce::roundToInt(readRawParameter(owner.valueTreeState,
+                                                                                   orderParameterId,
+                                                                                   0.0f)) + 2;
+            orderLabel->setButtonText(juce::String::formatted("%02d", position));
         }
 
         void refreshAuxiliaryToggleState()
@@ -441,10 +441,9 @@ private:
         juce::String enabledWhenId;
         bool auxiliaryToggleInverted = false;
         std::unique_ptr<ParameterControl> control;
+        std::unique_ptr<BoxTextButton> orderLabel;
         std::unique_ptr<BoxTextButton> auxiliaryToggle;
         std::unique_ptr<ButtonAttachment> auxiliaryToggleAttachment;
-        std::unique_ptr<BoxTextButton> moveUpButton;
-        std::unique_ptr<BoxTextButton> moveDownButton;
     };
 
     struct ChoiceRow final : public RowBase
@@ -538,13 +537,10 @@ private:
             button->setClickingTogglesState(true);
             button->setToggleAccentVisible(spec.toggleAccentVisible);
             attachment = std::make_unique<ButtonAttachment>(owner.valueTreeState, parameterIdToToggle, *button);
-            button->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+            button->setLongPressPromptActions({}, [this]
             {
-                return owner.assignButtonHostSlot(parameterIdToToggle,
-                                                  parameterIdToToggle,
-                                                  button.get(),
-                                                  modifiers);
-            };
+                owner.assignButtonToHostSlot(parameterIdToToggle, parameterIdToToggle, button.get());
+            });
             button->onStateChange = [this] { updateLabel(); };
             button->onClick = [this]
             {
@@ -658,13 +654,10 @@ private:
             if (spec.showTimeModeButton)
             {
                 modeButton = makeTimeModeButton();
-                modeButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
+                modeButton->setLongPressPromptActions({}, [this]
                 {
-                    return owner.assignButtonHostSlot(modeParameterIdToEdit,
-                                                      modeParameterIdToEdit,
-                                                      modeButton.get(),
-                                                      modifiers);
-                };
+                    owner.assignButtonToHostSlot(modeParameterIdToEdit, modeParameterIdToEdit, modeButton.get());
+                });
                 modeButton->onClick = [this]
                 {
                     owner.setParameterPlainValue(modeParameterIdToEdit, isHostSyncMode() ? 0.0f : 1.0f);
@@ -984,6 +977,82 @@ private:
         }
     }
 
+    void armReorderMove(ParameterRow& sourceRow)
+    {
+        if (sourceRow.fixedOrder || sourceRow.orderParameterId.isEmpty())
+            return;
+
+        reorderMoveSource = &sourceRow;
+
+        for (const auto& row : rows)
+        {
+            auto* parameterRow = dynamic_cast<ParameterRow*>(row.get());
+
+            if (parameterRow != nullptr
+                && parameterRow->reorderGroup == sourceRow.reorderGroup
+                && parameterRow->orderLabel != nullptr)
+            {
+                parameterRow->orderLabel->setDragTargetOutlineVisible(parameterRow == &sourceRow);
+            }
+        }
+    }
+
+    void applyReorderMove(ParameterRow& destinationRow)
+    {
+        auto* sourceRow = reorderMoveSource;
+        reorderMoveSource = nullptr;
+
+        const auto group = sourceRow != nullptr ? sourceRow->reorderGroup
+                                                : destinationRow.reorderGroup;
+        clearReorderDragTarget(group);
+
+        if (sourceRow == nullptr
+            || sourceRow == &destinationRow
+            || sourceRow->fixedOrder
+            || destinationRow.fixedOrder
+            || sourceRow->orderParameterId.isEmpty()
+            || destinationRow.orderParameterId.isEmpty()
+            || sourceRow->reorderGroup != destinationRow.reorderGroup)
+        {
+            return;
+        }
+
+        const auto destinationOrder = juce::roundToInt(
+            readRawParameter(owner.valueTreeState, destinationRow.orderParameterId, 0.0f));
+
+        for (auto moveCount = 0; moveCount < 4; ++moveCount)
+        {
+            const auto sourceOrder = juce::roundToInt(
+                readRawParameter(owner.valueTreeState, sourceRow->orderParameterId, 0.0f));
+
+            if (sourceOrder == destinationOrder)
+            {
+                if (sourceRow->orderLabel != nullptr)
+                    sourceRow->orderLabel->flashConfirmationOutline();
+
+                owner.clearFocus();
+                return;
+            }
+
+            moveReorderRow(*sourceRow, destinationOrder > sourceOrder ? 1 : -1);
+        }
+    }
+
+    void clearReorderDragTarget(const juce::String& group)
+    {
+        for (const auto& row : rows)
+        {
+            auto* parameterRow = dynamic_cast<ParameterRow*>(row.get());
+
+            if (parameterRow != nullptr
+                && parameterRow->reorderGroup == group
+                && parameterRow->orderLabel != nullptr)
+            {
+                parameterRow->orderLabel->setDragTargetOutlineVisible(false);
+            }
+        }
+    }
+
     void reorderRows(const juce::String& group)
     {
         auto first = std::find_if(rows.begin(), rows.end(), [&group] (const auto& row)
@@ -1077,6 +1146,7 @@ private:
     std::vector<std::unique_ptr<RowBase>> rows;
     size_t tailRowStart = 0;
     std::vector<juce::String> listenedParameterIds;
+    ParameterRow* reorderMoveSource = nullptr;
 };
 
 std::unique_ptr<CrossoverModulePage> makeCrossoverRangePage(CrossoverModuleComponent& owner,

@@ -37,7 +37,7 @@ void drawNeutralPopupItem(juce::Graphics& g,
                                       : (isEnabled ? uiWhite : uiGrey500));
     g.setFont(makeUiFont());
     g.drawFittedText(text,
-                     area.reduced(8, 0),
+                     area.reduced(uiGap, 0),
                      justification,
                      1,
                      1.0f);
@@ -60,16 +60,13 @@ juce::Font CopyPasteTextEditor::PopupLookAndFeel::getPopupMenuFont()
     return makeUiFont();
 }
 
-void CopyPasteTextEditor::PopupLookAndFeel::drawPopupMenuBackgroundWithOptions(juce::Graphics& g,
-                                                                               int width,
-                                                                               int height,
+void CopyPasteTextEditor::PopupLookAndFeel::drawPopupMenuBackgroundWithOptions(juce::Graphics& graphics,
+                                                                               const int width,
+                                                                               const int height,
                                                                                const juce::PopupMenu::Options&)
 {
-    g.setColour(uiGrey800);
-    g.fillRect(0, 0, width, height);
-
-    g.setColour(uiGrey500);
-    g.drawRect(0, 0, width, height, 1);
+    graphics.setColour(uiPopup);
+    graphics.fillRect(0, 0, width, height);
 }
 
 int CopyPasteTextEditor::PopupLookAndFeel::getPopupMenuBorderSizeWithOptions(const juce::PopupMenu::Options&)
@@ -91,7 +88,7 @@ void CopyPasteTextEditor::PopupLookAndFeel::getIdealPopupMenuItemSizeWithOptions
         return;
     }
 
-    idealWidth = juce::jmax(72, getTextPixelWidth(makeUiFont(), text) + 18);
+    idealWidth = juce::jmax(72, getTextPixelWidth(makeUiFont(), text) + uiGapDouble);
     idealHeight = 30;
 }
 

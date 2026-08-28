@@ -67,11 +67,6 @@ std::vector<int> decodeFilterDisplayOrder(const juce::String& text, const int ac
     return order;
 }
 
-juce::String makeHostSlotParameterIdStateKey(const int slotIndex)
-{
-    return "editor_host_slot_param_" + juce::String::formatted("%02d", slotIndex + 1);
-}
-
 juce::String makeHostSlotNameStateKey(const int slotIndex)
 {
     return "editor_host_slot_name_" + juce::String::formatted("%02d", slotIndex + 1);
@@ -189,7 +184,7 @@ void AvaAudioProcessorEditor::restoreEditorStateFromValueTree()
     for (int slotIndex = 0; slotIndex < static_cast<int>(hostSlotAssignments.size()); ++slotIndex)
     {
         auto& assignment = hostSlotAssignments[static_cast<size_t>(slotIndex)];
-        assignment.parameterId = state.getProperty(makeHostSlotParameterIdStateKey(slotIndex)).toString().trim();
+        assignment.parameterId = state.getProperty(AvaAudioProcessor::getHostSlotTargetStateKey(slotIndex)).toString().trim();
         assignment.parameterName = state.getProperty(makeHostSlotNameStateKey(slotIndex)).toString().trim();
     }
 
@@ -228,12 +223,12 @@ void AvaAudioProcessorEditor::storeEditorStateToValueTree() noexcept
 
         if (assignment.parameterId.isEmpty())
         {
-            state.removeProperty(makeHostSlotParameterIdStateKey(slotIndex), nullptr);
+            state.removeProperty(AvaAudioProcessor::getHostSlotTargetStateKey(slotIndex), nullptr);
             state.removeProperty(makeHostSlotNameStateKey(slotIndex), nullptr);
             continue;
         }
 
-        state.setProperty(makeHostSlotParameterIdStateKey(slotIndex), assignment.parameterId, nullptr);
+        state.setProperty(AvaAudioProcessor::getHostSlotTargetStateKey(slotIndex), assignment.parameterId, nullptr);
         state.setProperty(makeHostSlotNameStateKey(slotIndex), assignment.parameterName, nullptr);
     }
 
@@ -275,7 +270,7 @@ int AvaAudioProcessorEditor::getActiveFilterCount() const noexcept
 
 void AvaAudioProcessorEditor::syncEditorWidthToBounds()
 {
-    const auto restoredWidth = juce::jmax(minimumEditorWidth, getWidth());
+    const auto restoredWidth = juce::jlimit(minimumEditorWidth, maximumEditorWidth, getWidth());
     setResizeLimits(minimumEditorWidth,
                     minimumEditorHeight,
                     maximumEditorWidth,

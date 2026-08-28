@@ -2,146 +2,43 @@
 
 namespace
 {
-constexpr auto tooltipFontSize = uiFontSize - 4.0f;
-constexpr auto tooltipHorizontalPadding = 12;
-constexpr auto tooltipVerticalPadding = 6;
-constexpr auto tooltipLineGap = 2;
-constexpr auto maximumTooltipWidth = 240;
-
-juce::Font makeTooltipFont()
+class ScrollingComboBoxLabel final : public juce::Label
 {
-    return makeUiFont(juce::Font::plain, tooltipFontSize);
-}
-
-juce::StringArray wrapTooltipText(const juce::String& text,
-                                  const juce::Font& font,
-                                  const int maximumTextWidth)
-{
-    juce::StringArray lines;
-    const auto words = juce::StringArray::fromTokens(text, " ", "");
-    juce::String currentLine;
-    const auto textWidth = juce::jmax(1, maximumTextWidth);
-
-    auto addWrappedWord = [&lines, &font, textWidth] (const juce::String& word)
+public:
+    void paint(juce::Graphics& graphics) override
     {
-        juce::String currentPart;
+        graphics.setColour(findColour(juce::Label::textColourId));
+        graphics.setFont(getFont());
 
-        for (auto index = 0; index < word.length(); ++index)
+        if (drawLoopingText(graphics,
+                            getText(),
+                            getLocalBounds().reduced(uiGap, 0),
+                            getFont(),
+                            getJustificationType()))
         {
-            const auto nextPart = currentPart + word.substring(index, index + 1);
-
-            if (currentPart.isNotEmpty() && getTextPixelWidth(font, nextPart) > textWidth)
-            {
-                lines.add(currentPart);
-                currentPart = word.substring(index, index + 1);
-                continue;
-            }
-
-            currentPart = nextPart;
+            scheduleMarqueeRepaint();
         }
+    }
 
-        if (currentPart.isNotEmpty())
-            lines.add(currentPart);
-    };
-
-    for (int wordIndex = 0; wordIndex < words.size(); ++wordIndex)
+private:
+    void scheduleMarqueeRepaint()
     {
-        const auto& word = words[wordIndex];
-        const auto candidate = currentLine.isEmpty() ? word
-                                                     : currentLine + " " + word;
+        if (marqueeRepaintPending || ! isShowing())
+            return;
 
-        if (getTextPixelWidth(font, candidate) <= textWidth)
+        marqueeRepaintPending = true;
+        juce::Timer::callAfterDelay(16, [safeThis = juce::Component::SafePointer<ScrollingComboBoxLabel>(this)]
         {
-            currentLine = candidate;
-            continue;
-        }
+            if (safeThis == nullptr)
+                return;
 
-        if (currentLine.isNotEmpty())
-            lines.add(currentLine);
-
-        if (getTextPixelWidth(font, word) > textWidth)
-        {
-            addWrappedWord(word);
-            currentLine.clear();
-            continue;
-        }
-
-        currentLine = word;
+            safeThis->marqueeRepaintPending = false;
+            safeThis->repaint();
+        });
     }
 
-    if (currentLine.isNotEmpty())
-        lines.add(currentLine);
-
-    if (lines.isEmpty())
-        lines.add(text);
-
-    return lines;
-}
-}
-
-DelayedTooltipWindow::DelayedTooltipWindow(juce::Component* parentComponent, const int delayMs)
-    : juce::TooltipWindow(parentComponent, 0),
-      hoverDelayMs(delayMs)
-{
-}
-
-void DelayedTooltipWindow::setHintsEnabled(const bool shouldEnable)
-{
-    hintsEnabled = shouldEnable;
-    resetHoverState();
-
-    if (! hintsEnabled)
-        hideTip();
-}
-
-void DelayedTooltipWindow::setHoverDelayMs(const int delayMs) noexcept
-{
-    hoverDelayMs = juce::jmax(0, delayMs);
-}
-
-void DelayedTooltipWindow::resetHoverState() noexcept
-{
-    hoveredComponent = nullptr;
-    hoveredTip.clear();
-    hoverStartTimeMs = 0;
-}
-
-juce::String DelayedTooltipWindow::getTipFor(juce::Component& component)
-{
-    if (! hintsEnabled || juce::ModifierKeys::getCurrentModifiers().isAnyMouseButtonDown())
-    {
-        resetHoverState();
-        return {};
-    }
-
-    auto* tooltipClient = dynamic_cast<juce::TooltipClient*>(&component);
-
-    if (tooltipClient == nullptr || component.isCurrentlyBlockedByAnotherModalComponent())
-    {
-        resetHoverState();
-        return {};
-    }
-
-    const auto tip = tooltipClient->getTooltip();
-
-    if (tip.isEmpty())
-    {
-        resetHoverState();
-        return {};
-    }
-
-    const auto now = juce::Time::getApproximateMillisecondCounter();
-
-    if (hoveredComponent.getComponent() != &component || hoveredTip != tip)
-    {
-        hoveredComponent = &component;
-        hoveredTip = tip;
-        hoverStartTimeMs = now;
-        return {};
-    }
-
-    return now - hoverStartTimeMs >= static_cast<uint32_t>(hoverDelayMs) ? tip
-                                                                          : juce::String {};
+    bool marqueeRepaintPending = false;
+};
 }
 
 AvaAudioProcessorEditor::AvaLookAndFeel::AvaLookAndFeel()
@@ -150,37 +47,11 @@ AvaAudioProcessorEditor::AvaLookAndFeel::AvaLookAndFeel()
         setDefaultSansSerifTypeface(typeface);
 }
 
-void AvaAudioProcessorEditor::AvaLookAndFeel::setTooltipBoundsConstraint(juce::Rectangle<int> bounds) noexcept
-{
-    tooltipBoundsConstraint = bounds;
-}
-
-void AvaAudioProcessorEditor::updateTooltipBoundsConstraint() noexcept
-{
-    if (lookAndFeel == nullptr
-        || footerTab == nullptr
-        || clipButton == nullptr
-        || footerTab->getBounds().isEmpty()
-        || clipButton->getBounds().isEmpty())
-    {
-        return;
-    }
-
-    auto tooltipBounds = getLocalBounds();
-    tooltipBounds.setLeft(footerTab->getX());
-    tooltipBounds.setRight(footerTab->getRight());
-    tooltipBounds.setTop(clipButton->getY());
-    tooltipBounds.setBottom(footerTab->getBottom());
-
-    lookAndFeel->setTooltipBoundsConstraint(tooltipBounds);
-}
-
 juce::Typeface::Ptr AvaAudioProcessorEditor::AvaLookAndFeel::getTypefaceForFont(const juce::Font& font)
 {
 #if JUCE_TARGET_HAS_BINARY_DATA
-    const auto useBold = font.isBold();
-    if (auto typeface = useBold ? getUiBoldTypeface()
-                                : getUiRegularTypeface())
+    juce::ignoreUnused(font);
+    if (auto typeface = getUiRegularTypeface())
         return typeface;
 #else
     juce::ignoreUnused(font);
@@ -193,21 +64,26 @@ juce::Font AvaAudioProcessorEditor::AvaLookAndFeel::getComboBoxFont(juce::ComboB
     return makeUiFont();
 }
 
+juce::Label* AvaAudioProcessorEditor::AvaLookAndFeel::createComboBoxTextBox(juce::ComboBox&)
+{
+    auto* label = new ScrollingComboBoxLabel();
+    label->setEditable(false, false, false);
+    label->setInterceptsMouseClicks(false, false);
+    return label;
+}
+
 juce::Font AvaAudioProcessorEditor::AvaLookAndFeel::getPopupMenuFont()
 {
     return makeUiFont();
 }
 
-void AvaAudioProcessorEditor::AvaLookAndFeel::drawPopupMenuBackgroundWithOptions(juce::Graphics& g,
-                                                                                 int width,
-                                                                                 int height,
+void AvaAudioProcessorEditor::AvaLookAndFeel::drawPopupMenuBackgroundWithOptions(juce::Graphics& graphics,
+                                                                                 const int width,
+                                                                                 const int height,
                                                                                  const juce::PopupMenu::Options&)
 {
-    g.setColour(uiGrey800);
-    g.fillRect(0, 0, width, height);
-
-    g.setColour(uiAccent);
-    g.drawRect(0, 0, width, height, 1);
+    graphics.setColour(uiPopup);
+    graphics.fillRect(0, 0, width, height);
 }
 
 int AvaAudioProcessorEditor::AvaLookAndFeel::getPopupMenuBorderSizeWithOptions(const juce::PopupMenu::Options&)
@@ -229,17 +105,14 @@ void AvaAudioProcessorEditor::AvaLookAndFeel::getIdealPopupMenuItemSizeWithOptio
         return;
     }
 
-    idealWidth = juce::jmax(80, getTextPixelWidth(makeUiFont(), text) + 16);
+    idealWidth = juce::jmax(80, getTextPixelWidth(makeUiFont(), text) + uiGapDouble);
     idealHeight = 30;
 }
 
-void AvaAudioProcessorEditor::AvaLookAndFeel::drawCallOutBoxBackground(juce::CallOutBox&, juce::Graphics& g, const juce::Path& path, juce::Image&)
+void AvaAudioProcessorEditor::AvaLookAndFeel::drawCallOutBoxBackground(juce::CallOutBox&, juce::Graphics& graphics, const juce::Path& path, juce::Image&)
 {
-    g.setColour(uiGrey700);
-    g.fillPath(path);
-
-    g.setColour(uiGrey500);
-    g.strokePath(path, juce::PathStrokeType(1.0f));
+    graphics.setColour(uiPopup);
+    graphics.fillPath(path);
 }
 
 int AvaAudioProcessorEditor::AvaLookAndFeel::getCallOutBoxBorderSize(const juce::CallOutBox&)
@@ -252,86 +125,6 @@ float AvaAudioProcessorEditor::AvaLookAndFeel::getCallOutBoxCornerSize(const juc
     return 0.0f;
 }
 
-juce::Rectangle<int> AvaAudioProcessorEditor::AvaLookAndFeel::getTooltipBounds(const juce::String& tipText,
-                                                                             juce::Point<int> screenPos,
-                                                                             juce::Rectangle<int> parentArea)
-{
-    auto allowedArea = tooltipBoundsConstraint.isEmpty() ? parentArea
-                                                         : parentArea.getIntersection(tooltipBoundsConstraint);
-
-    if (allowedArea.isEmpty())
-        allowedArea = parentArea;
-
-    const auto tooltipFont = makeTooltipFont();
-    const auto maximumWidth = juce::jlimit(80, maximumTooltipWidth, juce::jmax(1, allowedArea.getWidth()));
-    const auto lines = wrapTooltipText(tipText,
-                                       tooltipFont,
-                                       maximumWidth - tooltipHorizontalPadding);
-    auto textWidth = 0;
-
-    for (const auto& line : lines)
-        textWidth = juce::jmax(textWidth, getTextPixelWidth(tooltipFont, line));
-
-    const auto lineHeight = juce::roundToInt(tooltipFont.getHeight()) + tooltipLineGap;
-    const auto width = juce::jlimit(12,
-                                    maximumWidth,
-                                    textWidth + tooltipHorizontalPadding);
-    const auto height = juce::jmax(12,
-                                   (lineHeight * lines.size()) + tooltipVerticalPadding);
-    auto bounds = juce::Rectangle<int>(width, height);
-    bounds.setCentre(screenPos.translated(0, -(height + verticalGap)));
-
-    if (bounds.getRight() > allowedArea.getRight())
-        bounds.setX(allowedArea.getRight() - bounds.getWidth());
-
-    if (bounds.getX() < allowedArea.getX())
-        bounds.setX(allowedArea.getX());
-
-    if (bounds.getY() < allowedArea.getY())
-        bounds.setY(screenPos.y + verticalGap);
-
-    if (bounds.getBottom() > allowedArea.getBottom())
-        bounds.setBottom(allowedArea.getBottom());
-
-    if (bounds.getY() < allowedArea.getY())
-        bounds.setY(allowedArea.getY());
-
-    return bounds;
-}
-
-void AvaAudioProcessorEditor::AvaLookAndFeel::drawTooltip(juce::Graphics& g,
-                                                        const juce::String& text,
-                                                        const int width,
-                                                        const int height)
-{
-    const auto bounds = juce::Rectangle<int>(width, height);
-    const auto tooltipFont = makeTooltipFont();
-    const auto lines = wrapTooltipText(text,
-                                       tooltipFont,
-                                       juce::jmax(1, width - tooltipHorizontalPadding));
-
-    g.setColour(juce::Colour(0xff666666));
-    g.fillRect(bounds);
-
-    g.setColour(uiGrey500);
-    g.drawRect(bounds, 1);
-
-    g.setColour(uiWhite);
-    g.setFont(tooltipFont);
-
-    const auto lineHeight = juce::roundToInt(tooltipFont.getHeight()) + tooltipLineGap;
-    auto y = (height - (lineHeight * lines.size())) / 2;
-
-    for (const auto& line : lines)
-    {
-        g.drawFittedText(line,
-                         juce::Rectangle<int>(6, y, width - 12, lineHeight),
-                         juce::Justification::centred,
-                         1,
-                         1.0f);
-        y += lineHeight;
-    }
-}
 
 void AvaAudioProcessorEditor::AvaLookAndFeel::drawComboBox(juce::Graphics& g,
                                                            int width,
@@ -428,7 +221,7 @@ void AvaAudioProcessorEditor::AvaLookAndFeel::drawPopupMenuItemWithOptions(juce:
     g.setColour(isHighlighted ? uiGrey700 : uiGrey800);
     g.fillRect(area);
 
-    g.setColour(uiAccent);
+    g.setColour(uiGrey500);
     g.drawRect(area, 1);
 
     g.setColour(item.isEnabled ? uiWhite : uiGrey500);
@@ -437,7 +230,7 @@ void AvaAudioProcessorEditor::AvaLookAndFeel::drawPopupMenuItemWithOptions(juce:
     const auto justification = isNoTickTarget ? dynamic_cast<NoTickComboBox*>(options.getTargetComponent())->getPopupMenuTextJustification()
                                               : juce::Justification::centred;
     g.drawFittedText(item.text,
-                     area.reduced(isNoTickTarget ? 8 : 6, 0),
+                     area.reduced(uiGap, 0),
                      justification,
                      1,
                      1.0f);

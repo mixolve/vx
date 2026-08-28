@@ -36,34 +36,14 @@ private:
     bool promptStylePopupEnabled = false;
 };
 
-class DelayedTooltipWindow final : public juce::TooltipWindow
-{
-public:
-    explicit DelayedTooltipWindow(juce::Component* parentComponent, int hoverDelayMs);
-
-    void setHintsEnabled(bool shouldEnable);
-    void setHoverDelayMs(int delayMs) noexcept;
-    juce::String getTipFor(juce::Component& component) override;
-
-private:
-    void resetHoverState() noexcept;
-
-    juce::Component::SafePointer<juce::Component> hoveredComponent;
-    juce::String hoveredTip;
-    uint32_t hoverStartTimeMs = 0;
-    int hoverDelayMs = 1500;
-    bool hintsEnabled = true;
-};
-
 class AvaAudioProcessorEditor::AvaLookAndFeel final : public juce::LookAndFeel_V4
 {
 public:
     AvaLookAndFeel();
 
-    void setTooltipBoundsConstraint(juce::Rectangle<int> bounds) noexcept;
-
     juce::Typeface::Ptr getTypefaceForFont(const juce::Font& font) override;
     juce::Font getComboBoxFont(juce::ComboBox&) override;
+    juce::Label* createComboBoxTextBox(juce::ComboBox&) override;
     juce::Font getPopupMenuFont() override;
     void drawPopupMenuBackgroundWithOptions(juce::Graphics& g,
                                             int width,
@@ -79,10 +59,6 @@ public:
     void drawCallOutBoxBackground(juce::CallOutBox&, juce::Graphics& g, const juce::Path& path, juce::Image&) override;
     int getCallOutBoxBorderSize(const juce::CallOutBox&) override;
     float getCallOutBoxCornerSize(const juce::CallOutBox&) override;
-    juce::Rectangle<int> getTooltipBounds(const juce::String& tipText,
-                                          juce::Point<int> screenPos,
-                                          juce::Rectangle<int> parentArea) override;
-    void drawTooltip(juce::Graphics& g, const juce::String& text, int width, int height) override;
     void drawComboBox(juce::Graphics& g,
                       int width,
                       int height,
@@ -109,7 +85,4 @@ public:
                                       bool isHighlighted,
                                       const juce::PopupMenu::Item& item,
                                       const juce::PopupMenu::Options& options) override;
-
-private:
-    juce::Rectangle<int> tooltipBoundsConstraint;
 };

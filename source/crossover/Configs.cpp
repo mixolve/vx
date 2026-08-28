@@ -184,6 +184,7 @@ CrossoverModuleComponent::Config makeTlsCrossoverConfig(TlsAudioProcessor& proce
     config.showCrossoverControls = false;
     config.showCrossoverNavigation = false;
     config.showCrossoverSolo = false;
+    config.pinModuleHeading = true;
     config.rangeControls = {
         headingControl("LISTEN", 1),
         toggleControl("listenLc", "LC", "", "", "listen", 1, 4),
@@ -208,8 +209,8 @@ CrossoverModuleComponent::Config makeTlsCrossoverConfig(TlsAudioProcessor& proce
         parameterControl("rightDelay", "RIGHT", 2),
 
         headingControl("PHASE", 2),
-        parameterControl("leftPhase", "PHASE L", 2),
-        parameterControl("rightPhase", "PHASE R", 2),
+        parameterControl("leftPhase", "LEFT", 2),
+        parameterControl("rightPhase", "RIGHT", 2),
 
         headingControl("PANORAMA", 2),
         parameterControl("left", "LEFT", 2),
@@ -253,6 +254,7 @@ CrossoverModuleComponent::Config makeDynCrossoverConfig(DynAudioProcessor& proce
     config.showCrossoverControls = false;
     config.showCrossoverNavigation = false;
     config.showCrossoverSolo = false;
+    config.pinModuleHeading = true;
     config.rangeControls = {
         headingControl("GENERAL", 1),
         parameterControl("morph", "MORPH", 2, 0),
@@ -315,6 +317,7 @@ CrossoverModuleComponent::Config makeTrsCrossoverConfig(TrsModuleProcessor& proc
     config.showCrossoverControls = false;
     config.showCrossoverNavigation = false;
     config.showCrossoverSolo = false;
+    config.pinModuleHeading = true;
     config.rangeControls = {
         headingControl("TRANSIENT", 1),
         parameterToggleControl(TrsModuleProcessor::paramTransGainId,

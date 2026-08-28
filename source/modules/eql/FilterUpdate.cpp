@@ -69,11 +69,7 @@ void EqlModuleProcessor::updateFilters()
                            maximumBellBandwidth,
                            filterBandwidthParams[filterArrayIndex]->load(std::memory_order_relaxed))
             : 1.0f;
-        const auto gainDb = filterGainParams[filterArrayIndex] != nullptr
-            ? juce::jlimit(-48.0f,
-                           48.0f,
-                           filterGainParams[filterArrayIndex]->load(std::memory_order_relaxed))
-            : 0.0f;
+        const auto gainDb = effectiveFilterGainDb[filterArrayIndex];
 
         if (isVolumeFilterType(filterType))
         {

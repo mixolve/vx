@@ -25,7 +25,6 @@ public:
     void setChoices(const juce::StringArray& choicesIn);
     void setChoiceEnabled(int choiceIndex, bool shouldEnable);
     void setTitleMouseEnabled(bool shouldEnable);
-    void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);
     void setInteractionEnabled(bool shouldEnable);
     void setOverrideText(const juce::String&);
     void clearOverrideText();

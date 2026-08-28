@@ -297,15 +297,13 @@ public:
         setMouseClickGrabsKeyboardFocus(false);
         setInterceptsMouseClicks(false, true);
 
-        const auto linkFont = makeUiFont(juce::Font::underlined, 22.0f);
-        const auto linkHeight = juce::jmax(1, juce::roundToInt(linkFont.getHeight()));
-
+        const auto linkFont = makeUiFont();
         linkButton.setFont(linkFont, false);
         linkButton.setJustificationType(juce::Justification::centred);
         linkButton.setColour(juce::HyperlinkButton::textColourId, uiAccent);
         linkButton.setMouseClickGrabsKeyboardFocus(false);
         linkButton.setWantsKeyboardFocus(false);
-        linkButton.setSize(1, linkHeight);
+        linkButton.setSize(1, rowHeight);
         linkButton.changeWidthToFitText();
 
         if (urlText.startsWithIgnoreCase("ava-manual://"))
@@ -324,7 +322,7 @@ public:
 
     int getPreferredHeight(int) const override
     {
-        return juce::jmax(1, juce::roundToInt(linkButton.getHeight()));
+        return rowHeight;
     }
 
     void resized() override
@@ -387,12 +385,7 @@ public:
             }
             else
             {
-                const auto headingLevel = juce::jlimit(1, 6, block.headingLevel);
-                const auto headingHeight = juce::jmax(18.0f, 25.0f - static_cast<float>(headingLevel - 1) * 2.0f);
-                const auto font = block.headingLevel > 0 ? makeUiFont(juce::Font::bold, headingHeight)
-                                                         : makeUiFont();
-
-                rows.push_back(std::make_unique<MarkdownTextRow>(block.text, font, uiWhite));
+                rows.push_back(std::make_unique<MarkdownTextRow>(block.text, makeUiFont(), uiWhite));
             }
 
             addAndMakeVisible(*rows.back());

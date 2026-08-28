@@ -20,7 +20,7 @@ inline constexpr auto eqlFilterOrder = std::to_array<ParameterOrderEntry>({
     { "freq", "FREQ" },
     { "bw", "BW" },
     { "gain", "GAIN" },
-    { "bypass", "BYPASS" },
+    { "bypass", "B" },
 });
 } // namespace
 

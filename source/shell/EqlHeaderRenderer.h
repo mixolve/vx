@@ -14,10 +14,4 @@ bool drawFilterHeaderHighlight(juce::Graphics& graphics,
                                const juce::Rectangle<int>& bounds,
                                const juce::Font& font,
                                juce::Justification justification);
-void drawABCompareHighlight(juce::Graphics& graphics,
-                            const juce::Rectangle<int>& bounds,
-                            const juce::Font& font,
-                            juce::Justification justification,
-                            int highlightedIndex,
-                            juce::Colour textColour);
 }

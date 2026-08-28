@@ -224,21 +224,4 @@ bool drawFilterHeaderHighlight(juce::Graphics& graphics,
     return true;
 }
 
-void drawABCompareHighlight(juce::Graphics& graphics,
-                            const juce::Rectangle<int>& bounds,
-                            const juce::Font& font,
-                            const juce::Justification justification,
-                            const int highlightedIndex,
-                            const juce::Colour textColour)
-{
-    static const juce::Colour activeColour { 0xFF9999FF };
-    drawFittedSingleLineSegments(graphics,
-                                 {
-                                     { "A", highlightedIndex == 0 ? activeColour : textColour },
-                                     { "B", highlightedIndex == 1 ? activeColour : textColour }
-                                 },
-                                 bounds,
-                                 font,
-                                 justification);
-}
 } // namespace eql_header_renderer

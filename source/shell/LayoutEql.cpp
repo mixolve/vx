@@ -4,7 +4,7 @@
 
 #include <array>
 
-void AvaAudioProcessorEditor::layoutEqlModuleSections(juce::Rectangle<int>& bounds, const int editorInsetX)
+void AvaAudioProcessorEditor::layoutEqlModuleSections(juce::Rectangle<int>& bounds)
 {
     if (! bounds.isEmpty())
         bounds.removeFromBottom(viewportToPotentiometerGap);
@@ -21,8 +21,6 @@ void AvaAudioProcessorEditor::layoutEqlModuleSections(juce::Rectangle<int>& boun
     }
 
     auto actionRowBounds = bounds.removeFromTop(rowHeight);
-    actionRowBounds.removeFromLeft(editorInsetX);
-    actionRowBounds.removeFromRight(editorInsetX);
 
     std::array<BoxTextButton*, 4> actionButtons {
         addFilterButton.get(),
@@ -76,12 +74,16 @@ void AvaAudioProcessorEditor::layoutEqlModuleSections(juce::Rectangle<int>& boun
             continue;
 
         auto headerBounds = contentBounds.removeFromTop(rowHeight);
-        headerBounds.removeFromLeft(editorInsetX);
-        headerBounds.removeFromRight(editorInsetX);
 
-        auto bypassBounds = headerBounds.removeFromLeft(rowHeight);
+        auto* orderLabel = filterOrderLabels[static_cast<size_t>(displayIndex)].get();
+        auto orderLabelBounds = headerBounds.removeFromLeft(48);
         headerBounds.removeFromLeft(parameterGap);
 
+        auto bypassBounds = headerBounds.removeFromLeft(45);
+        headerBounds.removeFromLeft(parameterGap);
+
+        if (orderLabel != nullptr)
+            orderLabel->setBounds(orderLabelBounds);
         section->bypassButton->setBounds(bypassBounds);
         section->header->setBounds(headerBounds);
 
@@ -91,11 +93,9 @@ void AvaAudioProcessorEditor::layoutEqlModuleSections(juce::Rectangle<int>& boun
         if (! section->expanded)
             continue;
 
-        auto placeFilterControl = [&contentBounds, editorInsetX] (auto& control)
+        auto placeFilterControl = [&contentBounds] (auto& control)
         {
             auto controlBounds = contentBounds.removeFromTop(control.getPreferredHeight());
-            controlBounds.removeFromLeft(editorInsetX);
-            controlBounds.removeFromRight(editorInsetX);
             control.setBounds(controlBounds);
 
             if (! contentBounds.isEmpty())
@@ -115,16 +115,12 @@ void AvaAudioProcessorEditor::layoutEqlModuleSections(juce::Rectangle<int>& boun
         auto presetContentBounds = presetsBounds;
 
         auto presetNameRowBounds = presetContentBounds.removeFromTop(rowHeight);
-        presetNameRowBounds.removeFromLeft(editorInsetX);
-        presetNameRowBounds.removeFromRight(editorInsetX);
         presetsSection->presetCombo.setBounds(presetNameRowBounds);
 
         if (! presetContentBounds.isEmpty())
             presetContentBounds.removeFromTop(verticalGap);
 
         auto presetButtonRowBounds = presetContentBounds.removeFromTop(rowHeight);
-        presetButtonRowBounds.removeFromLeft(editorInsetX);
-        presetButtonRowBounds.removeFromRight(editorInsetX);
 
         const auto presetButtonCount = 5;
         const auto totalGapWidth = presetRowGap * (presetButtonCount - 1);

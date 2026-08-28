@@ -4,7 +4,6 @@ namespace
 {
 void configurePresetCombo(NoTickComboBox& combo)
 {
-    combo.setTooltip("CHOOSE PRESET");
     combo.setEditableText(false);
     combo.setJustificationType(juce::Justification::centred);
     combo.setPopupMenuTextJustification(juce::Justification::centred);
@@ -31,19 +30,17 @@ AvaAudioProcessorEditor::PresetsSection::PresetsSection()
     configurePresetCombo(presetCombo);
 
     adButton = makeSectionButton("AD", uiAccent);
-    adButton->setTooltip("ADD PRESET");
     saveButton = makeSectionButton("SV", uiGrey500);
-    saveButton->setTooltip("SAVE PRESET");
     renameButton = makeSectionButton("RN", uiGrey500);
-    renameButton->setTooltip("RENAME PRESET");
     defaultButton = makeSectionButton("DF", uiAccent);
-    defaultButton->setTooltip("MAKE PRESET AS DEFAULT");
     deleteButton = makeSectionButton("DL", uiAccent);
-    deleteButton->setTooltip("DELETE PRESET");
 
     auto handlePresetSelection = [this]
     {
-        selectedPresetName = presetCombo.getText().trim();
+        const auto selectedIndex = presetCombo.getSelectedItemIndex();
+        selectedPresetName = juce::isPositiveAndBelow(selectedIndex, presetNames.size())
+            ? presetNames[selectedIndex]
+            : juce::String {};
 
         if (onPresetSelected)
             onPresetSelected();
@@ -83,19 +80,20 @@ juce::String AvaAudioProcessorEditor::PresetsSection::getSelectedPresetName() co
 
 juce::String AvaAudioProcessorEditor::PresetsSection::getEnteredPresetName() const
 {
-    return presetCombo.getText().trim();
+    return selectedPresetName;
 }
 
-void AvaAudioProcessorEditor::PresetsSection::setPresetNames(const juce::StringArray& presetNames,
+void AvaAudioProcessorEditor::PresetsSection::setPresetNames(const juce::StringArray& names,
                                                              const juce::String& preferredSelection)
 {
     const juce::ScopedValueSetter<bool> scopedIgnore(ignorePresetCallbacks, true);
+    presetNames = names;
     presetCombo.clear(juce::dontSendNotification);
 
-    for (int index = 0; index < presetNames.size(); ++index)
-        presetCombo.addItem(presetNames[index], index + 1);
+    for (int index = 0; index < names.size(); ++index)
+        presetCombo.addItem(names[index].toUpperCase(), index + 1);
 
-    if (presetNames.isEmpty())
+    if (names.isEmpty())
     {
         presetCombo.setText({}, juce::dontSendNotification);
         selectedPresetName.clear();
@@ -103,8 +101,18 @@ void AvaAudioProcessorEditor::PresetsSection::setPresetNames(const juce::StringA
     }
 
     const auto selectedName = preferredSelection.isNotEmpty() ? preferredSelection
-                                                              : presetNames[0];
-    const auto selectedIndex = presetNames.indexOf(selectedName);
+                                                              : names[0];
+    auto selectedIndex = -1;
+
+    for (int index = 0; index < names.size(); ++index)
+    {
+        if (names[index].equalsIgnoreCase(selectedName))
+        {
+            selectedIndex = index;
+            break;
+        }
+    }
+
     presetCombo.setSelectedItemIndex(selectedIndex >= 0 ? selectedIndex : 0, juce::dontSendNotification);
-    selectedPresetName = presetCombo.getText().trim();
+    selectedPresetName = names[selectedIndex >= 0 ? selectedIndex : 0];
 }

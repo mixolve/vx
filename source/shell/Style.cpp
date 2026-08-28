@@ -6,7 +6,32 @@
 
 int getEditorInsetX(const int width)
 {
+#if JUCE_IOS
     return juce::roundToInt(static_cast<float>(juce::jmax(0, width)) * editorInsetSideRatio);
+#else
+    juce::ignoreUnused(width);
+    return uiGap;
+#endif
+}
+
+int getEditorInsetTop(const int height)
+{
+#if JUCE_IOS
+    return juce::roundToInt(static_cast<float>(juce::jmax(0, height)) * editorInsetTopRatio);
+#else
+    juce::ignoreUnused(height);
+    return uiGap;
+#endif
+}
+
+int getEditorInsetBottom(const int height)
+{
+#if JUCE_IOS
+    return juce::roundToInt(static_cast<float>(juce::jmax(0, height)) * editorInsetBottomRatio);
+#else
+    juce::ignoreUnused(height);
+    return uiGap;
+#endif
 }
 
 juce::Typeface::Ptr getUiRegularTypeface()
@@ -20,31 +45,19 @@ juce::Typeface::Ptr getUiRegularTypeface()
 #endif
 }
 
-juce::Typeface::Ptr getUiBoldTypeface()
+juce::FontOptions makeUiFontOptions()
 {
 #if JUCE_TARGET_HAS_BINARY_DATA
-    static const auto boldTypeface = juce::Typeface::createSystemTypefaceFor(BinaryData::SometypeMonoBold_ttf,
-                                                                             BinaryData::SometypeMonoBold_ttfSize);
-    return boldTypeface;
-#else
-    return {};
-#endif
-}
-
-juce::FontOptions makeUiFontOptions(const int styleFlags, const float height)
-{
-#if JUCE_TARGET_HAS_BINARY_DATA
-    if (auto typeface = ((styleFlags & juce::Font::bold) != 0 ? getUiBoldTypeface()
-                                                              : getUiRegularTypeface()))
-        return juce::FontOptions(typeface).withHeight(height);
+    if (auto typeface = getUiRegularTypeface())
+        return juce::FontOptions(typeface).withHeight(uiFontSize);
 #endif
 
-    return juce::FontOptions("Sometype Mono", height, styleFlags);
+    return juce::FontOptions("Sometype Mono", uiFontSize, juce::Font::plain);
 }
 
-juce::Font makeUiFont(const int styleFlags, const float height)
+juce::Font makeUiFont()
 {
-    return juce::Font(makeUiFontOptions(styleFlags, height));
+    return juce::Font(makeUiFontOptions());
 }
 
 int getTextPixelWidth(const juce::Font& font, const juce::String& text)
@@ -52,6 +65,46 @@ int getTextPixelWidth(const juce::Font& font, const juce::String& text)
     juce::GlyphArrangement glyphs;
     glyphs.addLineOfText(font, text, 0.0f, 0.0f);
     return static_cast<int>(std::ceil(glyphs.getBoundingBox(0, -1, true).getWidth()));
+}
+
+bool drawLoopingText(juce::Graphics& graphics,
+                     const juce::String& text,
+                     const juce::Rectangle<int>& bounds,
+                     const juce::Font& font,
+                     const juce::Justification justification)
+{
+    if (text.isEmpty() || bounds.isEmpty())
+        return false;
+
+    const auto textWidth = static_cast<float>(getTextPixelWidth(font, text));
+
+    if (textWidth <= static_cast<float>(bounds.getWidth()))
+    {
+        graphics.drawText(text, bounds, justification, false);
+        return false;
+    }
+
+    constexpr auto pixelsPerSecond = 32.0f;
+    const auto loopText = text + " : ";
+    const auto loopWidth = static_cast<float>(getTextPixelWidth(font, loopText));
+    const auto elapsedSeconds = static_cast<float>(juce::Time::getMillisecondCounterHiRes() * 0.001);
+    const auto offset = std::fmod(elapsedSeconds * pixelsPerSecond, loopWidth);
+    const auto textY = static_cast<float>(bounds.getY());
+    const auto textHeight = static_cast<float>(bounds.getHeight());
+    const auto firstX = static_cast<float>(bounds.getX()) - offset;
+
+    graphics.saveState();
+    graphics.reduceClipRegion(bounds);
+    graphics.drawText(loopText,
+                      juce::Rectangle<float>(firstX, textY, loopWidth + 1.0f, textHeight),
+                      juce::Justification::centredLeft,
+                      false);
+    graphics.drawText(loopText,
+                      juce::Rectangle<float>(firstX + loopWidth, textY, loopWidth + 1.0f, textHeight),
+                      juce::Justification::centredLeft,
+                      false);
+    graphics.restoreState();
+    return true;
 }
 
 juce::String formatFixedDecimalValue(const double value, const int decimalPlaces)

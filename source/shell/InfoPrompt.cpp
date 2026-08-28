@@ -43,16 +43,10 @@ public:
         markdownViewport.setViewedComponent(nullptr, false);
     }
 
-    void paint(juce::Graphics& g) override
+    void paint(juce::Graphics& graphics) override
     {
-        g.setColour(juce::Colours::black.withAlpha(0.55f));
-        g.fillAll();
-
-        g.setColour(uiGrey700);
-        g.fillRect(panelBounds);
-
-        g.setColour(uiGrey500);
-        g.drawRect(panelBounds, 1);
+        graphics.setColour(juce::Colours::black);
+        graphics.fillAll();
     }
 
     void resized() override
@@ -153,13 +147,16 @@ private:
             return;
 
         closePending = true;
+        auto deferredCloseCallback = std::move(onClose);
+        onClose = {};
 
-        juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<FloatingInfoPrompt>(this)]
+        juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<FloatingInfoPrompt>(this),
+                                         callback = std::move(deferredCloseCallback)]() mutable
                                         {
-                                            if (safeThis == nullptr || safeThis->onClose == nullptr)
+                                            if (safeThis == nullptr || callback == nullptr)
                                                 return;
 
-                                            safeThis->onClose();
+                                            callback();
                                         });
     }
 

@@ -212,10 +212,11 @@ void EqlModuleProcessor::updateBellOrderFilter(BellOrderFilter& filter,
                                               const double octaveBandwidth,
                                               const double gain) noexcept
 {
-    filter.setIdentity();
-
     if (currentSampleRate <= 0.0 || order <= 0 || std::abs(gain - 1.0) < 1.0e-9)
+    {
+        filter.sectionCount = 0;
         return;
+    }
 
     const auto minimumFrequency = minimumDesignFilterFrequency;
     const auto maximumFrequency = (currentSampleRate * 0.5) * nyquistSafetyFactor;
@@ -326,7 +327,6 @@ void EqlModuleProcessor::updateShelfOrderFilterRaw(BiquadCascade& filter,
     for (int sectionIndex = filter.stageCount; sectionIndex < static_cast<int>(filter.sections.size()); ++sectionIndex)
         filter.sections[static_cast<size_t>(sectionIndex)].setIdentity();
 
-    filter.reset();
 }
 
 void EqlModuleProcessor::updateCutOrderFilterRaw(BiquadCascade& filter,
@@ -417,10 +417,11 @@ void EqlModuleProcessor::updateTiltFilter(BiquadCascade& filter,
                                          const double frequency,
                                          const double gainDb) noexcept
 {
-    filter.setIdentity();
-
     if (currentSampleRate <= 0.0 || std::abs(gainDb) < 1.0e-6)
+    {
+        filter.stageCount = 0;
         return;
+    }
 
     const auto minimumFrequency = minimumDesignFilterFrequency;
     const auto maximumFrequency = (currentSampleRate * 0.5) * nyquistSafetyFactor;
@@ -465,7 +466,6 @@ void EqlModuleProcessor::updateTiltFilter(BiquadCascade& filter,
         firstSection.b[2] *= normalisation;
     }
 
-    filter.reset();
 }
 
 void EqlModuleProcessor::updatePhaseFirFilter(PhaseFirFilter& target,

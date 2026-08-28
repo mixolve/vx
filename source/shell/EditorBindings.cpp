@@ -141,6 +141,17 @@ void AvaAudioProcessorEditor::rebindActiveModuleEditors()
             {
                 return handleHostSlotAssignRequest(parameterId, parameterName, normalizedValue);
             };
+            config.onModuleCloseRequest = [this]
+            {
+                juce::MessageManager::callAsync([safeEditor = juce::Component::SafePointer<AvaAudioProcessorEditor>(this)]
+                {
+                    if (safeEditor == nullptr)
+                        return;
+
+                    safeEditor->closeActiveModule();
+                    clearKeyboardFocus(*safeEditor);
+                });
+            };
             editor = std::make_unique<CrossoverModuleComponent>(std::move(config));
             addAndMakeVisible(*editor);
         }

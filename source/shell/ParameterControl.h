@@ -36,7 +36,7 @@ public:
                                std::function<double(const juce::String&)> textParser);
     void clearValueTextTransform();
     juce::Rectangle<int> getValueBounds() const noexcept;
-    void setTitleLongPressAction(std::function<void()> action, int delayMs = 500);
+    void setTitleMoveArmedAction(std::function<void()> action);
     void resized() override;
 
     std::function<void()> onValueChanged;

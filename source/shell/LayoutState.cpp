@@ -157,12 +157,14 @@ void AvaAudioProcessorEditor::updateSectionStates()
     if (redoButton != nullptr)
         redoButton->setVisible(globalControlsVisible);
 
-    if (abCompareButton != nullptr)
-        abCompareButton->setVisible(globalControlsVisible);
+    if (abSlotAButton != nullptr)
+        abSlotAButton->setVisible(globalControlsVisible);
 
-    for (auto& hostSlotMoveUpButton : hostSlotMoveUpButtons)
-        if (hostSlotMoveUpButton != nullptr)
-            hostSlotMoveUpButton->setVisible(hostParametersVisible);
+    if (abSwitchButton != nullptr)
+        abSwitchButton->setVisible(globalControlsVisible);
+
+    if (abSlotBButton != nullptr)
+        abSlotBButton->setVisible(globalControlsVisible);
 
     for (auto& hostSlotNameField : hostSlotNameFields)
         if (hostSlotNameField != nullptr)
@@ -171,10 +173,6 @@ void AvaAudioProcessorEditor::updateSectionStates()
     for (auto& hostSlotButton : hostSlotButtons)
         if (hostSlotButton != nullptr)
             hostSlotButton->setVisible(hostParametersVisible);
-
-    for (auto& hostSlotMoveDownButton : hostSlotMoveDownButtons)
-        if (hostSlotMoveDownButton != nullptr)
-            hostSlotMoveDownButton->setVisible(hostParametersVisible);
 
     if (tlsModuleEditor != nullptr)
         tlsModuleEditor->setVisible(tlsModuleLoaded && moduleContentVisible);
@@ -256,6 +254,10 @@ void AvaAudioProcessorEditor::updateSectionStates()
 
     filterViewport.setVisible(eqlModuleLoaded);
     setPresetsVisible(eqlModuleLoaded);
+
+    for (int orderPosition = 0; orderPosition < static_cast<int>(filterOrderLabels.size()); ++orderPosition)
+        if (auto* label = filterOrderLabels[static_cast<size_t>(orderPosition)].get())
+            label->setVisible(eqlModuleLoaded && orderPosition < activeFilterCount);
 
     for (int filterIndex = 0; filterIndex < AvaAudioProcessor::maxEqlFilterCount; ++filterIndex)
     {

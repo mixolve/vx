@@ -22,14 +22,12 @@ public:
                          juce::Justification itemJustificationIn,
                          SelectCallback selectCallback,
                          DismissCallback dismissCallback,
-                         CloseCallback closeCallback,
-                         juce::StringArray itemTooltipsIn)
+                         CloseCallback closeCallback)
         : anchorBounds(std::move(anchorBoundsIn)),
           choices(std::move(choicesIn)),
           selectedIndex(selectedIndexIn),
           itemEnabledStates(std::move(itemEnabledStatesIn)),
           itemJustification(itemJustificationIn),
-          itemTooltips(std::move(itemTooltipsIn)),
           onSelect(std::move(selectCallback)),
           onDismiss(std::move(dismissCallback)),
           onClose(std::move(closeCallback))
@@ -54,8 +52,6 @@ public:
         {
             auto button = std::make_unique<BoxTextButton>(uiAccent);
             button->setButtonText(choices[index]);
-            if (juce::isPositiveAndBelow(index, itemTooltips.size()))
-                button->setTooltip(itemTooltips[index]);
             button->setTextJustification(itemJustification);
             button->setAlwaysAccentOutline(index == selectedIndex);
             const auto isEnabled = itemEnabled(index);
@@ -71,16 +67,10 @@ public:
         }
     }
 
-    void paint(juce::Graphics& g) override
+    void paint(juce::Graphics& graphics) override
     {
-        g.setColour(juce::Colours::black.withAlpha(0.55f));
-        g.fillAll();
-
-        g.setColour(uiGrey700);
-        g.fillRect(panelBounds);
-
-        g.setColour(uiGrey500);
-        g.drawRect(panelBounds, 1);
+        graphics.setColour(uiPopupPanel);
+        graphics.fillRect(panelBounds);
     }
 
     void resized() override
@@ -93,10 +83,14 @@ public:
         const auto promptWidth = juce::jmax(1, juce::jmin(availableWidth, anchorBounds.getWidth()));
         const auto promptHeight = juce::jmin(juce::jmax(anchorBounds.getHeight(), itemBlockHeight + (promptPanelPadding * 2)),
                                              juce::jmax(0, visibleBounds.getHeight() - (promptPanelPadding * 2)));
+        const auto alignedItemIndex = juce::isPositiveAndBelow(selectedIndex, itemCount) ? selectedIndex : 0;
+        const auto alignedItemCentreY = promptPanelPadding
+            + (alignedItemIndex * (promptItemHeight + promptItemGap))
+            + (promptItemHeight / 2);
 
         panelBounds = juce::Rectangle<int>(promptWidth, promptHeight);
         panelBounds.setX(anchorBounds.getX());
-        panelBounds.setY(anchorBounds.getY());
+        panelBounds.setY(anchorBounds.getCentreY() - alignedItemCentreY);
         panelBounds = panelBounds.constrainedWithin(visibleBounds.reduced(promptPanelPadding));
 
         const auto viewportBounds = panelBounds.reduced(promptPanelPadding);
@@ -189,16 +183,19 @@ private:
             return;
 
         closePending = true;
+        auto deferredCloseCallback = std::move(onClose);
+        onClose = {};
 
         if (onDismiss != nullptr)
             onDismiss();
 
-        juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<FloatingChoicePrompt>(this)]
+        juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer<FloatingChoicePrompt>(this),
+                                         callback = std::move(deferredCloseCallback)]() mutable
                                         {
-                                            if (safeThis == nullptr || safeThis->onClose == nullptr)
+                                            if (safeThis == nullptr || callback == nullptr)
                                                 return;
 
-                                            safeThis->onClose();
+                                            callback();
                                         });
     }
 
@@ -223,7 +220,6 @@ private:
     juce::Viewport choiceViewport;
     juce::Component choiceContent;
     std::vector<std::unique_ptr<BoxTextButton>> itemButtons;
-    juce::StringArray itemTooltips;
     SelectCallback onSelect;
     DismissCallback onDismiss;
     CloseCallback onClose;
@@ -240,8 +236,7 @@ std::unique_ptr<PromptComponent> makeChoicePrompt(juce::Rectangle<int> anchorBou
                                                   const juce::Justification itemJustification,
                                                   std::function<void(int)> onSelect,
                                                   std::function<void()> onDismiss,
-                                                  std::function<void()> onClose,
-                                                  juce::StringArray itemTooltips)
+                                                  std::function<void()> onClose)
 {
     return std::make_unique<FloatingChoicePrompt>(std::move(anchorBounds),
                                                   std::move(choices),
@@ -250,6 +245,5 @@ std::unique_ptr<PromptComponent> makeChoicePrompt(juce::Rectangle<int> anchorBou
                                                   itemJustification,
                                                   std::move(onSelect),
                                                   std::move(onDismiss),
-                                                  std::move(onClose),
-                                                  std::move(itemTooltips));
+                                                  std::move(onClose));
 }

@@ -18,15 +18,11 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
     titleButton = std::make_unique<BoxTextButton>(parameter_control_support::titleFocusColour);
     titleButton->setButtonText(titleText);
     titleButton->setTextJustification(juce::Justification::centredLeft);
-    titleButton->onClickWithModifiers = [this] (const juce::ModifierKeys& modifiers)
-    {
-        return parameter_control_support::assignTitleToHostSlot(*this, titleButton.get(), parameterId, parameter, modifiers);
-    };
     titleButton->onClick = [this]
     {
         clearKeyboardFocus(*this);
     };
-    titleButton->setLongPressAction([this]
+    titleButton->setLongPressPromptActions([this]
     {
         if (onTitleClick)
         {
@@ -39,6 +35,10 @@ ChoiceControl::ChoiceControl(juce::AudioProcessorValueTreeState& state,
                                    true);
         }
 
+        clearKeyboardFocus(*this);
+    }, [this]
+    {
+        parameter_control_support::assignTitleToHostSlot(*this, titleButton.get(), parameterId, parameter);
         clearKeyboardFocus(*this);
     });
 
@@ -263,12 +263,6 @@ void ChoiceControl::setTitleMouseEnabled(const bool shouldEnable)
     }
 }
 
-void ChoiceControl::setTitleLongPressAction(std::function<void()> action, const int delayMs)
-{
-    if (titleButton != nullptr)
-        titleButton->setLongPressAction(std::move(action), delayMs);
-}
-
 void ChoiceControl::setInteractionEnabled(const bool shouldEnable)
 {
     interactionEnabled = shouldEnable;
@@ -339,7 +333,7 @@ LocalChoiceControl::LocalChoiceControl(const juce::String& titleText,
     titleButton->setTextJustification(juce::Justification::centredLeft);
     titleButton->setClearsParameterFocusOnMouseDown(false);
     titleButton->onClick = [] {};
-    titleButton->setLongPressAction([this]
+    titleButton->setLongPressPromptActions([this]
     {
         setSelectedChoiceIndex(defaultChoiceIndex, true);
     });
@@ -409,4 +403,3 @@ void LocalChoiceControl::resized()
     row.removeFromLeft(parameterGap);
     comboBox.setBounds(row);
 }
-

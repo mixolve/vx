@@ -1,3 +1,7 @@
+#if defined(__APPLE__)
+ #include <Accelerate/Accelerate.h>
+#endif
+
 #include "ProcessorSupport.h"
 
 void EqlModuleProcessor::SecondOrderSection::reset() noexcept
@@ -181,13 +185,17 @@ void EqlModuleProcessor::PhaseFirFilter::processWithChannelMask(juce::AudioBuffe
                 const auto* history = channelState.data() + writeIndex;
                 auto output = 0.0f;
 
-                for (int tapIndex = 0; tapIndex < phaseFirSize; tapIndex += 4)
-                {
-                    output += (taps[static_cast<size_t>(tapIndex)] * history[tapIndex])
-                        + (taps[static_cast<size_t>(tapIndex + 1)] * history[tapIndex + 1])
-                        + (taps[static_cast<size_t>(tapIndex + 2)] * history[tapIndex + 2])
-                        + (taps[static_cast<size_t>(tapIndex + 3)] * history[tapIndex + 3]);
-                }
+               #if JUCE_MAC || JUCE_IOS
+                vDSP_dotpr(taps.data(),
+                            1,
+                            history,
+                            1,
+                            &output,
+                            static_cast<vDSP_Length>(phaseFirSize));
+               #else
+                for (int tapIndex = 0; tapIndex < phaseFirSize; ++tapIndex)
+                    output += taps[static_cast<size_t>(tapIndex)] * history[tapIndex];
+               #endif
 
                 buffer.setSample(channel, sampleIndex, output);
             }
